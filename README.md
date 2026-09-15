@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mini-lens-hero.png" alt="Mini Lens for Pi — Your session. In focus. A compact footer showing model, tokens, cache, cost, context and generation speed." width="100%">
+  <img src="assets/pi-mini-mode-hero.png" alt="Pi Mini Mode for Pi — Your session. In focus. A compact footer showing model, tokens, cache, cost, context and generation speed." width="100%">
 </p>
 
 <p align="center">
@@ -12,14 +12,14 @@ A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost
 
 `/pi-mini-mode-settings` now has **Lens**, a separate **Collapse replies** switch, and **Minimal output**. Collapsed replies are off by default, so Pi's conversation history stays native until you turn them on. While the switch is off, Minimal output options stay disabled.
 
-- `/mini-lens-minimal on` shows the user's Markdown on an accent-tinted surface, a background-free process summary, and the final reply without a heading or extra background. No duplicate dock panel.
+- `/pi-mini-mode-minimal on` shows the user's Markdown on an accent-tinted surface, a background-free process summary, and the final reply without a heading or extra background. No duplicate dock panel.
 - Each turn uses one shared tree showing the latest **ten summary entries**: available thinking, tool calls, streaming tool output, and skill reads. `Ctrl+O` expands the full Markdown process and toggles it closed again; new questions start collapsed; tools without output show an elapsed wait counter, and empty progress events never overwrite existing content; there are no section headings, collapsed counts, or completion labels. Original session messages remain intact.
 - Agent/subagent calls share the same chronological tree as tools and skills; `Ctrl+O` reveals tasks and Markdown output. A returned call does not imply background completion.
 - The pi-subagents `async subagent` / `Async agents` widget uses a background-free status tree, retaining native detail shortcuts and output paths. This adapter is active only in minimal mode, restores on disable, and passes unknown formats through. Grouping design reference: [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions).
-- `/mini-lens-history` browses complete process entries, five at a time.
+- `/pi-mini-mode-history` browses complete process entries, five at a time.
 - Final Markdown streams as text events arrive; failures and interruptions are indicated.
 - `/reload` remounts the transcript, including history created in native mode. Expanded tree rails continue through paragraphs, blank lines and code blocks.
-- `/mini-lens-minimal off` restores Pi's default conversation history.
+- `/pi-mini-mode-minimal off` restores Pi's default conversation history.
 
 The user surface blends the active Pi accent with its user background. Process and answer text have no background. User padding is two terminal columns horizontally and one row vertically. Markdown, highlighted code, tables and Mermaid terminal diagrams work in light/dark themes; incomplete, unsupported or over-wide diagrams retain their source. **Minimal mode uses a private Pi 0.85.x layout adapter**, without patching the Pi installation. Unknown layouts refuse activation and retain native output. Recheck compatibility after Pi upgrades; another extension replacing the transcript may conflict.
 
@@ -64,7 +64,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 Choose the fields you need. Preview each change instantly, in your Pi theme.
 
-<a href="assets/mini-lens-settings.jpg"><img src="assets/mini-lens-settings.jpg" alt="Mini Lens settings in Pi's light theme, showing the live preview and field toggles. Click to view at full size." width="100%"></a>
+<a href="assets/pi-mini-mode-settings.jpg"><img src="assets/pi-mini-mode-settings.jpg" alt="Pi Mini Mode settings in Pi's light theme, showing the live preview and field toggles. Click to view at full size." width="100%"></a>
 
 [Watch the settings demo](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
 
@@ -84,7 +84,7 @@ Bundled themes `cc-light` / `cc-dark` are vendored from [pi-cc-extensions](https
 <details>
 <summary><strong>First run & configuration</strong> — defaults, controls, and settings file</summary>
 
-On the first interactive TUI session, Mini Lens shows a preview with every field enabled by default:
+On the first interactive TUI session, Pi Mini Mode shows a preview with every field enabled by default:
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
@@ -102,50 +102,50 @@ The focused option and its corresponding preview field use bold theme `accent` t
 
 Changes take effect immediately. The command requires Pi's TUI mode. Its preview always uses fixed example data rather than your current session, while reflecting every setting toggle immediately.
 
-Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/mini-lens.json`; installations with a different Pi config directory use that directory). A malformed or missing file safely falls back to the defaults.
+Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-mini-mode.json`; installations with a different Pi config directory use that directory). A malformed or missing file safely falls back to the defaults.
 
 ```json
 {
-  "mini-lens-model-show": true,
-  "mini-lens-thinking-show": true,
-  "mini-lens-ch-show": true,
-  "mini-lens-session-tokens-show": true,
-  "mini-lens-cache-tokens-show": true,
-  "mini-lens-cost-show": true,
-  "mini-lens-context-show": true,
-  "mini-lens-context-dots-show": false,
-  "mini-lens-context-percent-show": true,
-  "mini-lens-speed-show": true,
-  "mini-lens-speed-unit-show": true,
+  "pi-mini-mode-model-show": true,
+  "pi-mini-mode-thinking-show": true,
+  "pi-mini-mode-ch-show": true,
+  "pi-mini-mode-session-tokens-show": true,
+  "pi-mini-mode-cache-tokens-show": true,
+  "pi-mini-mode-cost-show": true,
+  "pi-mini-mode-context-show": true,
+  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-percent-show": true,
+  "pi-mini-mode-speed-show": true,
+  "pi-mini-mode-speed-unit-show": true,
   "onboardingCompleted": true
 }
 ```
 
 | Key | Default | Controls |
 | --- | --- | --- |
-| `mini-lens-model-show` | `true` | Model ID without provider prefix |
-| `mini-lens-thinking-show` | `true` | Thinking level |
-| `mini-lens-ch-show` | `true` | Session cache-hit rate (`CH`) |
-| `mini-lens-session-tokens-show` | `true` | Accumulated session tokens (`Total`) |
-| `mini-lens-cache-tokens-show` | `true` | Accumulated cache read + cache write tokens |
-| `mini-lens-cost-show` | `true` | Estimated session list price |
-| `mini-lens-mcp-show` | `false` | Enabled MCP server count |
-| `mini-lens-context-show` | `true` | Used/total context tokens and progress bar |
-| `mini-lens-context-dots-show` | `false` | Use a single-line dot-matrix bar instead of the default solid bar |
-| `mini-lens-context-percent-show` | `true` | Context-use percentage |
-| `mini-lens-speed-show` | `true` | Generation speed at the far right |
-| `mini-lens-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
-| `mini-lens-minimal-show` | `false` | Collapse replies; off keeps Pi's default conversation history |
-| `mini-lens-minimal-thinking-show` | `true` | Show thinking in collapsed replies |
-| `mini-lens-minimal-tools-show` | `true` | Show tool calls and agent calls |
-| `mini-lens-minimal-output-show` | `true` | Show process output |
-| `mini-lens-minimal-skills-show` | `true` | Show skill reads |
-| `mini-lens-agent-usage-show` | `true` | Show Agent token usage |
-| `mini-lens-agent-shortcut-show` | `true` | Show the temporary `Ctrl+O` hint for new Agents |
+| `pi-mini-mode-model-show` | `true` | Model ID without provider prefix |
+| `pi-mini-mode-thinking-show` | `true` | Thinking level |
+| `pi-mini-mode-ch-show` | `true` | Session cache-hit rate (`CH`) |
+| `pi-mini-mode-session-tokens-show` | `true` | Accumulated session tokens (`Total`) |
+| `pi-mini-mode-cache-tokens-show` | `true` | Accumulated cache read + cache write tokens |
+| `pi-mini-mode-cost-show` | `true` | Estimated session list price |
+| `pi-mini-mode-mcp-show` | `false` | Enabled MCP server count |
+| `pi-mini-mode-context-show` | `true` | Used/total context tokens and progress bar |
+| `pi-mini-mode-context-dots-show` | `false` | Use a single-line dot-matrix bar instead of the default solid bar |
+| `pi-mini-mode-context-percent-show` | `true` | Context-use percentage |
+| `pi-mini-mode-speed-show` | `true` | Generation speed at the far right |
+| `pi-mini-mode-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
+| `pi-mini-mode-minimal-show` | `false` | Collapse replies; off keeps Pi's default conversation history |
+| `pi-mini-mode-minimal-thinking-show` | `true` | Show thinking in collapsed replies |
+| `pi-mini-mode-minimal-tools-show` | `true` | Show tool calls and agent calls |
+| `pi-mini-mode-minimal-output-show` | `true` | Show process output |
+| `pi-mini-mode-minimal-skills-show` | `true` | Show skill reads |
+| `pi-mini-mode-agent-usage-show` | `true` | Show Agent token usage |
+| `pi-mini-mode-agent-shortcut-show` | `true` | Show the temporary `Ctrl+O` hint for new Agents |
 | `onboardingCompleted` | `false` initially | Internal marker that prevents another first-run prompt |
 
 - **Generation speed**
-  - **Show tok/s unit** (`mini-lens-speed-unit-show`) is the indented sub-setting shown beneath **Show latest generation speed** in `/mini-lens-settings`. Turning it off keeps the speed number (for example `40.0`) and removes only `tok/s`.
+  - **Show tok/s unit** (`pi-mini-mode-speed-unit-show`) is the indented sub-setting shown beneath **Show latest generation speed** in `/pi-mini-mode-settings`. Turning it off keeps the speed number (for example `40.0`) and removes only `tok/s`.
   - The sub-setting is retained when generation speed itself is hidden.
 
 </details>
@@ -157,7 +157,7 @@ Session totals are aggregated from each finalized `assistant` and `toolResult` e
 
 During an assistant stream, speed appears as soon as a positive cumulative `usage.output` sample and elapsed time are available. It is refreshed while streaming and is output tokens divided by elapsed time from the assistant message start. The completed rate remains visible while later assistant messages only call tools or wait for output; it is replaced only by a newer measurable generation. Regressing output samples and non-increasing timestamps are ignored. For a tool result that reports nested LLM usage but has no stream events, the final rate is output tokens divided by that tool execution's duration. A tool that does not report output usage has no measurable speed and leaves the prior rate intact.
 
-Before a measurable response exists, the speed field is absent entirely—Mini Lens never displays a `-- tok/s` placeholder. When present, speed is the rightmost footer field (the context percentage, if enabled, is immediately to its left). Its color uses Pi theme semantics: **success** at >=30 tok/s, **warning** at 10–29.9 tok/s, and **error** below 10 tok/s. No colors are hard-coded, so it follows the selected Pi theme.
+Before a measurable response exists, the speed field is absent entirely—Pi Mini Mode never displays a `-- tok/s` placeholder. When present, speed is the rightmost footer field (the context percentage, if enabled, is immediately to its left). Its color uses Pi theme semantics: **success** at >=30 tok/s, **warning** at 10–29.9 tok/s, and **error** below 10 tok/s. No colors are hard-coded, so it follows the selected Pi theme.
 
 The price is the same finalized active-branch usage and configured per-million-token rates. It is an estimate, not a provider invoice. In narrow terminals, the footer drops/truncates lower-priority content to remain one line without overflow.
 

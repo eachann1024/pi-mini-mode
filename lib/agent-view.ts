@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import { Markdown, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 
 type Theme = ExtensionContext["ui"]["theme"];
 export const RUNNING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -175,7 +175,7 @@ const isAgentFleetSummary = (lines: string[]) => {
     && !/\b(?:jobs?|panes?)\b/.test(content[0]);
 };
 
-export const AGENT_STATUS_ENTRY = "mini-lens-agent-status";
+export const AGENT_STATUS_ENTRY = "pi-mini-mode-agent-status";
 
 export function savedAgentStatuses(entries: unknown[]): Record<string, unknown>[] {
   const saved = new Map<string, Record<string, unknown>>();
@@ -381,6 +381,11 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     subagentControls?.push({ runId: runKey, y: rows.length, width, line });
     rows.push(line);
     if (isChildExpanded) {
+      // Live activity is literal text, not a final answer or Markdown tool output.
+      if (!terminal) {
+        const details = wrapTextWithAnsi(`当前活动：${text(activity)}`, Math.max(1, width - 3));
+        rows.push(...details.map(line => truncateToWidth(`   ${theme.fg("muted", line)}`, width)));
+      }
       const messages = Array.isArray(child.noticeMessages) ? child.noticeMessages : [];
       const bodies: string[] = [];
       for (const msg of messages) {

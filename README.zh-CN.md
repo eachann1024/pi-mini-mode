@@ -1,9 +1,9 @@
-# Mini Lens for Pi（中文）
+# Pi Mini Mode for Pi（中文）
 
 [English](README.md)
 
 <p align="center">
-  <img src="assets/mini-lens-hero.png" alt="Mini Lens：显示模型、令牌、缓存、费用、上下文和生成速度的紧凑页脚" width="100%">
+  <img src="assets/pi-mini-mode-hero.png" alt="Pi Mini Mode：显示模型、令牌、缓存、费用、上下文和生成速度的紧凑页脚" width="100%">
 </p>
 
 <p align="center">
@@ -16,14 +16,14 @@
 
 `/pi-mini-mode-settings` 现在包含 **Lens**、独立的 **Collapse replies（折叠回复）** 和 **Minimal output（极简输出）** 设置。折叠回复默认关闭；关闭时，极简输出选项也会禁用，因此 Pi 的对话历史会保持原生显示。
 
-- `/mini-lens-minimal on` 显示带主题色背景的用户 Markdown、无背景的过程摘要，以及没有标题或额外背景的最终回复，不会重复显示停靠面板。
+- `/pi-mini-mode-minimal on` 显示带主题色背景的用户 Markdown、无背景的过程摘要，以及没有标题或额外背景的最终回复，不会重复显示停靠面板。
 - 每轮使用一棵共享树，显示最新 **10 条摘要**，包括可用的思考、工具调用、流式工具输出和技能读取。按 `Ctrl+O` 可展开完整 Markdown 过程，再按一次收起；新问题默认收起。没有输出的工具会显示已等待时间，空的进度事件不会覆盖已有内容，也不会显示分组标题、折叠数量或完成标签。原始会话消息保持不变。
 - Agent/subagent 调用会按时间顺序与工具、技能共用同一棵树；按 `Ctrl+O` 可查看任务和 Markdown 输出。调用返回并不代表后台任务已经完成。
 - pi-subagents 的 `async subagent` / `Async agents` 小组件使用无背景的状态树，同时保留原生详情快捷键和输出路径。此适配器只在极简模式启用，关闭后恢复原状，未知格式会直接交给原生处理。分组设计参考 [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions)。
-- `/mini-lens-history` 可浏览完整过程记录，每次显示 5 条。
+- `/pi-mini-mode-history` 可浏览完整过程记录，每次显示 5 条。
 - 最终 Markdown 会随着文本事件流式显示；失败和中断会明确标记。
 - `/reload` 会重新挂载 transcript，也会包含原生模式中产生的历史记录。展开状态的树形连接线会贯穿段落、空行和代码块。
-- `/mini-lens-minimal off` 恢复 Pi 默认的对话历史显示。
+- `/pi-mini-mode-minimal off` 恢复 Pi 默认的对话历史显示。
 
 用户区域会混合当前 Pi 强调色与用户背景色。过程和回答文本没有背景；用户区域水平方向留出两个终端列、垂直方向留出一行。Markdown、高亮代码、表格以及 Mermaid 终端图表可适配明暗主题；不完整、不支持或过宽的图表会保留源文本。
 
@@ -62,7 +62,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 页脚会跟随 Pi 主题并适配窄终端。只有页脚会变化，Pi 内置的工具和思考视图保持不变。内置的 `cc-light` / `cc-dark` 主题来自 [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions)，采用 MIT 许可。
 
-首次进入交互式 TUI 会话时，Mini Lens 默认启用所有字段并显示预览，例如：
+首次进入交互式 TUI 会话时，Pi Mini Mode 默认启用所有字段并显示预览，例如：
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
@@ -70,47 +70,47 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
 
 首次设置会提供 **Keep defaults（保留默认值）** 和 **Configure now（立即配置）**。保留默认值会保存页脚字段、保持折叠回复关闭，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。Print、JSON 等非交互模式不会显示提示。
 
-设置保存在 Pi 的 agent 目录中，通常是 `~/.pi/agent/mini-lens.json`；如果 Pi 使用其他配置目录，则保存在对应目录。文件缺失或格式错误时会安全回退到默认设置。设置示例：
+设置保存在 Pi 的 agent 目录中，通常是 `~/.pi/agent/pi-mini-mode.json`；如果 Pi 使用其他配置目录，则保存在对应目录。文件缺失或格式错误时会安全回退到默认设置。设置示例：
 
 ```json
 {
-  "mini-lens-model-show": true,
-  "mini-lens-thinking-show": true,
-  "mini-lens-ch-show": true,
-  "mini-lens-session-tokens-show": true,
-  "mini-lens-cache-tokens-show": true,
-  "mini-lens-cost-show": true,
-  "mini-lens-mcp-show": false,
-  "mini-lens-context-show": true,
-  "mini-lens-context-dots-show": false,
-  "mini-lens-context-percent-show": true,
-  "mini-lens-speed-show": true,
-  "mini-lens-speed-unit-show": true,
+  "pi-mini-mode-model-show": true,
+  "pi-mini-mode-thinking-show": true,
+  "pi-mini-mode-ch-show": true,
+  "pi-mini-mode-session-tokens-show": true,
+  "pi-mini-mode-cache-tokens-show": true,
+  "pi-mini-mode-cost-show": true,
+  "pi-mini-mode-mcp-show": false,
+  "pi-mini-mode-context-show": true,
+  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-percent-show": true,
+  "pi-mini-mode-speed-show": true,
+  "pi-mini-mode-speed-unit-show": true,
   "onboardingCompleted": true
 }
 ```
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `mini-lens-model-show` | `true` | 显示不含 provider 前缀的模型 ID |
-| `mini-lens-thinking-show` | `true` | 显示思考级别 |
-| `mini-lens-ch-show` | `true` | 显示会话缓存命中率（`CH`） |
-| `mini-lens-session-tokens-show` | `true` | 显示会话累计令牌（`Total`） |
-| `mini-lens-cache-tokens-show` | `true` | 显示缓存读取与写入令牌（已包含在 Total 中） |
-| `mini-lens-cost-show` | `true` | 显示会话费用估算 |
-| `mini-lens-mcp-show` | `false` | 显示已启用的 MCP 服务器数量 |
-| `mini-lens-context-show` | `true` | 显示已用/总上下文令牌和进度条 |
-| `mini-lens-context-dots-show` | `false` | 使用单行点阵进度条替代默认实心进度条 |
-| `mini-lens-context-percent-show` | `true` | 显示上下文使用百分比 |
-| `mini-lens-speed-show` | `true` | 显示最新生成速度 |
-| `mini-lens-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
-| `mini-lens-minimal-show` | `false` | 折叠回复；关闭则使用 Pi 默认历史显示 |
-| `mini-lens-minimal-thinking-show` | `true` | 显示折叠回复中的思考 |
-| `mini-lens-minimal-tools-show` | `true` | 显示工具调用和 Agent 调用 |
-| `mini-lens-minimal-output-show` | `true` | 显示过程输出 |
-| `mini-lens-minimal-skills-show` | `true` | 显示技能读取 |
-| `mini-lens-agent-usage-show` | `true` | 显示 Agent token 用量 |
-| `mini-lens-agent-shortcut-show` | `true` | 新 Agent 显示临时 `Ctrl+O` 提示 |
+| `pi-mini-mode-model-show` | `true` | 显示不含 provider 前缀的模型 ID |
+| `pi-mini-mode-thinking-show` | `true` | 显示思考级别 |
+| `pi-mini-mode-ch-show` | `true` | 显示会话缓存命中率（`CH`） |
+| `pi-mini-mode-session-tokens-show` | `true` | 显示会话累计令牌（`Total`） |
+| `pi-mini-mode-cache-tokens-show` | `true` | 显示缓存读取与写入令牌（已包含在 Total 中） |
+| `pi-mini-mode-cost-show` | `true` | 显示会话费用估算 |
+| `pi-mini-mode-mcp-show` | `false` | 显示已启用的 MCP 服务器数量 |
+| `pi-mini-mode-context-show` | `true` | 显示已用/总上下文令牌和进度条 |
+| `pi-mini-mode-context-dots-show` | `false` | 使用单行点阵进度条替代默认实心进度条 |
+| `pi-mini-mode-context-percent-show` | `true` | 显示上下文使用百分比 |
+| `pi-mini-mode-speed-show` | `true` | 显示最新生成速度 |
+| `pi-mini-mode-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
+| `pi-mini-mode-minimal-show` | `false` | 折叠回复；关闭则使用 Pi 默认历史显示 |
+| `pi-mini-mode-minimal-thinking-show` | `true` | 显示折叠回复中的思考 |
+| `pi-mini-mode-minimal-tools-show` | `true` | 显示工具调用和 Agent 调用 |
+| `pi-mini-mode-minimal-output-show` | `true` | 显示过程输出 |
+| `pi-mini-mode-minimal-skills-show` | `true` | 显示技能读取 |
+| `pi-mini-mode-agent-usage-show` | `true` | 显示 Agent token 用量 |
+| `pi-mini-mode-agent-shortcut-show` | `true` | 新 Agent 显示临时 `Ctrl+O` 提示 |
 | `onboardingCompleted` | 初始为 `false` | 防止再次显示首次设置提示的内部标记 |
 
 生成速度设置中的 **显示 tok/s 单位** 是 **显示最新生成速度** 下方的缩进子设置。关闭它只会移除 `tok/s`，保留速度数字；即使隐藏生成速度，该子设置仍会保留。

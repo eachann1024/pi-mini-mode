@@ -10,7 +10,7 @@ import { register } from "node:module";
 const piModule = `
 export const CONFIG_DIR_NAME = ".pi";
 export const getMarkdownTheme = () => Object.fromEntries(["heading", "link", "linkUrl", "code", "codeBlock", "codeBlockBorder", "quote", "quoteBorder", "hr", "listBullet", "bold", "italic", "strikethrough", "underline"].map(key => [key, text => text]));
-export const getAgentDir = () => process.env.MINI_LENS_AGENT_DIR;
+export const getAgentDir = () => process.env.PI_MINI_MODE_AGENT_DIR;
 export const getSettingsListTheme = () => ({});
 export class Container { addChild() {} render() { return []; } invalidate() {} }
 export class Text { constructor() {} }
@@ -44,21 +44,21 @@ const piUrl = `data:text/javascript,${encodeURIComponent(piModule)}`;
 const tuiUrl = `data:text/javascript,${encodeURIComponent(tuiModule)}`;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piUrl)}};if(s==='@earendil-works/pi-tui')return {shortCircuit:true,url:${JSON.stringify(tuiUrl)}};return n(s,c)}`)}`, import.meta.url);
 
-const configDir = await mkdtemp(join(tmpdir(), "mini-lens-test-"));
-process.env.MINI_LENS_AGENT_DIR = configDir;
+const configDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-test-"));
+process.env.PI_MINI_MODE_AGENT_DIR = configDir;
 process.env.LANG = "en_US.UTF-8";
 const source = new URL("../extensions/footer-status.ts", import.meta.url);
 const extension = await import(pathToFileURL(source.pathname).href + `?${Date.now()}`);
 
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-minimal-show"], false);
-assert.equal(extension.parseSettings({})["mini-lens-minimal-show"], false, "missing collapsed-replies setting keeps Pi native history");
-assert.equal(extension.parseSettings({ "mini-lens-minimal-show": false })["mini-lens-minimal-show"], false);
-assert.equal(extension.parseSettings({ "mini-lens-minimal-show": true })["mini-lens-minimal-show"], true);
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.label, "折叠回复");
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.description, "关闭后保留 Pi 默认会话历史。");
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.currentValue, "off");
-assert.equal("mini-lens-language" in extension.parseSettings({ "mini-lens-language": "zh" }), false);
-for (const key of ['mini-lens-agent-usage-show', 'mini-lens-agent-shortcut-show']) {
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-minimal-show"], false);
+assert.equal(extension.parseSettings({})["pi-mini-mode-minimal-show"], false, "missing collapsed-replies setting keeps Pi native history");
+assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": false })["pi-mini-mode-minimal-show"], false);
+assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": true })["pi-mini-mode-minimal-show"], true);
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.label, "折叠回复");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.description, "关闭后保留 Pi 默认会话历史。");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "off");
+assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
+for (const key of ['pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
   assert.equal(extension.DEFAULT_SETTINGS[key], true);
   assert.equal(extension.parseSettings({ [key]: false })[key], false);
 }
@@ -67,8 +67,8 @@ const minimalTurn = { question: "测试问题", process: Array.from({ length: 13
 const minimalView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn]);
 let minimalText = minimalView.render(100).join("\n");
 assert.doesNotMatch(minimalText, /已收起|我们的极简模块|用户提问|最终的结果/);
-assert.doesNotMatch(minimalText, /entry-[0-2](?!\d)/);
-assert.equal((minimalText.match(/entry-/g) ?? []).length, 10);
+assert.doesNotMatch(minimalText, /entry-[0-6](?!\d)/);
+assert.equal((minimalText.match(/entry-/g) ?? []).length, 6);
 assert.match(minimalText, /Agent · 13\/13 · Ctrl\+O/);
 assert.doesNotMatch(minimalText, /展开|收起/);
 assert.match(minimalText, /secret final/);
@@ -167,7 +167,7 @@ assert.match(dotRows, /<muted>●<\/muted>.*read/, "completed tool dot uses the 
 assert.match(dotRows, /<muted>●<\/muted>.*Output/, "non-expandable output dot uses the muted token");
 const mixedTurn = { question: "mixed", process: ["tool one", "call a", "skill frontend", "tool two", "call b", "tool three", "skill last"], agentCalls: [{ id: "a", name: "researcher", task: "research", state: "done" }, { id: "b", name: "reviewer", task: "review", state: "running" }] };
 const mixedRows = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn]).render(100);
-assert.equal(mixedRows.filter(row => /^[├└]─/.test(row)).length, 7);
+assert.equal(mixedRows.filter(row => /^[├└]─/.test(row)).length, 6);
 assert.doesNotMatch(mixedRows.join("\n"), /S 0 \/ C 0/);
 assert.doesNotMatch(mixedRows.join("\n"), /较早记录/);
 assert.doesNotMatch(mixedRows.join("\n"), /工具 one|Agent 调用/);
@@ -184,7 +184,7 @@ let expandIntegrated = false;
 const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => false, () => true, () => expandIntegrated);
 let integratedRows = integratedView.render(120).map(stripAnsi);
 assert.match(integratedRows.find(row => row.startsWith('Agent')), /Agent · 13\/13\s+Subagent 4\/9\s+S 320K \/ C 246K$/);
-assert.equal(integratedRows.filter(row => /^[├└]─/.test(row)).length, 19, 'ten main entries plus live and briefly completed children');
+assert.equal(integratedRows.filter(row => /^[├└]─/.test(row)).length, 15, 'six main entries plus live and briefly completed children');
 assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-2](?!\d)|运行中|Ctrl\+S|PREVIEW_|CHILD_FINAL_/);
 assert.ok(integratedRows.findIndex(row => row.includes('MAIN_12')) < integratedRows.findIndex(row => row.includes('CHILD_4')));
 assert.ok(integratedRows.findIndex(row => row.includes('CHILD_8')) < integratedRows.findIndex(row => row.includes('FINAL_REPLY')));
@@ -193,14 +193,14 @@ assert.match(integratedRows.find(row => row.includes('CHILD_8')), /^└─/);
 for (const width of [1, 12, 40]) assert.ok(integratedView.render(width).every(row => stripAnsi(row).length <= width));
 assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Subagent 4\/9/, 'narrow headers prioritize progress over token totals');
 for (let i = 9; i < 40; i++) integratedTurn.subAgents[0].steps.push({ runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, recentOutput: [`CHILD_${i}`], status: 'running' });
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 50, 'children are not subject to the main ten-row cap');
+assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 46, 'children are not subject to the main six-row cap');
 for (const child of integratedTurn.subAgents[0].steps) child.status = 'completed';
 integratedRows = integratedView.render(120).map(stripAnsi);
 assert.match(integratedRows.join('\n'), /Subagent 40\/40/);
 assert.match(integratedRows.join('\n'), /CHILD_/);
 assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
 expandIntegrated = true;
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 50, 'Ctrl+S retains one heading per child');
+assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 46, 'Ctrl+S retains one heading per child');
 assert.match(integratedView.render(120).join('\n'), /CHILD_FINAL_0/);
 assert.doesNotMatch(integratedView.render(120).join('\n'), /PREVIEW_/);
 const savedNow = Date.now;
@@ -223,29 +223,29 @@ assert.equal(restoredTurns.length, 7, "process limit must not delete conversatio
 assert.equal(restoredTurns[6].final, "answer-6");
 assert.deepEqual(restoredTurns[6].process, ["output tool output"]);
 
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-mcp-show"], false, "MCP count defaults to off");
-assert.equal(extension.parseSettings({ "mini-lens-mcp-show": "true" })["mini-lens-mcp-show"], false, "invalid MCP setting falls back to off");
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-ch-show"], true, "mini-lens-ch-show defaults to true");
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-session-tokens-show"], true, "session-token display defaults to true");
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-cache-tokens-show"], true, "cache-token display defaults to true");
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-speed-unit-show"], true, "speed-unit display defaults to true");
-assert.deepEqual(extension.parseSettings({ "mini-lens-ch-show": false }), {
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-mcp-show"], false, "MCP count defaults to off");
+assert.equal(extension.parseSettings({ "pi-mini-mode-mcp-show": "true" })["pi-mini-mode-mcp-show"], false, "invalid MCP setting falls back to off");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-ch-show"], true, "pi-mini-mode-ch-show defaults to true");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-session-tokens-show"], true, "session-token display defaults to true");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-cache-tokens-show"], true, "cache-token display defaults to true");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-speed-unit-show"], true, "speed-unit display defaults to true");
+assert.deepEqual(extension.parseSettings({ "pi-mini-mode-ch-show": false }), {
   ...extension.DEFAULT_SETTINGS,
-  "mini-lens-ch-show": false,
+  "pi-mini-mode-ch-show": false,
 }, "partial settings merge with safe defaults");
 assert.deepEqual(extension.parseSettings("bad config"), extension.DEFAULT_SETTINGS, "invalid configuration safely falls back to defaults");
 
-const persisted = { ...extension.DEFAULT_SETTINGS, "mini-lens-ch-show": false, "mini-lens-mcp-show": true, onboardingCompleted: true };
+const persisted = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-ch-show": false, "pi-mini-mode-mcp-show": true, onboardingCompleted: true };
 const configPath = extension.settingsPath(configDir);
 await extension.saveSettings(persisted, configPath);
 assert.deepEqual((await extension.loadSettings(configPath)).settings, persisted, "settings persist to Pi's agent directory");
-assert.equal(JSON.parse(await readFile(configPath, "utf8"))["mini-lens-ch-show"], false, "persisted JSON retains the documented setting name");
+assert.equal(JSON.parse(await readFile(configPath, "utf8"))["pi-mini-mode-ch-show"], false, "persisted JSON retains the documented setting name");
 const corruptPath = join(configDir, "corrupt.json");
 await writeFile(corruptPath, "{not JSON", "utf8");
 assert.deepEqual((await extension.loadSettings(corruptPath)).settings, extension.DEFAULT_SETTINGS, "corrupt configuration files safely fall back to defaults");
 
-const runtimeDir = await mkdtemp(join(tmpdir(), "mini-lens-runtime-"));
-process.env.MINI_LENS_AGENT_DIR = runtimeDir;
+const runtimeDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-runtime-"));
+process.env.PI_MINI_MODE_AGENT_DIR = runtimeDir;
 const handlers = new Map();
 const commands = new Map();
 const eventEmitter = new EventEmitter();
@@ -358,7 +358,7 @@ assert.deepEqual(totals, { totalTokens: 175_080, input: 125_000, output: 10_080,
 Date.now = originalNow;
 
 const sampleTotals = { totalTokens: 100_000, input: 75_000, output: 10_000, cacheRead: 25_000, cacheWrite: 0, cost: 0.01234 };
-assert.equal(extension.DEFAULT_SETTINGS["mini-lens-context-dots-show"], false, "solid bar remains default");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-context-dots-show"], false, "solid bar remains default");
 const missingContext = extension.statusLine({ ...ctx, model: undefined, thinkingLevel: undefined, getContextUsage: () => ({ contextWindow: 272_000 }) }, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, undefined);
 assert.doesNotMatch(missingContext, /\?|272K|no model|off|[█░⣿⣀]|tok\/s/, "missing fields hide without placeholders");
 assert.match(missingContext, /Total 100K/, "known usage stays visible");
@@ -366,12 +366,12 @@ const emptyUsage = { totalTokens: 0, input: 0, output: 0, cacheRead: 0, cacheWri
 const initialLine = extension.statusLine({ ...ctx, getContextUsage: () => ({ tokens: 0, contextWindow: 272_000, percent: 0 }) }, theme, 140, emptyUsage, extension.DEFAULT_SETTINGS, undefined);
 assert.doesNotMatch(initialLine, /Total 0|Cached 0/, "zero-value usage metrics stay hidden until usage exists");
 assert.match(initialLine, /0\/272K/, "context remains visible before usage exists");
-const dotted = { ...extension.DEFAULT_SETTINGS, "mini-lens-context-dots-show": true };
+const dotted = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-context-dots-show": true };
 const dottedLine = extension.statusLine(ctx, theme, 140, sampleTotals, dotted, 40);
 assert.match(dottedLine, /⣿+⣀+/, "dot-matrix bar renders filled and empty cells");
 assert.doesNotMatch(dottedLine, /[█░]/, "dot-matrix mode replaces solid cells");
-assert.equal(extension.parseSettings({ "mini-lens-context-dots-show": "bad" })["mini-lens-context-dots-show"], false);
-const withMcp = { ...extension.DEFAULT_SETTINGS, "mini-lens-mcp-show": true };
+assert.equal(extension.parseSettings({ "pi-mini-mode-context-dots-show": "bad" })["pi-mini-mode-context-dots-show"], false);
+const withMcp = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": true };
 assert.doesNotMatch(extension.statusLine(ctx, theme, 140, sampleTotals, withMcp, 40), /MCP/, "unknown MCP state is hidden and old statusLine calls remain compatible");
 assert.match(extension.statusLine(ctx, theme, 140, sampleTotals, withMcp, 40, undefined, 0), /◇ MCP 0/, "a known empty snapshot displays zero");
 assert.doesNotMatch(extension.settingsPreviewLine(theme, extension.DEFAULT_SETTINGS), /MCP/, "preview defaults to MCP off");
@@ -381,13 +381,13 @@ for (let width = 0; width <= 140; width++) {
   const line = extension.statusLine(ctx, theme, width, sampleTotals, withMcp, 40, undefined, 123);
   assert.ok(line.length <= width, `MCP-enabled width ${width} never overflows`);
 }
-const withoutCache = { ...extension.DEFAULT_SETTINGS, "mini-lens-ch-show": false };
+const withoutCache = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-ch-show": false };
 const hiddenCacheLine = extension.statusLine(ctx, theme, 140, sampleTotals, withoutCache, 40);
-assert.doesNotMatch(hiddenCacheLine, /CH 25\.0%/, "mini-lens-ch-show false immediately hides cache hit");
-const withoutSessionTotals = { ...extension.DEFAULT_SETTINGS, "mini-lens-session-tokens-show": false, "mini-lens-cache-tokens-show": false };
+assert.doesNotMatch(hiddenCacheLine, /CH 25\.0%/, "pi-mini-mode-ch-show false immediately hides cache hit");
+const withoutSessionTotals = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-session-tokens-show": false, "pi-mini-mode-cache-tokens-show": false };
 const hiddenTotalsLine = extension.statusLine(ctx, theme, 140, sampleTotals, withoutSessionTotals, 40);
 assert.doesNotMatch(hiddenTotalsLine, /Total 100K|Cached 25K/, "session-token and cache-token settings independently hide their metrics");
-const withoutSpeedUnit = { ...extension.DEFAULT_SETTINGS, "mini-lens-speed-unit-show": false };
+const withoutSpeedUnit = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-speed-unit-show": false };
 const noUnitLine = extension.statusLine(ctx, theme, 140, sampleTotals, withoutSpeedUnit, 40);
 assert.match(noUnitLine, /40\.0$/, "speed-unit setting shows only the numeric speed when disabled");
 assert.doesNotMatch(noUnitLine, /tok\/s/, "speed-unit setting removes tok/s from the footer");
@@ -435,29 +435,14 @@ const settingsCtx = {
     },
   },
 };
-await commands.get("mini-lens-settings").handler("", settingsCtx);
+await commands.get("pi-mini-mode-settings").handler("", settingsCtx);
 const settingsChildren = settingsPanel.render(100);
 const settingsPreview = settingsChildren[2];
-assert.deepEqual(settingsChildren[3].items.map((item) => item.label), ["Lens", "折叠回复", "极简输出"]);
-assert.equal(settingsChildren[3].items[1].currentValue, "off");
-assert.deepEqual(settingsChildren[3].items[1].values, ["on", "off"]);
-assert.equal(settingsChildren[3].items[2].submenu, undefined, "Minimal output stays disabled while Collapse replies is off");
-assert.equal(settingsChildren[3].items[2].currentValue, "off");
-assert.match(settingsChildren[3].items[2].description ?? "", /打开「折叠回复」后才能配置这些选项/);
-settingsChildren[3].setValue("mini-lens-minimal-show", "on");
-assert.equal(settingsChildren[3].items[1].currentValue, "on");
-assert.equal(typeof settingsChildren[3].items[2].submenu, "function", "Minimal output unlocks after Collapse replies is on");
-assert.equal(settingsChildren[3].items[2].currentValue, "›");
-const collapsedChildren = settingsChildren[3].items[2].submenu("", () => {});
-assert.deepEqual(collapsedChildren.items.map((item) => item.id), [
-  "mini-lens-minimal-thinking-show", "mini-lens-minimal-tools-show", "mini-lens-minimal-output-show",
-  "mini-lens-minimal-skills-show", "mini-lens-agent-usage-show", "mini-lens-agent-shortcut-show",
-]);
-assert.ok(!collapsedChildren.items.some((item) => item.id === "mini-lens-minimal-show"), "the switch stays out of the Minimal output group");
-settingsChildren[3].setValue("mini-lens-minimal-show", "off");
-assert.equal(settingsChildren[3].items[2].submenu, undefined, "turning the switch off disables Minimal output again");
-const settingsList = settingsChildren[3].items[0].submenu("", () => {});
-assert.ok(!settingsList.items.some((item) => item.id === "mini-lens-minimal-show" || extension.isCollapsedReplyChildSetting(item.id)), "Lens stays separate from collapsed-reply options");
+assert.deepEqual(settingsChildren[3].items.map((item) => item.label), ["设置"]);
+assert.equal(typeof settingsChildren[3].items[0].submenu, "function");
+const settingsSubmenu = settingsChildren[3].items[0].submenu("›", () => {});
+assert.deepEqual(settingsSubmenu.items.map((item) => item.label), ["显示模型", "显示思考等级", "显示会话总 token", "显示会话缓存 token", "显示缓存命中率 (CH)", "显示会话价格", "显示已启用 MCP 服务器", "显示上下文 token 与进度条", "↳ 使用点阵进度条", "显示上下文百分比", "显示最近生成速度", "↳ 显示 tok/s 单位", "折叠回复", "极简输出"]);
+const settingsList = settingsSubmenu;
 colors.length = 0;
 settingsList.theme.label("Focused option", true);
 settingsList.theme.value("off", true);
@@ -467,8 +452,8 @@ settingsList.theme.label("Normal option", false);
 assert.deepEqual(colors, ["text"], "unfocused labels are not highlighted");
 assert.match(settingsPreview.text, /deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "settings preview uses fixed example data instead of the current session");
 assert.doesNotMatch(settingsPreview.text, /25\.0%|50K\/100K|gpt-5/, "settings preview never reads live session values");
-assert.equal(settingsList.items.find((item) => item.id === "mini-lens-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
-settingsList.setValue("mini-lens-mcp-show", "on");
+assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
+settingsList.setValue("pi-mini-mode-mcp-show", "on");
 assert.match(settingsPreview.text, /◇ MCP 3/, "MCP toggle updates example preview immediately");
 assert.match(footer.render(140)[0], /◇ MCP 3/, "startup broadcast survives session_start and counts enabled, not connected servers or tools");
 let beforeMcpRefresh = renders;
@@ -485,16 +470,16 @@ for (const payload of [null, undefined, false, "bad", [], {}, { version: 2, serv
 }
 events.emit(mcpStatusEvent, { version: 1, servers: [] });
 assert.match(footer.render(140)[0], /◇ MCP 0/, "shutdown/empty snapshot clears previous count");
-settingsList.setValue("mini-lens-mcp-show", "off");
+settingsList.setValue("pi-mini-mode-mcp-show", "off");
 assert.doesNotMatch(footer.render(140)[0], /MCP/, "MCP toggle off immediately hides live count");
 events.emit(mcpStatusEvent, startupSnapshot);
-settingsList.setValue("mini-lens-mcp-show", "on");
+settingsList.setValue("pi-mini-mode-mcp-show", "on");
 assert.match(footer.render(140)[0], /◇ MCP 3/, "events received while hidden remain available when enabled");
-settingsList.setValue("mini-lens-cache-tokens-show", "off");
+settingsList.setValue("pi-mini-mode-cache-tokens-show", "off");
 assert.doesNotMatch(settingsPreview.text, /Cached 25K/, "changing the cache-token setting updates the preview immediately");
-settingsList.setValue("mini-lens-ch-show", "off");
+settingsList.setValue("pi-mini-mode-ch-show", "off");
 assert.doesNotMatch(settingsPreview.text, /CH 40\.0%/, "changing the cache-rate setting updates the preview immediately");
-settingsList.setValue("mini-lens-speed-unit-show", "off");
+settingsList.setValue("pi-mini-mode-speed-unit-show", "off");
 assert.match(settingsPreview.text, /120$/, "changing the unit setting updates the preview immediately");
 assert.doesNotMatch(settingsPreview.text, /tok\/s/, "disabled speed unit is absent from the updated preview");
 
@@ -505,13 +490,13 @@ for (const width of [40, 20, 8, 3]) {
 }
 for (let attempt = 0; attempt < 100; attempt++) {
   const saved = (await extension.loadSettings(extension.settingsPath(runtimeDir))).settings;
-  if (saved["mini-lens-mcp-show"] && !saved["mini-lens-speed-unit-show"]) break;
+  if (saved["pi-mini-mode-mcp-show"] && !saved["pi-mini-mode-speed-unit-show"]) break;
   await setTimeout(10);
 }
 const savedRuntime = (await extension.loadSettings(extension.settingsPath(runtimeDir))).settings;
-assert.equal(savedRuntime["mini-lens-mcp-show"], true, "settings-panel MCP toggle persists to disk");
-assert.equal(savedRuntime["mini-lens-speed-unit-show"], false, "queued settings writes complete in order");
-assert.equal("mini-lens-language" in savedRuntime, false, "legacy language setting is not persisted");
+assert.equal(savedRuntime["pi-mini-mode-mcp-show"], true, "settings-panel MCP toggle persists to disk");
+assert.equal(savedRuntime["pi-mini-mode-speed-unit-show"], false, "queued settings writes complete in order");
+assert.equal("pi-mini-mode-language" in savedRuntime, false, "legacy language setting is not persisted");
 handlers.get("session_shutdown")({}, ctx);
 assert.equal(eventEmitter.listenerCount(mcpStatusEvent), 0, "shutdown removes shared bus listener for reload");
 
@@ -530,7 +515,7 @@ const minimalCtx = { ...ctx, mode: "tui", hasUI: false, sessionManager: { getBra
 await minimalHandlers.get("session_start")({}, minimalCtx);
 assert.equal(doc.render, originalDocRender, "collapsed replies off keeps Pi's default conversation history");
 assert.equal(inputListener, undefined, "native history does not install collapsed-reply shortcuts");
-await minimalCommands.get("mini-lens-minimal").handler("on", minimalCtx);
+await minimalCommands.get("pi-mini-mode-minimal").handler("on", minimalCtx);
 assert.deepEqual(inputListener('\x1b[111;7u'), { consume: true });
 assert.equal(doc.render, originalDocRender, 'Ctrl+Option+O restores native transcript');
 assert.equal(inputListener('\x0f'), undefined, 'native Ctrl+O passes through');
@@ -636,7 +621,7 @@ await writeFile(join(statusDirectory, "status.json"), JSON.stringify({ sessionId
 const previousStatusRoot = process.env.PI_SUBAGENTS_TEMP_ROOT;
 process.env.PI_SUBAGENTS_TEMP_ROOT = statusRoot;
 minimalCtx.sessionManager.getSessionFile = () => "current-session";
-await minimalCommands.get("mini-lens-minimal").handler("on", minimalCtx);
+await minimalCommands.get("pi-mini-mode-minimal").handler("on", minimalCtx);
 assert.match(doc.render(100).join("\n"), /Subagent 0\/1[\s\S]*child task[\s\S]*Follow-up answer/, "settled parent keeps children before its replies");
 assert.deepEqual(testTui.children[3].render(100), [], 'nothing is rendered in the dock');
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/);
@@ -664,7 +649,7 @@ try {
   assert.match(doc.render(100).join('\n'), /Subagent|completed child/);
   inputListener('\x13');
   assert.match(doc.render(100).join('\n'), /completed child/, 'expanded completed child stays visible');
-  await minimalCommands.get('mini-lens-minimal').handler('on', minimalCtx);
+  await minimalCommands.get('pi-mini-mode-minimal').handler('on', minimalCtx);
   assert.match(doc.render(100).join('\n'), /Subagent|completed child/, 'remount retains current-session completed children');
 } finally { Date.now = realNow; }
 assert.deepEqual(testTui.children[3].render(100), []);
@@ -672,9 +657,9 @@ assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'running'));
 assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'completed' && entry.data.steps[0].finalOutput === 'completed child'), 'polling persists structured final text without requiring expansion');
 await rm(statusDirectory, { recursive: true });
 minimalCtx.sessionManager.getBranch = () => persistedAgentEntries;
-await minimalCommands.get('mini-lens-minimal').handler('on', minimalCtx);
+await minimalCommands.get('pi-mini-mode-minimal').handler('on', minimalCtx);
 assert.match(doc.render(100).join('\n'), /completed child/, 'session entries restore children after temporary status removal');
-await minimalCommands.get("mini-lens-minimal").handler("off", minimalCtx);
+await minimalCommands.get("pi-mini-mode-minimal").handler("off", minimalCtx);
 if (previousStatusRoot === undefined) delete process.env.PI_SUBAGENTS_TEMP_ROOT;
 else process.env.PI_SUBAGENTS_TEMP_ROOT = previousStatusRoot;
 await rm(statusRoot, { recursive: true, force: true });
@@ -684,7 +669,7 @@ assert.equal(inputListener, undefined);
 testTui.mode = 'regular';
 const unsupportedNotices = [];
 const regularCtx = { ...minimalCtx, ui: { ...minimalCtx.ui, notify: (message, level) => unsupportedNotices.push({ message, level }) } };
-await minimalCommands.get('mini-lens-minimal').handler('on', regularCtx);
+await minimalCommands.get('pi-mini-mode-minimal').handler('on', regularCtx);
 assert.equal(doc.render, originalDocRender);
 assert.equal(unsupportedNotices.length, 1);
 assert.equal(unsupportedNotices[0].level, 'warning');
@@ -700,8 +685,8 @@ delete testTui.mode;
 minimalHandlers.get("session_shutdown")({}, minimalCtx);
 
 // A first interactive run previews enabled defaults, offers two explicit choices, and persists Keep defaults.
-const onboardingDir = await mkdtemp(join(tmpdir(), "mini-lens-onboarding-"));
-process.env.MINI_LENS_AGENT_DIR = onboardingDir;
+const onboardingDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-onboarding-"));
+process.env.PI_MINI_MODE_AGENT_DIR = onboardingDir;
 const onboardingExtension = await import(pathToFileURL(source.pathname).href + `?onboarding=${Date.now()}`);
 const onboardingHandlers = new Map();
 onboardingExtension.default({ events, on(name, handler) { onboardingHandlers.set(name, handler); }, registerCommand() {} });
@@ -727,8 +712,8 @@ assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
 
-const configureDir = await mkdtemp(join(tmpdir(), "mini-lens-configure-"));
-process.env.MINI_LENS_AGENT_DIR = configureDir;
+const configureDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-configure-"));
+process.env.PI_MINI_MODE_AGENT_DIR = configureDir;
 const configureHandlers = new Map();
 onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(name, handler); }, registerCommand() {} });
 await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
@@ -738,5 +723,5 @@ await rm(configDir, { recursive: true, force: true });
 await rm(runtimeDir, { recursive: true, force: true });
 await rm(onboardingDir, { recursive: true, force: true });
 await rm(configureDir, { recursive: true, force: true });
-delete process.env.MINI_LENS_AGENT_DIR;
+delete process.env.PI_MINI_MODE_AGENT_DIR;
 console.log("footer-status self-check ok");

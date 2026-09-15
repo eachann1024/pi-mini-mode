@@ -57,7 +57,8 @@ for (const name of ['dark', 'light']) {
   assert.match(clean(frameA), /…\s*$/);
   snapshot[0].steps[0].recentOutput = ['AI 回复 ' + '中文回复🙂 '.repeat(40)];
   const replyStart = render(clock + 3000, 120, true);
-  assert.equal(replyStart.rows.length, 1, 'running prose never creates a process block');
+  assert.match(clean(replyStart.rows.slice(1).join('\n')), /当前活动：bash npm test/, 'running expansion shows current tool activity');
+  assert.doesNotMatch(clean(replyStart.rows.join('\n')), /AI 回复/, 'unstructured prose stays hidden');
   assert.doesNotMatch(clean(replyStart.rows[0]), /AI 回复/);
   assert.equal(clean(replyStart.rows[0]).split(' : ')[1], clean(render(clock + 5000).rows[0]).split(' : ')[1], 'activity never plays back recentOutput');
   assert.match(clean(render(clock + 100000).rows[0]), /bash npm test/, 'tool activity stays visible');
@@ -176,11 +177,11 @@ for (const name of ['dark', 'light']) {
     liveHost.children[3].clear();
     liveHost.children[3].addChild(new Text(title, 0, 0));
     const firstFrame = liveHost.children[3].render(100);
-    assert.equal(firstFrame.length, 41, 'running children keep one inline activity row');
+    assert.equal(firstFrame.length, 81, 'expanded running children show a heading and current activity');
     assert.doesNotMatch(clean(firstFrame.join('\n')), /async workflow|Async agents|subagents \(/);
   }
   statuses[0].steps.push({ runId: 'new-child', agent: 'reviewer', model: 'gpt-5', thinking: 'high', currentTool: 'write new.ts' });
-  assert.equal(liveHost.children[3].render(100).length, 42);
+  assert.equal(liveHost.children[3].render(100).length, 83);
   liveHost.children[5].addChild(new Text('⠇ Async agents · background', 0, 0));
   assert.deepEqual(liveHost.children[5].render(100), [], 'native panel stays hidden below editor too');
   restoreLive();
@@ -196,7 +197,7 @@ for (const name of ['dark', 'light']) {
   assert.ok(markdownDetails.includes(theme.bold('重点')), 'expanded SubAgent output uses the shared Markdown emphasis');
   const jsonDetails = liveAgentRows([{ runId: 'json-details', steps: [{ agent: 'scout', status: 'completed', finalOutput: '{"key":"**literal**"}' }] }], theme, 100, true).join('\n');
   assert.match(clean(jsonDetails), /\{\"key\":\"\*\*literal\*\*\"\}/, 'structured output stays literal');
-  assert.equal(liveAgentRows(outputStatus, theme, 100, true).length, 2, 'running replies stay hidden');
+  assert.equal(liveAgentRows(outputStatus, theme, 100, true).length, 3, 'running expansion shows its state, not raw replies');
   assert.doesNotMatch(clean(liveAgentRows(outputStatus, theme, 100, true).join('\n')), /FIRST_DETAIL/);
   for (const state of ['queued', 'running', 'completed', 'failed']) {
     const step = outputStatus[0].steps[0];
@@ -204,7 +205,7 @@ for (const name of ['dark', 'light']) {
     step.error = state === 'failed' ? 'Model unavailable' : undefined;
     for (const expanded of [false, true]) {
       const rows = liveAgentRows(outputStatus, theme, 100, expanded).map(clean);
-      assert.equal(rows.length, expanded && state === 'failed' ? 3 : 2, `${state}: unstructured previews never expand`);
+      assert.equal(rows.length, expanded && state !== 'completed' ? 3 : 2, `${state}: current activity or error expands, unstructured previews do not`);
       assert.doesNotMatch(rows.join('\n'), /FIRST_DETAIL|LATEST/);
       if (rows.length === 1) continue;
       assert.match(rows[1], state === 'failed' ? /^└─ × / : state === 'completed' ? /^└─ ✓ / : /^└─ [\u2800-\u28ff] /);
@@ -239,7 +240,7 @@ for (const name of ['dark', 'light']) {
   assert.match(mixedRows[0], /running 5 · done 4/);
   assert.equal(visibleWidth(mixedRows[0]), 100, 'summary is right aligned');
   assert.doesNotMatch(mixedRows.join('\n'), /active_long_running|4\/9/);
-  assert.equal(liveAgentRows(mixed, theme, 100, true).length, 10);
+  assert.equal(liveAgentRows(mixed, theme, 100, true).length, 15);
   const fleetHost = { children: Array.from({ length: 7 }, () => new Container()) };
   let clicked = false;
   let fleet = ['5 active agents · ↓ 540.3k tokens · ↓/← to inspect'];
@@ -437,7 +438,7 @@ assert.equal(expandedNoticeView.rows[0], collapsedNoticeView.rows[0], 'expanding
 assert.ok(expandedNoticeView.rows[0].includes(testTheme.fg('muted', ' medium')), 'expanded thinking stays gray');
 const renderedExpandedText = clean(expandedNoticeView.rows.join('\n'));
 assert.match(renderedExpandedText, /本轮代码已完成并通过所有测试/);
-assert.equal(expandedNoticeView.rows.length, 1, 'progress notices remain a single status row and never enter details');
+assert.match(clean(expandedNoticeView.rows.slice(1).join('\n')), /当前活动：本轮代码已完成并通过所有测试/, 'running expansion shows the current notice, not its history');
 assert.doesNotMatch(renderedExpandedText, /Subagent progress update|Run:|Child index|Live guidance|subagent\(|REQUEST_ID/);
 
 const clickedIds = new Set([singleAsyncId]);
