@@ -45,6 +45,15 @@ let control = view.toolChoices()[0];
 view.handleMouse(event(control, { type: 'move', button: 'none' }));
 assert.match(view.render(80)[control.y], /▸ bash/);
 assert.match(view.render(40)[view.toolChoices()[0].y], /● bash/, 'resize clears hover');
+const errorHover = minimalOutputComponent(theme, () => [{ question: 'q', process: ['call err'], agentCalls: [{ id: 'err', name: 'bash', task: 'fail', state: 'error' }] }]);
+errorHover.render(80);
+const errorControl = errorHover.toolChoices()[0];
+assert.match(errorHover.render(80)[errorControl.y], /× bash/);
+errorHover.handleMouse(event(errorControl, { type: 'move', button: 'none' }));
+assert.match(errorHover.render(80)[errorControl.y], /▸ bash/, 'error hover shows the arrow');
+assert.doesNotMatch(errorHover.render(80)[errorControl.y], /×/, 'error hover hides ×');
+errorHover.handleMouse(event(errorControl));
+assert.match(errorHover.render(80).join('\n'), /▾ × bash/, 'expanded error still shows ×');
 view.render(80);
 control = view.toolChoices()[0];
 for (const changes of [{ shift: true }, { ctrl: true }, { alt: true }, { button: 'right' }, { x: 7 }, { type: 'drag' }, { type: 'wheel' }]) {
@@ -83,7 +92,7 @@ const placeholder = minimalOutputComponent(theme, () => [{ question: 'q', proces
 placeholder.render(80);
 assert.equal(placeholder.toolChoices().length, 0, 'empty Thinking placeholder is not expandable');
 
-// Running SubAgents without output must visibly open, then update in place.
+// Running SubAgents keep one activity row; only structured finals enter expanded details.
 const child = { agent: 'worker', status: 'running', currentTool: 'bash', currentToolArgs: 'npm test', recentOutput: [] };
 const agentTurn = { question: 'q', process: [], subAgents: [{ runId: 'live-child', mode: 'single', state: 'running', steps: [child] }] };
 const agentView = minimalOutputComponent(theme, () => [agentTurn]);
@@ -92,16 +101,19 @@ const agentDetails = () => agentView.render(80).slice(agentHeading() + 1).join('
 assert.equal(agentDetails(), '');
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() }, { type: 'press' })), { handled: true });
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() })), { handled: true, render: true });
-assert.match(agentDetails(), /bash npm test/);
+assert.equal(agentDetails(), '');
 child.currentToolArgs = 'npm run check';
-assert.match(agentDetails(), /bash npm run check/, 'expanded live activity refreshes');
+assert.match(agentView.render(80).join('\n'), /bash npm run check/, 'inline live activity refreshes');
 child.currentTool = '';
 child.currentToolArgs = '';
-assert.match(agentDetails(), /等待子代理输出/, 'empty live run still visibly expands');
+assert.equal(agentDetails(), '', 'empty live run does not open a process block');
 child.recentOutput = ['LIVE_OUTPUT'];
-assert.match(agentDetails(), /LIVE_OUTPUT/);
+assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
+assert.equal(agentDetails(), '');
 agentTurn.subAgents[0].state = 'complete';
-assert.match(agentDetails(), /LIVE_OUTPUT/, 'completion preserves expansion');
+child.finalOutput = 'FINAL_OUTPUT';
+assert.match(agentDetails(), /FINAL_OUTPUT/, 'completion preserves click expansion');
+assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
 agentView.handleMouse(event({ y: agentHeading() }));
 assert.equal(agentDetails(), '', 'completed run can collapse');
 

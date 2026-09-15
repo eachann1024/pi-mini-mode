@@ -1,11 +1,10 @@
 import { diagramMarkdown, isMarkdownProse, minimalMarkdownTheme } from "./minimal-markdown.ts";
-import { extractNoticeBody } from "./transcript-adapter.ts";
-import { secondaryAccent } from "./minimal-theme.ts";
+import { supervisorNoticeBody } from "./transcript-adapter.ts";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Markdown, Text, sliceByColumn, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
 type Theme = ExtensionContext["ui"]["theme"];
 export const RUNNING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -58,24 +57,33 @@ export function agentCallRows(calls: AgentCall[], theme: Theme, width: number, e
 
 const plain = (text: string) => text.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "").replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trim();
 
-/** pi-subagents stores a short activity preview; recover its matching raw tool input from the child session. */
-const toolInputCache = new Map<string, { stamp: string; thinking: string; inputs: Array<{ name: string; value: string }> }>();
+/** Recover structured final text and raw tool inputs from the child session, never from activity previews. */
+const childSessionCache = new Map<string, { stamp: string; thinking: string; finalOutput: string; inputs: Array<{ name: string; value: string }> }>();
 const singleLine = (value: string) => plain(value).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ");
 function childSessionData(sessionFile: unknown) {
   if (typeof sessionFile !== "string") return undefined;
   try {
     const stat = statSync(sessionFile);
     const stamp = `${stat.mtimeMs}:${stat.size}`;
-    let cached = toolInputCache.get(sessionFile);
+    let cached = childSessionCache.get(sessionFile);
     if (!cached || cached.stamp !== stamp) {
       const inputs: Array<{ name: string; value: string }> = [];
       let thinking = "";
+      let finalOutput = "";
       for (const line of readFileSync(sessionFile, "utf8").split(/\r?\n/)) {
         try {
-          const entry = JSON.parse(line) as { type?: string; thinkingLevel?: string; message?: { role?: string; content?: Array<{ type?: string; name?: string; input?: Record<string, unknown>; arguments?: Record<string, unknown> }> } };
+          const entry = JSON.parse(line) as { type?: string; thinkingLevel?: string; message?: { role?: string; stopReason?: string; channel?: string; content?: Array<{ type?: string; text?: string; name?: string; input?: Record<string, unknown>; arguments?: Record<string, unknown> } | null> } };
           if (entry.type === "thinking_level_change" && /^(off|minimal|low|medium|high|xhigh|max)$/.test(entry.thinkingLevel ?? "")) thinking = entry.thinkingLevel!;
           if (entry.message?.role !== "assistant") continue;
-          for (const call of entry.message.content ?? []) {
+          const message = entry.message;
+          const content = Array.isArray(message.content) ? message.content : [];
+          // Pi persists no channel: only a stopped assistant text reply is a final answer.
+          finalOutput = entry.type === "message" && message.stopReason === "stop"
+            && (message.channel === undefined || message.channel === "final")
+            && !content.some(block => block?.type === "toolCall")
+            ? content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block!.text).join("\n\n").trim() : "";
+          for (const call of content) {
+            if (!call) continue;
             if (call.type !== "toolCall" || typeof call.name !== "string") continue;
             const input = call.arguments ?? call.input ?? {};
             const value = [input.path, input.command, input.pattern, input.query, input.task, input.prompt]
@@ -84,8 +92,8 @@ function childSessionData(sessionFile: unknown) {
           }
         } catch { /* A concurrently written session can end with a partial line. */ }
       }
-      cached = { stamp, thinking, inputs };
-      toolInputCache.set(sessionFile, cached);
+      cached = { stamp, thinking, finalOutput, inputs };
+      childSessionCache.set(sessionFile, cached);
     }
     return cached;
   } catch { return undefined; }
@@ -123,7 +131,7 @@ export function restyleAgentWidget(lines: string[], theme: Theme, width: number,
   const rows = [agentSummary(theme, width, blocks.length - done - errors, done, errors, expanded)];
   if (!blocks.length) rows.push(truncateToWidth(theme.fg("text", content[0]), width));
   const markdown = (text: string, available: number) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: value => secondaryAccent(theme, value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
+    { color: value => theme.fg("text", value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
   // ponytail: native widget exposes bounded live previews, not the full child transcript.
   visible.forEach((block, index) => {
     const heading = block[0].replace(/^(?:[└├]─\s*)?[●○◉✓✗×◦■\u2800-\u28ff]\s*/, "");
@@ -167,6 +175,35 @@ const isAgentFleetSummary = (lines: string[]) => {
     && !/\b(?:jobs?|panes?)\b/.test(content[0]);
 };
 
+export const AGENT_STATUS_ENTRY = "mini-lens-agent-status";
+
+export function savedAgentStatuses(entries: unknown[]): Record<string, unknown>[] {
+  const saved = new Map<string, Record<string, unknown>>();
+  for (const value of entries) {
+    const entry = value as { type?: string; customType?: string; data?: Record<string, unknown> } | null;
+    if (entry?.type === "custom" && entry.customType === AGENT_STATUS_ENTRY
+      && entry.data && typeof entry.data.runId === "string") saved.set(entry.data.runId, entry.data);
+  }
+  return [...saved.values()];
+}
+
+/** Keep observed snapshots even after the producer cleans its temporary directory. */
+export function retainAgentStatuses(previous: Record<string, unknown>[], current: Record<string, unknown>[]): Record<string, unknown>[] {
+  const retained = new Map(previous.map(status => [String(status.runId), status]));
+  for (const status of new Map([...previous, ...current].map(status => [String(status.runId), status])).values()) {
+    const saved = retained.get(String(status.runId));
+    const children = agentChildren([status]).map(child => {
+      const previous = saved && agentChildren([saved]).find(item => item.displayId === child.displayId);
+      const sameAttempt = previous?.sessionFile === child.sessionFile && previous?.startedAt === child.startedAt;
+      const finalOutput = childSessionData(child.sessionFile)?.finalOutput ?? child.finalOutput ?? (sameAttempt ? previous?.finalOutput : undefined);
+      return { ...child, finalOutput, notice: child.notice ?? previous?.notice, noticeMessages: child.noticeMessages ?? previous?.noticeMessages };
+    });
+    retained.set(String(status.runId), children.length
+      ? { ...status, steps: children, workflowChildren: undefined, children: undefined } : status);
+  }
+  return [...retained.values()];
+}
+
 // ponytail: pi-subagents status.json adapter; replace with an uncapped public snapshot API when available.
 export function readAgentStatuses(sessionId: string, root = process.env.PI_SUBAGENTS_TEMP_ROOT?.trim()
   ? resolve(process.env.PI_SUBAGENTS_TEMP_ROOT) : join(tmpdir(), `pi-subagents-uid-${process.getuid?.()}`), previous: Record<string, unknown>[] = []): Record<string, unknown>[] {
@@ -177,7 +214,7 @@ export function readAgentStatuses(sessionId: string, root = process.env.PI_SUBAG
       if (!entry.isDirectory()) return [];
       try {
         const status = JSON.parse(readFileSync(join(directory, entry.name, "status.json"), "utf8"));
-        return status && status.sessionId === sessionId && !status.displayDismissedAt ? [status] : [];
+        return status && status.sessionId === sessionId ? [status] : [];
       } catch {
         // Retain the last valid snapshot during replacement; never flash an empty panel.
         return previous.filter(status => status.sessionId === sessionId && status.runId === entry.name);
@@ -240,7 +277,7 @@ export function agentStatusesByTurn(statuses: Record<string, unknown>[], turns: 
   return assigned;
 }
 
-function agentChildren(statuses: Record<string, unknown>[]): Record<string, unknown>[] {
+export function agentChildren(statuses: Record<string, unknown>[]): Record<string, unknown>[] {
   const children = new Map<string, Record<string, unknown>>();
   const visit = (value: unknown, key: string) => {
     if (!value || typeof value !== "object") return;
@@ -261,7 +298,7 @@ function agentChildren(statuses: Record<string, unknown>[]): Record<string, unkn
     if (status.mode === "single" && Array.isArray(status.steps) && status.steps.length === 1) {
       const terminal = finishedAgent(status.state) || failedAgent(status);
       visit({ ...status.steps[0], runId: status.runId, startedAt: status.steps[0].startedAt ?? status.startedAt,
-        notice: status.notice, noticeMessages: status.noticeMessages,
+        notice: status.notice ?? status.steps[0].notice, noticeMessages: status.noticeMessages ?? status.steps[0].noticeMessages,
         ...(terminal ? { status: status.state, endedAt: status.steps[0].endedAt ?? status.endedAt, error: status.error ?? status.steps[0].error } : {}),
       }, String(status.runId));
     } else visit({ ...status, notice: status.notice, noticeMessages: status.noticeMessages }, String(status.runId));
@@ -276,9 +313,7 @@ export type AgentDeadlines = Map<string, number>;
 export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme, width: number, expanded = false, _activeOnly = false,
   deadlines: AgentDeadlines = new Map(), now = Date.now(), expandedIds?: Set<string>,
   subagentControls?: Array<{ runId: string; y: number; width: number; line: string }>) {
-  // readAgentStatuses already scopes snapshots to the active session. Keep each
-  // current-session terminal snapshot so its title and expandable details remain
-  // available after the run completes; no separate archive is created.
+  // Live and session-persisted snapshots share the same lifecycle and details.
   const all = agentChildren(statuses);
   const errors = all.filter(failedAgent).length;
   const done = all.filter(child => !failedAgent(child) && finishedAgent(child.status ?? child.state)).length;
@@ -288,13 +323,13 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     ? plain(value).replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g, " ").trim() : "";
   const renderBody = (source: string, available: number) => {
     if (isMarkdownProse(source)) return new Markdown(source, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-      { color: value => theme.fg("text", value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
+      { color: value => theme.fg("muted", value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
     const rows: string[] = [];
     for (const sourceLine of source.split(/\r?\n/)) {
       let line = sourceLine;
       do {
         const row = truncateToWidth(line, Math.max(1, available), "");
-        rows.push(row);
+        rows.push(theme.fg("muted", row));
         line = line.slice(row.length);
       } while (line);
     }
@@ -307,7 +342,6 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     const model = text(child.model).split("/").at(-1) || "";
     const suffix = model.match(/:(off|minimal|low|medium|high|xhigh|max)$/);
     const level = text(child.thinking) || suffix?.[1] || childSessionData(child.sessionFile)?.thinking || "?";
-    const output = Array.isArray(child.recentOutput) ? child.recentOutput.at(-1) : undefined;
     const tools = Array.isArray(child.recentTools) ? child.recentTools.filter(tool => tool && typeof tool === "object") : [];
     const latest = tools.at(-1);
     const latestArgs = rawToolInput(child.sessionFile, latest?.tool, text(latest?.args));
@@ -315,7 +349,7 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
       || text(child.error)
       || [text(child.currentTool), text(child.currentPath || child.currentToolArgs)].filter(Boolean).join(" ")
       || [text(latest?.tool), latestArgs].filter(Boolean).join(" ")
-      || text(output) || text(child.description) || "waiting";
+      || text(child.description) || text(child.status ?? child.state) || "waiting";
     // Tool inputs are literal code, not Markdown (heredocs can contain HTML-like text).
     const body = latest || child.currentTool ? text(activity) : text(new Markdown(activity, 0, 0, minimalMarkdownTheme(getMarkdownTheme()), undefined, { transform: diagramMarkdown })
       .render(Math.max(1, visibleWidth(activity) + 1)).join(" "));
@@ -335,15 +369,14 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     const endedAt = terminal ? timestamp(child.endedAt) ?? deadlines.get(`${elapsedKey}:ended`) ?? now : now;
     if (terminal) deadlines.set(`${elapsedKey}:ended`, endedAt);
     const elapsed = formatAgentElapsed(startedAt, endedAt);
-    const heading = truncateToWidth(theme.fg(color, `${index === all.length - 1 ? "└─" : "├─"} ${glyph} `)
-      + theme.fg("accent", theme.bold("SubAgent"))
+    const heading = truncateToWidth(theme.fg("dim", `${index === all.length - 1 ? "└─" : "├─"} `)
+      + theme.fg(failedAgent(child) || notice?.color === "error" ? "error" : notice?.color === "warning" ? "warning" : isRunning && !terminal ? "accent" : "muted", `${glyph} `)
+      + theme.fg("text", theme.bold("SubAgent"))
       + theme.fg(color, ` • ${suffix ? model.slice(0, -suffix[0].length) : model}`)
       + (level ? theme.fg("muted", ` ${level}`) : "") + theme.fg(terminal ? "muted" : "success", ` ${elapsed}`) + theme.fg(color, " : "), width, "…");
     const bodyBudget = Math.max(0, width - visibleWidth(heading));
-    const overflow = Math.max(0, visibleWidth(body) - bodyBudget);
-    const offset = !terminal && overflow ? Math.max(0, Math.floor(Math.max(0, now - (typeof latest?.endMs === "number" ? latest.endMs : typeof child.lastActivityAt === "number" ? child.lastActivityAt : 0)) / 250) % (overflow + 9) - 4) : 0;
-    const progress = bodyBudget ? sliceByColumn(body, Math.min(overflow, offset), bodyBudget, true) : "";
-    const row = heading + theme.fg(color, progress);
+    const progress = !bodyBudget ? "" : truncateToWidth(body, bodyBudget, "…");
+    const row = heading + theme.fg("muted", progress);
     const line = row + " ".repeat(Math.max(0, width - visibleWidth(row)));
     subagentControls?.push({ runId: runKey, y: rows.length, width, line });
     rows.push(line);
@@ -351,23 +384,13 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
       const messages = Array.isArray(child.noticeMessages) ? child.noticeMessages : [];
       const bodies: string[] = [];
       for (const msg of messages) {
-        const b = extractNoticeBody(msg);
+        const b = supervisorNoticeBody(msg);
         if (b && !bodies.includes(b)) bodies.push(b);
       }
-      // Some completed runs have no supervisor notice. Their snapshot still
-      // carries recent output, which is the in-session detail shown on expand.
-      if (!bodies.length && Array.isArray(child.recentOutput)) {
-        for (const output of child.recentOutput) {
-          const b = bodyText(output);
-          if (b && !bodies.includes(b)) bodies.push(b);
-        }
-      }
-      if (!bodies.length && !terminal) {
-        // Live runs may have tool activity but no output or supervisor notice yet.
-        const detail = activity === "waiting" ? "等待子代理输出…" : activity;
-        rows.push(...new Text(detail, 0, 0).render(Math.max(1, width - 3))
-          .map(line => truncateToWidth(`   ${line}`, width)));
-      }
+      const finalOutput = terminal ? bodyText(childSessionData(child.sessionFile)?.finalOutput ?? child.finalOutput) : "";
+      if (finalOutput && !bodies.includes(finalOutput)) bodies.push(finalOutput);
+      const error = bodyText(child.error);
+      if (error && !bodies.includes(error)) bodies.push(error);
       for (const textBody of bodies) {
         // Child/supervisor bodies are Markdown prose; tool logs and JSON are
         // not placed in this semantic body channel.

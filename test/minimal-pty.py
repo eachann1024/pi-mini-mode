@@ -42,9 +42,9 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
         entries.append({'type': 'message', 'id': entry_id, 'parentId': parent, 'timestamp': timestamp, 'message': content})
         parent = entry_id
     message({'role': 'user', 'content': 'PTY_QUESTION', 'timestamp': 1788739200000})
-    message({'role': 'assistant', 'content': [{'type': 'toolCall', 'id': str(i), 'name': 'bash', 'arguments': {'command': f'echo PTY_PROCESS_{i}'}} for i in range(8)], 'api': 'openai-completions', 'provider': 'fixture', 'model': 'fixture', 'stopReason': 'toolUse', 'usage': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 0, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}, 'timestamp': 1788739200000})
-    for i in range(8):
-        message({'role': 'toolResult', 'toolCallId': str(i), 'toolName': 'bash', 'content': [{'type': 'text', 'text': f'PTY_PROCESS_{i}'}], 'isError': False, 'timestamp': 1788739200000})
+    message({'role': 'assistant', 'content': [{'type': 'toolCall', 'id': str(i), 'name': 'bash', 'arguments': {'command': f'echo PTY_PROCESS_{i:02d}'}} for i in range(13)], 'api': 'openai-completions', 'provider': 'fixture', 'model': 'fixture', 'stopReason': 'toolUse', 'usage': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 0, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}, 'timestamp': 1788739200000})
+    for i in range(13):
+        message({'role': 'toolResult', 'toolCallId': str(i), 'toolName': 'bash', 'content': [{'type': 'text', 'text': f'PTY_PROCESS_{i:02d}'}], 'isError': False, 'timestamp': 1788739200000})
     message({'role': 'assistant', 'content': [{'type': 'text', 'text': '**PTY_FINAL。 **中文后续\n\n- `AiErrorLogController.java`\n- **KnowallLog.post**'}], 'api': 'openai-completions', 'provider': 'fixture', 'model': 'fixture', 'stopReason': 'stop', 'usage': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 0, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}, 'timestamp': 1788739200000})
     widget_extension = Path(directory) / 'agent-widget.ts'
     widget_extension.write_text('''import { createAssistantMessageEventStream } from "''' + str(ROOT / 'node_modules/@earendil-works/pi-ai/dist/compat.js') + '''";
@@ -86,7 +86,7 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
     status_root = Path(directory) / 'statuses'
     status_dir = status_root / 'async-subagent-runs' / 'fixture-run'
     status_dir.mkdir(parents=True)
-    (status_dir / 'status.json').write_text(json.dumps({'sessionId': str(session), 'runId': 'fixture-run', 'toolCallId': '0', 'mode': 'single', 'state': 'running', 'steps': [{'agent': 'reviewer', 'model': '9router/low', 'thinking': 'high', 'status': 'running', 'recentOutput': ['PTY_AGENT_DETAIL', 'PTY_AGENT_TASK']}]}))
+    (status_dir / 'status.json').write_text(json.dumps({'sessionId': str(session), 'runId': 'fixture-run', 'toolCallId': '0', 'mode': 'single', 'state': 'running', 'steps': [{'agent': 'reviewer', 'model': '9router/low', 'thinking': 'high', 'status': 'running', 'description': 'PTY_AGENT_TASK', 'recentOutput': ['PTY_AGENT_DETAIL', 'PTY_AGENT_PREVIEW']}]}))
     for mode in ['regular', 'fullscreen']:
         # Exercise the normal startup setting, not a CLI override that can hide
         # a mismatch with the user's default launch mode.
@@ -135,25 +135,25 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             assert b'Agent' in reenabled
             assert b'Subagent' in reenabled
             assert b'PTY_AGENT_TASK' in reenabled
-            assert 'SubAgent • low high : PTY_AGENT_TASK'.encode() in re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', reenabled)
+            assert re.search(rb'SubAgent .*low high \d+:\d+ : PTY_AGENT_TASK', re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', reenabled))
             assert b'PTY_AGENT_DETAIL' not in reenabled
             assert b'Async agents' not in reenabled
             assert b'PTY_NATIVE_DETAIL' not in reenabled
-            assert b'PTY_PROCESS_0' not in reenabled
-            assert b'PTY_PROCESS_1' not in reenabled
-            assert b'PTY_PROCESS_7' in reenabled
-            assert b'PTY_PROCESS_2' not in reenabled
+            assert b'PTY_PROCESS_00' not in reenabled
+            assert b'PTY_PROCESS_01' not in reenabled
+            assert b'PTY_PROCESS_12' in reenabled
+            assert b'PTY_PROCESS_02' not in reenabled
             plain_reenabled = re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', reenabled)
             assert re.search(rb'Agent[^\r\n]*Subagent 0/1', plain_reenabled), plain_reenabled[-4000:]
-            assert plain_reenabled.index(b'PTY_PROCESS_7') < plain_reenabled.index(b'PTY_AGENT_TASK') < plain_reenabled.index(b'PTY_FINAL')
+            assert plain_reenabled.index(b'PTY_PROCESS_12') < plain_reenabled.index(b'PTY_AGENT_TASK') < plain_reenabled.index(b'PTY_FINAL')
             assert '运行中'.encode() not in reenabled
             os.write(fd, b'\x0f')
             expanded = receive(fd, 2)
-            assert b'PTY_PROCESS_7' in expanded
+            assert b'PTY_PROCESS_12' in expanded
             assert b'PTY_AGENT_TASK' in expanded
             os.write(fd, b'\x0f')
             collapsed = receive(fd, 2)
-            assert b'PTY_PROCESS_7' in collapsed
+            assert b'PTY_PROCESS_12' in collapsed
             os.write(fd, b'\x13')
             child_expanded = receive(fd, 1)
             assert b'PTY_AGENT_DETAIL' not in child_expanded
@@ -177,10 +177,18 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             snapshot['state'] = 'completed'
             snapshot['steps'][0]['workflowKey'] = 'PTY_TITLE'
             snapshot['endedAt'] = int(time.time() * 1000)
-            snapshot['steps'][0]['recentOutput'] = ['PTY_COMPLETED_RESULT']
+            snapshot['steps'][0]['recentOutput'] = ['PTY_AGENT_PREVIEW']
+            snapshot['steps'][0]['finalOutput'] = 'PTY_COMPLETED_RESULT'
+            snapshot['steps'][0]['description'] = 'PTY_COMPLETED_TASK'
             status_file.write_text(json.dumps(snapshot))
-            completed = receive(fd, 2)
-            assert b'PTY_COMPLETED_RESULT' in completed
+            receive(fd, 2)
+            # The polling interval can emit the previous snapshot before the update.
+            fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 102, 0, 0))
+            os.kill(pid, signal.SIGWINCH)
+            completed = receive(fd, 1)
+            assert b'PTY_COMPLETED_TASK' in completed
+            assert b'PTY_COMPLETED_RESULT' not in completed
+            assert b'PTY_AGENT_PREVIEW' not in completed
             assert '✓'.encode() in completed
             assert b'1/1' in completed
             assert b'PTY_AGENT_TASK' not in completed
@@ -191,7 +199,8 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             os.kill(pid, signal.SIGWINCH)
             revealed += receive(fd, 1)
             assert b'PTY_COMPLETED_RESULT' in revealed
-            assert 'SubAgent • low high : PTY_COMPLETED_RESULT'.encode() in re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', revealed)
+            assert re.search(rb'SubAgent .*low high \d+:\d+ : PTY_COMPLETED_TASK', re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', revealed))
+            assert b'PTY_AGENT_PREVIEW' not in revealed
             assert b'PTY_TITLE' not in revealed
             os.write(fd, b'\x13')
             receive(fd, 1)
@@ -213,7 +222,8 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             assert b'PTY_LIVE_THOUGHT' not in settled_frame
             assert b'Thinking' not in settled_frame
             assert b'PTY_COMPLETED_RESULT' not in settled_frame
-            assert b'Subagent' not in settled_frame, 'terminal line expires and reload does not revive it'
+            assert b'Subagent' in settled_frame, 'completed child stays in its owning turn after reload'
+            assert b'PTY_COMPLETED_TASK' in settled_frame
             snapshot['state'] = 'running'
             snapshot['steps'][0]['status'] = 'running'
             snapshot['steps'][0]['recentOutput'] = ['PTY_AGENT_TASK']
@@ -224,7 +234,7 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             assert b'Error:' not in narrow
             log = Path(tempfile.gettempdir()) / f'mini-lens-{mode}-pty.log'
             log.write_bytes(start + enabled + disabled + reenabled + child_expanded + child_collapsed + reloaded + followup + restored + settled_frame + narrow)
-            print(f'{mode}: real Pi lifecycle, async receipt/follow-up/reload, title, 10s completion expiry, thinking cleanup, resize PASS; {log}', flush=True)
+            print(f'{mode}: real Pi lifecycle, async receipt/follow-up/reload, title, completion retention, thinking cleanup, resize PASS; {log}', flush=True)
         finally:
             # This disposable test owns the child; do not wait on interactive exit prompts.
             os.kill(pid, signal.SIGKILL)

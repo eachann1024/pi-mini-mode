@@ -9,11 +9,44 @@ const clean = (text: string) => stripVTControlCharacters(text).replace(/[\x00-\x
 const renderMarkdownBody = (body: string, width: number) => isMarkdownProse(body)
   ? new Markdown(body, 0, 0, minimalMarkdownTheme(getMarkdownTheme()), undefined, { transform: diagramMarkdown }).render(Math.max(1, width))
   : new Text(body, 0, 0).render(Math.max(1, width));
+const isSupervisorReply = (message: unknown) => record(message)?.customType === "subagent_supervisor_reply";
+
+/** Structured interview questions are the prompt; IDs and reply hints stay out. */
+export function formatInterview(interview: unknown): string {
+  const data = record(interview);
+  if (!data) return typeof interview === "string" ? clean(interview) : "";
+  const lines: string[] = [];
+  if (typeof data.title === "string" && data.title.trim()) lines.push(clean(data.title));
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  questions.forEach((question, index) => {
+    if (typeof question === "string") {
+      if (question.trim()) lines.push(`${index + 1}. ${clean(question)}`);
+      return;
+    }
+    const item = record(question);
+    if (!item) return;
+    const prompt = [item.prompt, item.question, item.text, item.label].find(value => typeof value === "string" && String(value).trim());
+    if (typeof prompt === "string") lines.push(`${index + 1}. ${clean(prompt)}`);
+    const options = Array.isArray(item.options) ? item.options : Array.isArray(item.choices) ? item.choices : [];
+    for (const option of options) {
+      const label = typeof option === "string" ? option : typeof record(option)?.label === "string" ? String(record(option)!.label) : "";
+      if (label.trim()) lines.push(`   - ${clean(label)}`);
+    }
+  });
+  return lines.join("\n");
+}
+
+function withInterview(body: string, interview: unknown): string {
+  const questions = formatInterview(interview);
+  if (!questions) return body;
+  return body ? `${body}\n${questions}` : questions;
+}
 
 export function extractNoticeBody(message: unknown): string {
   const item = record(message);
   if (!item) return typeof message === "string" ? clean(message) : "";
   const details = record(item.details);
+  const interview = details?.interview;
   if (details) {
     const event = record(details.event);
     const body = typeof details.requestBody === "string"
@@ -29,8 +62,10 @@ export function extractNoticeBody(message: unknown): string {
         ? event.reason === "tool_failures" ? "工具执行失败" : "任务完成受阻"
         : undefined;
       if (failureReason && !cleanBody.includes(failureReason)) cleanBody = `[${failureReason}] ${cleanBody}`;
-      return cleanBody;
+      return withInterview(cleanBody, interview);
     }
+    const questions = formatInterview(interview);
+    if (questions) return questions;
   }
   const raw = typeof item.content === "string" ? item.content : "";
   if (raw) {
@@ -38,21 +73,46 @@ export function extractNoticeBody(message: unknown): string {
       .split(/\r?\n/)
       .map(line => line.trim())
       .filter(line => line
-        && !/^(?:Subagent (?:progress update|needs a supervisor decision|control notice)|Supervisor (?:progress update|decision request))\b/i.test(line)
-        && !/^(?:Run|Agent|Child index|Child target|Request ID|Live guidance|Reply with|Request):\s*/i.test(line)
+        && !/^(?:Subagent (?:progress update|needs a supervisor decision|control notice)|Supervisor (?:progress update|decision request|interview request))\b/i.test(line)
+        && !/^(?:Run|Agent|Child index|Child target|Request ID|Live guidance|Reply with|Request|Interview shape):\s*/i.test(line)
         && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(line)
       )
       .join("\n")
       .replace(/^UPDATE:\s*/i, "")
       .trim();
-    if (filtered) return filtered;
+    if (filtered) return withInterview(filtered, interview);
   }
+  const questions = formatInterview(interview);
+  if (questions) return questions;
   return typeof item.content === "string" ? item.content : JSON.stringify(item.content ?? item, null, 2);
 }
 
 /** Only pi-subagents' known envelopes carry state; prose is never a status signal. */
 export function supervisorNotice(message: unknown) {
   const item = record(message);
+  if (item?.customType === "subagent_supervisor_reply") {
+    const data = record(item.data);
+    if (item.type !== "custom" || !data
+      || typeof data.requestId !== "string" || typeof data.runId !== "string"
+      || typeof data.agent !== "string" || typeof data.message !== "string"
+      || typeof data.childIndex !== "number" || !Number.isFinite(data.childIndex)
+      || typeof data.createdAt !== "number" || !Number.isFinite(data.createdAt)
+      || (data.reason !== undefined && (typeof data.reason !== "string" || !["need_decision", "interview_request", "progress_update"].includes(data.reason)))
+      || (data.childTarget !== undefined && typeof data.childTarget !== "string")) return;
+    return {
+      key: data.runId && Number.isInteger(data.childIndex) && data.childIndex >= 0
+        && !data.nestedRunId && !data.nestingPath ? JSON.stringify([data.runId, data.childIndex]) : undefined,
+      runId: data.runId || undefined,
+      agent: data.agent,
+      internal: true,
+      alert: false,
+      state: "内部协作",
+      color: "muted" as const,
+      summary: "代理间沟通已收纳",
+      body: stripVTControlCharacters(data.message).trim(),
+    };
+  }
+  if (item?.type === "custom") return;
   if (item?.customType === "subagent-incremental-child-notify") {
     const content = typeof item.content === "string" ? item.content : undefined;
     const header = content?.match(/^Workflow child (completed|failed):\s+\*\*([^*\n]+)\*\*\s*$/m);
@@ -66,6 +126,7 @@ export function supervisorNotice(message: unknown) {
     const childRunId = content.match(/^Child run:\s*([0-9a-f-]{36})\s*$/mi)?.[1];
     return {
       key: childRunId ? JSON.stringify(["incremental-child", childRunId]) : undefined,
+      runId: childRunId,
       internal: false,
       alert: failed,
       state: failed ? "执行失败" : "已完成",
@@ -83,11 +144,20 @@ export function supervisorNotice(message: unknown) {
   if (request ? !["progress_update", "need_decision", "interview_request"].includes(String(details.reason))
     : item?.customType !== "subagent_control_notice" || !event || !["needs_attention", "active_long_running"].includes(String(event.type))) return;
   const data = request ? details : event!;
-  const body = request ? details.requestBody : data.message;
+  const body = request
+    ? (typeof details.requestBody === "string" ? details.requestBody : "")
+    : data.message;
   if (typeof body !== "string" || typeof data.agent !== "string") return;
-  const internal = request ? details.reason !== "progress_update" || details.expectsReply === true : data.reason === "supervisor_request";
+  const ask = request && (details.reason === "need_decision" || details.reason === "interview_request");
+  // Replies and duplicate "waiting for supervisor" control notices stay compact.
+  // Blocking asks are the main-session prompt; progress remains a status line.
+  const internal = request
+    ? (!ask && (details.reason !== "progress_update" || details.expectsReply === true))
+    : data.reason === "supervisor_request";
   const failed = !request && ["completion_guard", "tool_failures"].includes(String(data.reason));
-  const attention = !request && data.type === "needs_attention" && !internal;
+  const attention = ask || (!request && data.type === "needs_attention" && !internal);
+  const question = clean(body).replace(/^UPDATE:\s*/i, "");
+  const interviewTitle = typeof record(details.interview)?.title === "string" ? clean(String(record(details.interview)!.title)) : "";
   const index = request ? data.childIndex : data.index;
   const runId = typeof data.runId === "string" && data.runId ? data.runId : undefined;
   // ponytail: aggregate only unambiguous run+child envelopes; nested/missing
@@ -95,13 +165,23 @@ export function supervisorNotice(message: unknown) {
   const key = runId && Number.isInteger(index) && Number(index) >= 0
     && !data.nestedRunId && !data.nestingPath ? JSON.stringify([runId, index]) : undefined;
   return { key, runId, internal, alert: failed || attention,
-    state: failed ? "执行失败" : attention ? "需要关注" : internal ? "内部协作" : "进度",
+    state: failed ? "执行失败" : ask ? (details.reason === "interview_request" ? "需要提问" : "需要裁决")
+      : attention ? "需要关注" : internal ? "内部协作" : "进度",
     color: failed ? "error" as const : attention ? "warning" as const : "muted" as const,
-    summary: internal ? "代理间沟通已收纳" : clean(body).replace(/^UPDATE:\s*/i, "") || "暂无摘要",
+    summary: internal ? "代理间沟通已收纳" : question || (ask ? interviewTitle || "等待回复" : "暂无摘要"),
     label: typeof data.label === "string" ? clean(data.label) : typeof data.taskPreview === "string" ? clean(data.taskPreview) : undefined,
-    body: clean(body).replace(/^UPDATE:\s*/i, ""),
+    body: question,
     agent: typeof data.agent === "string" ? data.agent : undefined,
   };
+}
+
+/** Progress is a status preview, not detail prose; decisions and failures remain inspectable. */
+export function supervisorNoticeBody(message: unknown): string {
+  const item = record(message);
+  if (item?.customType === "subagent_supervisor_request" && record(item.details)?.reason === "progress_update") return "";
+  const notice = supervisorNotice(message);
+  if (item?.type === "custom" && item.customType === "subagent_supervisor_reply") return notice?.body ?? "";
+  return notice?.alert || notice?.internal ? extractNoticeBody(message) : "";
 }
 
 export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["theme"], width: number, expanded: boolean): string[] | undefined {
@@ -153,7 +233,7 @@ export function compactSupervisorNotice(message: unknown, theme: ExtensionContex
   if (expanded) {
     const bodies: string[] = [];
     for (const original of history) {
-      const body = extractNoticeBody(original);
+      const body = supervisorNoticeBody(original);
       if (body && !bodies.includes(body)) bodies.push(body);
     }
     for (const body of bodies) {
@@ -167,6 +247,14 @@ interface ContainerLike extends Component { children: Component[] }
 function isContainer(value: unknown): value is ContainerLike {
   const node = value as Partial<ContainerLike> | null;
   return !!node && Array.isArray(node.children) && typeof node.render === "function" && typeof node.invalidate === "function";
+}
+
+function supervisorEnvelope(child: Component): unknown {
+  if (child.constructor.name === "CustomMessageComponent") return (child as unknown as { message?: unknown }).message;
+  if (child.constructor.name === "CustomEntryComponent") {
+    const entry = record((child as unknown as { entry?: unknown }).entry);
+    if (entry?.type === "custom" && entry.customType === "subagent_supervisor_reply") return entry;
+  }
 }
 
 /** Pi 0.85.x private layout adapter. Never mutates the stored messages or child tree. */
@@ -183,6 +271,7 @@ interface TranscriptView extends Component {
   toggleSubagent?(id: string): void;
 }
 interface NoticeOptions {
+  turnCount?: () => number;
   supervisor?: {
     theme: ExtensionContext["ui"]["theme"];
     expanded: () => boolean;
@@ -240,8 +329,7 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
     if (expanded !== globalExpanded) { expandedNotices.clear(); globalExpanded = expanded; }
     const groups = new Map<string | Component, { first: Component; messages: unknown[]; selected: unknown; notice: NonNullable<ReturnType<typeof supervisorNotice>> }>();
     if (options.supervisor) for (const child of chat.children) {
-      if (child.constructor.name !== "CustomMessageComponent") continue;
-      const message = (child as unknown as { message?: unknown }).message;
+      const message = supervisorEnvelope(child);
       const notice = supervisorNotice(message);
       if (!notice) continue;
       const key = notice.key ?? child;
@@ -249,9 +337,12 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
       if (!group) groups.set(key, { first: child, messages: [message], selected: message, notice });
       else {
         group.messages.push(message);
-        // Ordinary updates must not bury a real failure/attention signal. These
-        // envelopes have no resolution/completion signal; keep it in the summary.
-        if (notice.color === "error" || (notice.alert && group.notice.color !== "error") || (!group.notice.alert && (!notice.internal || group.notice.internal))) {
+        // Failures stay sticky. A matching supervisor reply is the only
+        // resolution for a blocking ask; progress and duplicate wait notices
+        // must not bury the prompt or clear a failure.
+        const resolved = isSupervisorReply(message) && group.notice.alert && group.notice.color !== "error";
+        if (notice.color === "error" || (notice.alert && group.notice.color !== "error") || resolved
+          || (!group.notice.alert && (!notice.internal || group.notice.internal))) {
           group.selected = message;
           group.notice = notice;
         }
@@ -263,7 +354,17 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
     options.supervisor?.onNotices?.(groups);
     const groupKeys = [...groups.keys()];
     const controls = new Map<number, Array<{ y: number; width: number; key: string | Component; expanded: boolean }>>();
-    let turn = -1;
+    const nativeTurns = chat.children.filter(child => child.constructor.name === "UserMessageComponent").length;
+    const totalTurns = options.turnCount?.() ?? nativeTurns;
+    // ponytail: Pi rebuilds a retained suffix after compaction; explicit entry IDs
+    // are needed if native history ever becomes a non-contiguous projection.
+    if (!Number.isInteger(totalTurns) || totalTurns < nativeTurns) {
+      prefixNotices = [];
+      prefixNoticeOffset = viewOffset = viewHeight = 0;
+      view.clearHover?.();
+      return originalRender.call(document, width);
+    }
+    let turn = totalTurns - nativeTurns - 1;
     let nextExpiry = Infinity;
     const time = now();
     for (const child of chat.children) {
@@ -278,7 +379,8 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         notices.set(turn, rows);
         continue;
       }
-      if (child.constructor.name === "CustomEntryComponent") {
+      if (child.constructor.name === "CustomEntryComponent"
+        && !(options.supervisor && supervisorNotice(supervisorEnvelope(child)))) {
         const goalRows = options.supervisor && compactGoalCard((child as unknown as { entry?: unknown }).entry, options.supervisor.theme, width, expandedNotices.get(child) ?? false);
         const rows = notices.get(turn) ?? [];
         if (!goalRows) {
@@ -294,10 +396,10 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         notices.set(turn, rows);
         continue;
       }
-      // Completion receipts use Pi's custom renderer and must survive minimal mode.
-      if (child.constructor.name === "CustomMessageComponent") {
+      // Known reply entries share notice grouping; unknown cards retain Pi's renderer.
+      if (child.constructor.name === "CustomMessageComponent" || child.constructor.name === "CustomEntryComponent") {
         const rows = notices.get(turn) ?? [];
-        const message = (child as unknown as { message?: unknown }).message;
+        const message = supervisorEnvelope(child);
         const notice = options.supervisor && supervisorNotice(message);
         const key = notice ? notice.key ?? child : child;
         const group = groups.get(key);
