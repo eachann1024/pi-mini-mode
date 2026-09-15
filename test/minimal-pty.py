@@ -28,11 +28,11 @@ def receive(fd, seconds):
             os.write(fd, b'\x1b[?1;2c')
     return b''.join(chunks)
 
-with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
+with tempfile.TemporaryDirectory(prefix='pi-mini-mode-pty-') as directory:
     agent = Path(directory) / 'agent'
     agent.mkdir()
     (agent / 'settings.json').write_text(json.dumps({'quietStartup': True, 'theme': 'dark'}))
-    (agent / 'mini-lens.json').write_text(json.dumps({'mini-lens-minimal-show': True, 'onboardingCompleted': True}))
+    (agent / 'pi-mini-mode.json').write_text(json.dumps({'pi-mini-mode-minimal-show': True, 'onboardingCompleted': True}))
     timestamp = '2026-09-07T00:00:00.000Z'
     entries = [{'type': 'session', 'version': 3, 'id': 'f09aa6aa-bfe8-4d85-b817-426a3089498a', 'timestamp': timestamp, 'cwd': directory}]
     parent = None
@@ -104,11 +104,11 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
         try:
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 100, 0, 0))
             start = receive(fd, 8)
-            (Path(tempfile.gettempdir()) / f'mini-lens-{mode}-startup.log').write_bytes(start)
-            os.write(fd, b'/mini-lens-minimal on\r')
+            (Path(tempfile.gettempdir()) / f'pi-mini-mode-{mode}-startup.log').write_bytes(start)
+            os.write(fd, b'/pi-mini-mode-minimal on\r')
             enabled = receive(fd, 3)
             combined = start + enabled
-            (Path(tempfile.gettempdir()) / f'mini-lens-{mode}-startup.log').write_bytes(combined)
+            (Path(tempfile.gettempdir()) / f'pi-mini-mode-{mode}-startup.log').write_bytes(combined)
             if mode == 'regular':
                 # Regular mode intentionally keeps Pi's native transcript: replacing it
                 # makes historical stream updates clear terminal scrollback.
@@ -127,10 +127,10 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
                 assert '无法识别'.encode() not in combined
             if mode == 'regular':
                 continue
-            os.write(fd, b'/mini-lens-minimal off\r')
+            os.write(fd, b'/pi-mini-mode-minimal off\r')
             disabled = receive(fd, 2)
             assert b'$ echo PTY_PROCESS_' in disabled, disabled.decode(errors='replace')[-5000:]
-            os.write(fd, b'/mini-lens-minimal on\r')
+            os.write(fd, b'/pi-mini-mode-minimal on\r')
             reenabled = receive(fd, 2)
             assert b'Agent' in reenabled
             assert b'Subagent' in reenabled
@@ -164,7 +164,7 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             assert b'Async agents' not in child_collapsed
             os.write(fd, b'/reload\r')
             reloaded = receive(fd, 4)
-            (Path(tempfile.gettempdir()) / f'mini-lens-{mode}-reload.log').write_bytes(reloaded)
+            (Path(tempfile.gettempdir()) / f'pi-mini-mode-{mode}-reload.log').write_bytes(reloaded)
             assert '无法识别'.encode() not in reloaded, reloaded.decode(errors='replace')[-3000:]
             assert b'Agent' in reloaded
             assert b'PTY_FINAL' in reloaded
@@ -232,7 +232,7 @@ with tempfile.TemporaryDirectory(prefix='mini-lens-pty-') as directory:
             os.kill(pid, signal.SIGWINCH)
             narrow = receive(fd, 1)
             assert b'Error:' not in narrow
-            log = Path(tempfile.gettempdir()) / f'mini-lens-{mode}-pty.log'
+            log = Path(tempfile.gettempdir()) / f'pi-mini-mode-{mode}-pty.log'
             log.write_bytes(start + enabled + disabled + reenabled + child_expanded + child_collapsed + reloaded + followup + restored + settled_frame + narrow)
             print(f'{mode}: real Pi lifecycle, async receipt/follow-up/reload, title, completion retention, thinking cleanup, resize PASS; {log}', flush=True)
         finally:

@@ -92,7 +92,7 @@ const placeholder = minimalOutputComponent(theme, () => [{ question: 'q', proces
 placeholder.render(80);
 assert.equal(placeholder.toolChoices().length, 0, 'empty Thinking placeholder is not expandable');
 
-// Running SubAgents keep one activity row; only structured finals enter expanded details.
+// Running SubAgents expand literal live activity; only structured finals enter completed details.
 const child = { agent: 'worker', status: 'running', currentTool: 'bash', currentToolArgs: 'npm test', recentOutput: [] };
 const agentTurn = { question: 'q', process: [], subAgents: [{ runId: 'live-child', mode: 'single', state: 'running', steps: [child] }] };
 const agentView = minimalOutputComponent(theme, () => [agentTurn]);
@@ -101,18 +101,22 @@ const agentDetails = () => agentView.render(80).slice(agentHeading() + 1).join('
 assert.equal(agentDetails(), '');
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() }, { type: 'press' })), { handled: true });
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() })), { handled: true, render: true });
-assert.equal(agentDetails(), '');
+assert.match(agentDetails(), /当前活动：bash npm test/);
 child.currentToolArgs = 'npm run check';
-assert.match(agentView.render(80).join('\n'), /bash npm run check/, 'inline live activity refreshes');
+assert.match(agentDetails(), /当前活动：bash npm run check/, 'expanded live activity refreshes');
+agentView.handleMouse(event({ y: agentHeading() }));
+assert.equal(agentDetails(), '', 'running run can collapse');
+agentView.handleMouse(event({ y: agentHeading() }));
 child.currentTool = '';
 child.currentToolArgs = '';
-assert.equal(agentDetails(), '', 'empty live run does not open a process block');
+assert.match(agentDetails(), /当前活动：running/, 'empty live run shows its state');
 child.recentOutput = ['LIVE_OUTPUT'];
 assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
-assert.equal(agentDetails(), '');
+assert.match(agentDetails(), /当前活动：running/);
 agentTurn.subAgents[0].state = 'complete';
 child.finalOutput = 'FINAL_OUTPUT';
 assert.match(agentDetails(), /FINAL_OUTPUT/, 'completion preserves click expansion');
+assert.doesNotMatch(agentDetails(), /当前活动/, 'final output replaces live activity');
 assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
 agentView.handleMouse(event({ y: agentHeading() }));
 assert.equal(agentDetails(), '', 'completed run can collapse');
@@ -239,8 +243,8 @@ turns = JSON.parse(original);
 assert.doesNotMatch(view.render(80).join('\n'), /FIRST_RESULT/, 'discarded calls do not retain expansion');
 // Command uses Pi's existing keyboard selector, without binding a new shortcut.
 const dir = await mkdtemp(join(tmpdir(), 'tool-folding-'));
-const previousDir = process.env.MINI_LENS_AGENT_DIR;
-process.env.MINI_LENS_AGENT_DIR = dir;
+const previousDir = process.env.PI_MINI_MODE_AGENT_DIR;
+process.env.PI_MINI_MODE_AGENT_DIR = dir;
 const handlers = new Map(), commands = new Map();
 let cancel = false, notice;
 const branch = [
@@ -265,7 +269,7 @@ const ctx = { mode: 'tui', hasUI: true, sessionManager: { getBranch: () => branc
   },
 } };
 try {
-  await writeFile(join(dir, 'mini-lens.json'), JSON.stringify({ 'mini-lens-minimal-show': true, onboardingCompleted: true }));
+  await writeFile(join(dir, 'pi-mini-mode.json'), JSON.stringify({ 'pi-mini-mode-minimal-show': true, onboardingCompleted: true }));
   extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, cmd) { commands.set(name, cmd); }, registerEntryRenderer() {}, appendEntry() {} });
   await handlers.get('session_start')({}, ctx);
   tui.start(); await paint(); scroll.scrollTo(0); await paint();
@@ -286,15 +290,15 @@ try {
     }
   };
   await checkMountedDocks();
-  await commands.get('mini-lens-tools').handler('', ctx);
+  await commands.get('pi-mini-mode-tools').handler('', ctx);
   assert.match(content(), /KEYBOARD_RESULT/, 'keyboard Enter expands one tool');
   cancel = true;
-  await commands.get('mini-lens-tools').handler('', ctx);
+  await commands.get('pi-mini-mode-tools').handler('', ctx);
   assert.match(content(), /KEYBOARD_RESULT/, 'keyboard Escape preserves state');
   cancel = false;
-  await commands.get('mini-lens-tools').handler('', ctx);
+  await commands.get('pi-mini-mode-tools').handler('', ctx);
   assert.doesNotMatch(content(), /KEYBOARD_RESULT/, 'keyboard Enter collapses tool');
-  await commands.get('mini-lens-tools').handler('', ctx);
+  await commands.get('pi-mini-mode-tools').handler('', ctx);
   await handlers.get('session_tree')({}, ctx);
   assert.doesNotMatch(content(), /KEYBOARD_RESULT/, 'session branch remount resets local state');
   await paint(); scroll.scrollTo(0); await paint();
@@ -315,15 +319,15 @@ try {
   await handlers.get('session_tree')({}, ctx);
   await paint(); scroll.scrollTo(0); await paint();
   await checkMountedDocks();
-  await commands.get('mini-lens-tools').handler('', { ...ctx, mode: 'print' });
+  await commands.get('pi-mini-mode-tools').handler('', { ...ctx, mode: 'print' });
   assert.match(notice, /requires fullscreen/);
 } finally {
   await handlers.get('session_shutdown')?.({}, ctx);
   tui.stop();
   assertDockRestored();
   assert.equal(hiddenClicks, 0);
-  if (previousDir === undefined) delete process.env.MINI_LENS_AGENT_DIR;
-  else process.env.MINI_LENS_AGENT_DIR = previousDir;
+  if (previousDir === undefined) delete process.env.PI_MINI_MODE_AGENT_DIR;
+  else process.env.PI_MINI_MODE_AGENT_DIR = previousDir;
   await rm(dir, { recursive: true, force: true });
 }
 console.log('Tool folding PASS: real SGR hover/click/dock/header/scroll, combined transcript+agent docks 3/5, extension mount/remount/native toggle/fail-closed/shutdown restoration, independent toggles, reflow, CJK/graphemes, links/copy, prompt folding, states, sanitization.');

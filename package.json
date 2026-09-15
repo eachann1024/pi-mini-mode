@@ -25,7 +25,7 @@
     "tui"
   ],
   "pi": {
-    "video": "https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/mini-lens-settings.mp4",
+    "video": "https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.mp4",
     "extensions": [
       "./extensions/footer-status.ts"
     ],

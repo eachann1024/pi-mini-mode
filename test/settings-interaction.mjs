@@ -17,8 +17,8 @@ export const getSettingsListTheme = () => ({
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piStub)}};return n(s,c)}`)}`, import.meta.url);
 const { default: extension, loadSettings, settingsPath, settingsPreviewLine, DEFAULT_SETTINGS } = await import("../extensions/footer-status.ts");
 
-const dir = await mkdtemp(join(tmpdir(), "mini-lens-pointer-"));
-process.env.MINI_LENS_AGENT_DIR = dir;
+const dir = await mkdtemp(join(tmpdir(), "pi-mini-mode-pointer-"));
+process.env.PI_MINI_MODE_AGENT_DIR = dir;
 process.env.LANG = "en_US.UTF-8";
 const commands = new Map();
 extension({ events: { on() { return () => {}; } }, on() {}, registerCommand(name, command) { commands.set(name, command); }, registerEntryRenderer() {}, appendEntry() {} });
@@ -28,7 +28,7 @@ const theme = {
   fg(color, text) { return color === "accent" ? `\x1b[32m${text}\x1b[39m` : text; },
   bold(text) { return `\x1b[1m${text}\x1b[22m`; },
 };
-await commands.get("mini-lens-settings").handler("", {
+await commands.get("pi-mini-mode-settings").handler("", {
   mode: "tui",
   ui: {
     setWidget() {},
@@ -37,21 +37,9 @@ await commands.get("mini-lens-settings").handler("", {
   },
 });
 const plain = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
-assert.match(panel.render(100).join("\n"), /折叠回复/);
-assert.match(panel.render(100).join("\n"), /极简输出/);
-assert.match(plain(panel.render(100).join("\n")), /折叠回复\s+off/);
-panel.handleInput("\x1b[B"); // 折叠回复
-panel.handleInput("\x1b[B"); // 极简输出 (disabled)
+panel.handleInput("\r"); // enter 设置
 panel.handleInput("\r");
-assert.match(plain(panel.render(100).join("\n")), /折叠回复/, "disabled 极简输出 does not open");
-assert.doesNotMatch(plain(panel.render(100).join("\n")), /显示思考/);
-assert.match(plain(panel.render(100).join("\n")), /打开「折叠回复」后才能配置这些选项/);
-panel.handleInput("\x1b[A"); // 折叠回复
-panel.handleInput("\r"); // on
-assert.match(plain(panel.render(100).join("\n")), /折叠回复\s+on/);
-panel.handleInput("\x1b[B"); // 极简输出
-panel.handleInput("\r"); // enter unlocked group
-assert.match(plain(panel.render(100).join("\n")), /显示思考/);
+assert.match(plain(panel.render(100).join("\n")), /显示模型/);
 assert.doesNotMatch(plain(panel.render(100).join("\n")), /折叠回复/);
 panel.handleInput("\x1b"); // back to groups
 panel.handleInput("\x1b[A"); // Collapse replies
@@ -87,14 +75,14 @@ for (const width of [140, 80, 40, 20]) {
   assert.ok(panel.render(width).every((line) => visibleWidth(line) <= width), `MCP settings stay within ${width} columns`);
 }
 for (let width = 0; width <= 140; width++) {
-  const preview = settingsPreviewLine(theme, { ...DEFAULT_SETTINGS, "mini-lens-mcp-show": true }, width, "mini-lens-mcp-show");
+  const preview = settingsPreviewLine(theme, { ...DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": true }, width, "pi-mini-mode-mcp-show");
   assert.ok(visibleWidth(preview) <= width, `ANSI-styled MCP preview respects ${width} columns`);
 }
 for (let attempt = 0; attempt < 100; attempt++) {
-  if ((await loadSettings(settingsPath(dir))).settings["mini-lens-mcp-show"]) break;
+  if ((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"]) break;
   await setTimeout(10);
 }
-assert.equal((await loadSettings(settingsPath(dir))).settings["mini-lens-mcp-show"], true, "real keyboard toggle persists");
+assert.equal((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"], true, "real keyboard toggle persists");
 await rm(dir, { recursive: true, force: true });
-delete process.env.MINI_LENS_AGENT_DIR;
+delete process.env.PI_MINI_MODE_AGENT_DIR;
 console.log("settings interaction check ok (real SettingsList / Container)");

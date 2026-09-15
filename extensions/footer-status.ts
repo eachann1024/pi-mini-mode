@@ -11,66 +11,66 @@ import { dirname, join } from "node:path";
 import attachFooterTidy from "../lib/footer-tidy.ts";
 import attachTitlePlain from "../lib/title-plain.ts";
 
-export const SETTINGS_FILE_NAME = "mini-lens.json";
+export const SETTINGS_FILE_NAME = "pi-mini-mode.json";
 
 export interface MiniLensSettings {
-  "mini-lens-model-show": boolean;
-  "mini-lens-thinking-show": boolean;
-  "mini-lens-ch-show": boolean;
-  "mini-lens-session-tokens-show": boolean;
-  "mini-lens-cache-tokens-show": boolean;
-  "mini-lens-cost-show": boolean;
-  "mini-lens-mcp-show": boolean;
-  "mini-lens-context-show": boolean;
-  "mini-lens-context-dots-show": boolean;
-  "mini-lens-context-percent-show": boolean;
-  "mini-lens-speed-show": boolean;
-  "mini-lens-speed-unit-show": boolean;
-  "mini-lens-minimal-show": boolean;
-  "mini-lens-minimal-thinking-show": boolean;
-  "mini-lens-minimal-tools-show": boolean;
-  "mini-lens-minimal-output-show": boolean;
-  "mini-lens-minimal-skills-show": boolean;
-  "mini-lens-agent-usage-show": boolean;
-  "mini-lens-agent-shortcut-show": boolean;
+  "pi-mini-mode-model-show": boolean;
+  "pi-mini-mode-thinking-show": boolean;
+  "pi-mini-mode-ch-show": boolean;
+  "pi-mini-mode-session-tokens-show": boolean;
+  "pi-mini-mode-cache-tokens-show": boolean;
+  "pi-mini-mode-cost-show": boolean;
+  "pi-mini-mode-mcp-show": boolean;
+  "pi-mini-mode-context-show": boolean;
+  "pi-mini-mode-context-dots-show": boolean;
+  "pi-mini-mode-context-percent-show": boolean;
+  "pi-mini-mode-speed-show": boolean;
+  "pi-mini-mode-speed-unit-show": boolean;
+  "pi-mini-mode-minimal-show": boolean;
+  "pi-mini-mode-minimal-thinking-show": boolean;
+  "pi-mini-mode-minimal-tools-show": boolean;
+  "pi-mini-mode-minimal-output-show": boolean;
+  "pi-mini-mode-minimal-skills-show": boolean;
+  "pi-mini-mode-agent-usage-show": boolean;
+  "pi-mini-mode-agent-shortcut-show": boolean;
   onboardingCompleted: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
-  "mini-lens-model-show": true,
-  "mini-lens-thinking-show": true,
-  "mini-lens-ch-show": true,
-  "mini-lens-session-tokens-show": true,
-  "mini-lens-cache-tokens-show": true,
-  "mini-lens-cost-show": true,
-  "mini-lens-mcp-show": false,
-  "mini-lens-context-show": true,
-  "mini-lens-context-dots-show": false,
-  "mini-lens-context-percent-show": true,
-  "mini-lens-speed-show": true,
-  "mini-lens-speed-unit-show": true,
-  "mini-lens-minimal-show": false,
-  "mini-lens-minimal-thinking-show": true,
-  "mini-lens-minimal-tools-show": true,
-  "mini-lens-minimal-output-show": true,
-  "mini-lens-minimal-skills-show": true,
-  "mini-lens-agent-usage-show": true,
-  "mini-lens-agent-shortcut-show": true,
+  "pi-mini-mode-model-show": true,
+  "pi-mini-mode-thinking-show": true,
+  "pi-mini-mode-ch-show": true,
+  "pi-mini-mode-session-tokens-show": true,
+  "pi-mini-mode-cache-tokens-show": true,
+  "pi-mini-mode-cost-show": true,
+  "pi-mini-mode-mcp-show": false,
+  "pi-mini-mode-context-show": true,
+  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-percent-show": true,
+  "pi-mini-mode-speed-show": true,
+  "pi-mini-mode-speed-unit-show": true,
+  "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-minimal-thinking-show": true,
+  "pi-mini-mode-minimal-tools-show": true,
+  "pi-mini-mode-minimal-output-show": true,
+  "pi-mini-mode-minimal-skills-show": true,
+  "pi-mini-mode-agent-usage-show": true,
+  "pi-mini-mode-agent-shortcut-show": true,
   onboardingCompleted: false,
 };
 
 const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<keyof MiniLensSettings>;
 
 const COPY = {
-  title: "Mini Lens 设置", preview: "预览（示例数据）", lens: "Lens", minimal: "极简输出",
+  title: "Pi Mini Mode 设置", preview: "预览（示例数据）", lens: "设置", minimal: "极简输出",
   model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", enableMinimal: "折叠回复", showThinking: "显示思考", tools: "显示工具调用", output: "显示过程输出", skills: "显示技能", agentUsage: "显示 Agent token 用量", shortcut: "新 Agent 显示 Ctrl+O 提示（6 秒）",
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "关闭后保留 Pi 默认会话历史。",
   minimalLocked: "打开「折叠回复」后才能配置这些选项。",
-  tuiRequired: "/mini-lens-settings 需要 TUI 模式", saveFailed: "无法保存 Mini Lens 设置", minimalRequired: "/mini-lens-minimal 需要 TUI 模式", minimalUsage: "用法：/mini-lens-minimal [on|off]", minimalState: "Mini Lens 折叠回复：", onboarding: "MCP 数量、点阵样式和折叠回复默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 折叠回复：", onboarding: "MCP 数量、点阵样式和折叠回复默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
 } as const;
 
-export function settingsPath(agentDir = process.env.MINI_LENS_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
+export function settingsPath(agentDir = process.env.PI_MINI_MODE_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
   return join(agentDir, SETTINGS_FILE_NAME);
 }
 
@@ -244,10 +244,10 @@ function renderRight(
   highlighted?: keyof MiniLensSettings,
 ): string {
   const fields: string[] = [];
-  if (settings["mini-lens-context-percent-show"] && percentText) fields.push(highlighted === "mini-lens-context-percent-show" ? theme.bg("selectedBg", theme.fg("accent", theme.bold(percentText))) : theme.fg("accent", percentText));
-  if (settings["mini-lens-speed-show"] && speed !== undefined) {
-    const text = formatSpeed(speed, settings["mini-lens-speed-unit-show"]);
-    fields.push(highlighted === "mini-lens-speed-show" || highlighted === "mini-lens-speed-unit-show"
+  if (settings["pi-mini-mode-context-percent-show"] && percentText) fields.push(highlighted === "pi-mini-mode-context-percent-show" ? theme.bg("selectedBg", theme.fg("accent", theme.bold(percentText))) : theme.fg("accent", percentText));
+  if (settings["pi-mini-mode-speed-show"] && speed !== undefined) {
+    const text = formatSpeed(speed, settings["pi-mini-mode-speed-unit-show"]);
+    fields.push(highlighted === "pi-mini-mode-speed-show" || highlighted === "pi-mini-mode-speed-unit-show"
       ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text)))
       : theme.fg(speedColor(speed), text));
   }
@@ -289,7 +289,7 @@ export function statusLine(
   mcpCount?: number,
   statuses?: ReadonlyMap<string, string>,
 ): string {
-  if (highlighted === "mini-lens-context-dots-show") highlighted = "mini-lens-context-show";
+  if (highlighted === "pi-mini-mode-context-dots-show") highlighted = "pi-mini-mode-context-show";
   const field = (id: keyof MiniLensSettings, color: Parameters<typeof theme.fg>[0], text: string) =>
     id === highlighted ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text))) : theme.fg(color, text);
   if (width <= 0) return "";
@@ -306,37 +306,37 @@ export function statusLine(
   const percent = rawPercent === undefined ? undefined : Math.max(0, Math.min(100, rawPercent));
   const percentText = percent === undefined ? "" : `${Math.round(percent)}%`;
   const tokenText = tokens === undefined || contextWindow === undefined ? "" : `${formatTokens(Math.max(0, tokens))}/${formatTokens(Math.max(0, contextWindow))}`;
-  const showContext = settings["mini-lens-context-show"] && Boolean(tokenText);
-  const mcpText = settings["mini-lens-mcp-show"] && mcpCount !== undefined ? `◇ MCP ${mcpCount}` : "";
+  const showContext = settings["pi-mini-mode-context-show"] && Boolean(tokenText);
+  const mcpText = settings["pi-mini-mode-mcp-show"] && mcpCount !== undefined ? `◇ MCP ${mcpCount}` : "";
   const planTag = plannotatorPlanTag(statuses);
 
   const right = renderRight(theme, settings, percentText, speed, highlighted);
   const rightWidth = visibleWidth(right);
   if (right && width <= rightWidth) {
-    const compactRight = settings["mini-lens-speed-show"] && speed !== undefined
-      ? theme.fg(speedColor(speed), formatSpeed(speed, settings["mini-lens-speed-unit-show"]))
+    const compactRight = settings["pi-mini-mode-speed-show"] && speed !== undefined
+      ? theme.fg(speedColor(speed), formatSpeed(speed, settings["pi-mini-mode-speed-unit-show"]))
       : right;
     return truncateToWidth(compactRight, width, "");
   }
 
   const leftParts = [
     planTag,
-    settings["mini-lens-model-show"] && model && field("mini-lens-model-show", "accent", model),
-    settings["mini-lens-thinking-show"] && thinking && field("mini-lens-thinking-show", "muted", thinking),
-    settings["mini-lens-session-tokens-show"] && usageTotals.totalTokens > 0 && field("mini-lens-session-tokens-show", "text", `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`),
-    settings["mini-lens-cache-tokens-show"] && cachedTokens > 0 && field("mini-lens-cache-tokens-show", "text", `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`),
-    settings["mini-lens-ch-show"] && hitText && field("mini-lens-ch-show", "text", hitText),
-    settings["mini-lens-cost-show"] && price && field("mini-lens-cost-show", "muted", price),
-    mcpText && field("mini-lens-mcp-show", "muted", mcpText),
+    settings["pi-mini-mode-model-show"] && model && field("pi-mini-mode-model-show", "accent", model),
+    settings["pi-mini-mode-thinking-show"] && thinking && field("pi-mini-mode-thinking-show", "muted", thinking),
+    settings["pi-mini-mode-session-tokens-show"] && usageTotals.totalTokens > 0 && field("pi-mini-mode-session-tokens-show", "text", `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`),
+    settings["pi-mini-mode-cache-tokens-show"] && cachedTokens > 0 && field("pi-mini-mode-cache-tokens-show", "text", `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`),
+    settings["pi-mini-mode-ch-show"] && hitText && field("pi-mini-mode-ch-show", "text", hitText),
+    settings["pi-mini-mode-cost-show"] && price && field("pi-mini-mode-cost-show", "muted", price),
+    mcpText && field("pi-mini-mode-mcp-show", "muted", mcpText),
   ].filter((part): part is string => Boolean(part));
   const unstyledLeft = [
     planTag && stripVTControlCharacters(planTag),
-    settings["mini-lens-model-show"] && model,
-    settings["mini-lens-thinking-show"] && thinking,
-    settings["mini-lens-session-tokens-show"] && usageTotals.totalTokens > 0 && `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`,
-    settings["mini-lens-cache-tokens-show"] && cachedTokens > 0 && `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`,
-    settings["mini-lens-ch-show"] && hitText,
-    settings["mini-lens-cost-show"] && price,
+    settings["pi-mini-mode-model-show"] && model,
+    settings["pi-mini-mode-thinking-show"] && thinking,
+    settings["pi-mini-mode-session-tokens-show"] && usageTotals.totalTokens > 0 && `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`,
+    settings["pi-mini-mode-cache-tokens-show"] && cachedTokens > 0 && `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`,
+    settings["pi-mini-mode-ch-show"] && hitText,
+    settings["pi-mini-mode-cost-show"] && price,
     mcpText,
   ].filter(Boolean).join("  ");
   const leftBudget = Math.min(visibleWidth(unstyledLeft), Math.max(1, width - rightWidth - (showContext ? 20 : 1)), Math.max(0, width - rightWidth - 1));
@@ -349,12 +349,12 @@ export function statusLine(
     const visibleToken = truncateToWidth(tokenText, middleBudget, "…");
     const visibleTokenWidth = visibleWidth(visibleToken);
     const barWidth = middleBudget - visibleTokenWidth - 1;
-    const filledCell = settings["mini-lens-context-dots-show"] ? "⣿" : "█";
-    const emptyCell = settings["mini-lens-context-dots-show"] ? "⣀" : "░";
+    const filledCell = settings["pi-mini-mode-context-dots-show"] ? "⣿" : "█";
+    const emptyCell = settings["pi-mini-mode-context-dots-show"] ? "⣀" : "░";
     const bar = barWidth >= 2 && percent !== undefined
-      ? `${field("mini-lens-context-show", "accent", filledCell.repeat(Math.round(barWidth * percent / 100)))}${field("mini-lens-context-show", "borderMuted", emptyCell.repeat(barWidth - Math.round(barWidth * percent / 100)))}`
+      ? `${field("pi-mini-mode-context-show", "accent", filledCell.repeat(Math.round(barWidth * percent / 100)))}${field("pi-mini-mode-context-show", "borderMuted", emptyCell.repeat(barWidth - Math.round(barWidth * percent / 100)))}`
       : "";
-    middle = `${field("mini-lens-context-show", "muted", visibleToken)}${bar ? ` ${bar}` : ""}`;
+    middle = `${field("pi-mini-mode-context-show", "muted", visibleToken)}${bar ? ` ${bar}` : ""}`;
   }
 
   const content = [left, middle].filter(Boolean).join("  ");
@@ -364,18 +364,18 @@ export function statusLine(
 }
 
 export function isCollapsedReplyChildSetting(id: string): boolean {
-  return id === "mini-lens-minimal-thinking-show" || id === "mini-lens-minimal-tools-show" || id === "mini-lens-minimal-output-show"
-    || id === "mini-lens-minimal-skills-show" || id === "mini-lens-agent-usage-show" || id === "mini-lens-agent-shortcut-show";
+  return id === "pi-mini-mode-minimal-thinking-show" || id === "pi-mini-mode-minimal-tools-show" || id === "pi-mini-mode-minimal-output-show"
+    || id === "pi-mini-mode-minimal-skills-show" || id === "pi-mini-mode-agent-usage-show" || id === "pi-mini-mode-agent-shortcut-show";
 }
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
   const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted">, string> = {
-    "mini-lens-model-show": COPY.model, "mini-lens-thinking-show": COPY.thinking, "mini-lens-session-tokens-show": COPY.total, "mini-lens-cache-tokens-show": COPY.cached, "mini-lens-ch-show": COPY.cacheHit, "mini-lens-cost-show": COPY.price, "mini-lens-mcp-show": COPY.mcp, "mini-lens-context-show": COPY.context, "mini-lens-context-dots-show": COPY.dots, "mini-lens-context-percent-show": COPY.percent, "mini-lens-speed-show": COPY.speed, "mini-lens-speed-unit-show": COPY.speedUnit, "mini-lens-minimal-show": COPY.enableMinimal, "mini-lens-minimal-thinking-show": COPY.showThinking, "mini-lens-minimal-tools-show": COPY.tools, "mini-lens-minimal-output-show": COPY.output, "mini-lens-minimal-skills-show": COPY.skills, "mini-lens-agent-usage-show": COPY.agentUsage, "mini-lens-agent-shortcut-show": COPY.shortcut,
+    "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.enableMinimal, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
   };
   return (Object.keys(labels) as Array<keyof typeof labels>).map((id) => ({
     id, label: labels[id],
-    description: id === "mini-lens-minimal-show" ? COPY.enableMinimalDescription : id === "mini-lens-session-tokens-show" ? COPY.totalDescription : id === "mini-lens-cache-tokens-show" ? COPY.cachedDescription : id === "mini-lens-ch-show" ? COPY.cacheHitDescription : undefined,
+    description: id === "pi-mini-mode-minimal-show" ? COPY.enableMinimalDescription : id === "pi-mini-mode-session-tokens-show" ? COPY.totalDescription : id === "pi-mini-mode-cache-tokens-show" ? COPY.cachedDescription : id === "pi-mini-mode-ch-show" ? COPY.cacheHitDescription : undefined,
     currentValue: settings[id] ? values[0] : values[1], values,
   }));
 }
@@ -535,10 +535,10 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
     let thinking: number | undefined;
     let visibleCount = 0;
     const process = turn.process.filter((line, index) => {
-      const visible = line.startsWith("thinking ") ? settings["mini-lens-minimal-thinking-show"]
-        : /^(tool|call) /.test(line) ? settings["mini-lens-minimal-tools-show"]
-        : line.startsWith("output ") ? settings["mini-lens-minimal-output-show"]
-        : line.startsWith("skill ") ? settings["mini-lens-minimal-skills-show"] : true;
+      const visible = line.startsWith("thinking ") ? settings["pi-mini-mode-minimal-thinking-show"]
+        : /^(tool|call) /.test(line) ? settings["pi-mini-mode-minimal-tools-show"]
+        : line.startsWith("output ") ? settings["pi-mini-mode-minimal-output-show"]
+        : line.startsWith("skill ") ? settings["pi-mini-mode-minimal-skills-show"] : true;
       if (visible) {
         if (index === turn.thinking) thinking = visibleCount;
         visibleCount++;
@@ -548,8 +548,8 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
     return {
       ...turn,
       thinking,
-      awaitingResponse: turn.awaitingResponse && settings["mini-lens-minimal-thinking-show"],
-      agentCalls: settings["mini-lens-minimal-tools-show"] ? turn.agentCalls : [],
+      awaitingResponse: turn.awaitingResponse && settings["pi-mini-mode-minimal-thinking-show"],
+      agentCalls: settings["pi-mini-mode-minimal-tools-show"] ? turn.agentCalls : [],
       process,
     };
   });
@@ -648,9 +648,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           return { handled: true, render: true };
         }
       }
-      if (event.button !== "left" || event.shift || event.ctrl || event.alt || (event.clickCount ?? 1) !== 1) return;
+      if (event.button !== "left" || event.shift || event.ctrl || event.alt) return;
       const control = promptControls.find(control => event.y === control.y && event.x >= control.x && event.x < control.x + control.width);
-      if (control) {
+      if (control && (event.clickCount ?? 1) === 1) {
         if (event.type === "press") return { handled: true };
         if (event.type === "click") {
           togglePrompt(control.index, control.question);
@@ -665,6 +665,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           return { handled: true, render: true };
         }
       }
+      if ((event.clickCount ?? 1) !== 1) return;
       const region = noticeRegions.find(region => event.y >= region.y && event.y < region.y + region.rows.length);
       return region?.rows.handleMouse?.({ ...event, y: event.y - region.y });
     },
@@ -699,7 +700,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           const control = truncateToWidth(label, inner, "");
           promptControls.push({ index, question: turn.question, y: lines.length + 1 + userRows.length,
             x: 0, width, label });
-          userRows.push(theme.fg("accent", control) + theme.fg("muted", truncateToWidth(" · /mini-lens-prompts", Math.max(0, inner - visibleWidth(control)), "")));
+          userRows.push(theme.fg("accent", control) + theme.fg("muted", truncateToWidth(" · /pi-mini-mode-prompts", Math.max(0, inner - visibleWidth(control)), "")));
         }
         lines.push(...surface(userRows, width, true));
         const entries = turn.process.flatMap((entry, processIndex) => {
@@ -725,7 +726,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
         if (entries.length || turn.running || turn.usage || agents.total) {
           const expanded = isExpanded();
-          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || expandedThinking.has(entry.id)).slice(-10);
+          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || expandedThinking.has(entry.id)).slice(-6);
           const done = entries.filter(entry => entry.state === "done").length;
           const progressHeader = theme.bold(theme.fg("text", "Agent")) + (entries.length ? theme.fg("muted", ` · ${done}/${entries.length}`) : "")
             + (agents.total ? theme.bold(theme.fg("text", "     Subagent")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
@@ -803,7 +804,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const details = entry.detail.split(/\r?\n/).filter(line => line.trim());
               // ponytail: four diagnostic lines; full output remains in the native transcript.
               lines.push(...details.slice(1, 5).map(line => truncateToWidth(rail + theme.fg("muted", line), width)));
-              if (details.length > 5) lines.push(truncateToWidth(rail + theme.fg("muted", `… +${details.length - 5} lines · /mini-lens-minimal off`), width));
+              if (details.length > 5) lines.push(truncateToWidth(rail + theme.fg("muted", `… +${details.length - 5} lines · /pi-mini-mode-minimal off`), width));
             }
           });
           const agentStartY = lines.length;
@@ -875,7 +876,7 @@ export default function (pi: ExtensionAPI) {
     restoreAgentWidgets?.();
     restoreAgentWidgets = undefined;
     promptView = undefined;
-    if (settings["mini-lens-minimal-show"] && ctx.mode === "tui") unsubscribeMinimalInput = ctx.ui.onTerminalInput?.((data) => {
+    if (settings["pi-mini-mode-minimal-show"] && ctx.mode === "tui") unsubscribeMinimalInput = ctx.ui.onTerminalInput?.((data) => {
       const nativeKey = matchesKey(data, "ctrl+alt+o");
       const subAgentKey = matchesKey(data, "ctrl+s");
       if (!nativeKey && (!restoreTranscript || (!subAgentKey && !matchesKey(data, "ctrl+o")))) return;
@@ -889,14 +890,14 @@ export default function (pi: ExtensionAPI) {
       refreshMinimalOutput();
       return { consume: true };
     });
-    if (nativeOutput || !settings["mini-lens-minimal-show"] || ctx.mode !== "tui") {
+    if (nativeOutput || !settings["pi-mini-mode-minimal-show"] || ctx.mode !== "tui") {
       lastAttachMode = undefined;
-      ctx.ui.setWidget?.("mini-lens-minimal-output", undefined);
+      ctx.ui.setWidget?.("pi-mini-mode-minimal-output", undefined);
       refreshMinimalOutput();
       refreshMinimal = undefined;
       return;
     }
-    ctx.ui.setWidget("mini-lens-minimal-output", (tui, theme) => {
+    ctx.ui.setWidget("pi-mini-mode-minimal-output", (tui, theme) => {
       refreshMinimal = () => tui.requestRender();
       // Retain children under their originating user turn, including while idle,
       // after a follow-up user message, and when rebuilding a saved session.
@@ -933,7 +934,7 @@ export default function (pi: ExtensionAPI) {
           return { ...turn, subAgents: withNotices };
         });
       };
-      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["mini-lens-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["mini-lens-agent-usage-show"], () => subAgentsExpanded, agentDeadlines);
+      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["pi-mini-mode-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["pi-mini-mode-agent-usage-show"], () => subAgentsExpanded, agentDeadlines);
       const hintRemaining = (activeMinimalTurn?.shortcutHintUntil ?? 0) - Date.now();
       if (hintRemaining > 0) {
         shortcutTimer = setTimeout(() => tui.requestRender(), hintRemaining);
@@ -1007,7 +1008,7 @@ export default function (pi: ExtensionAPI) {
       return { render: () => [], invalidate() {} };
     });
   };
-  pi.registerCommand("mini-lens-prompts", {
+  pi.registerCommand("pi-mini-mode-prompts", {
     description: "Expand or collapse a user prompt in fullscreen minimal output",
     handler: async (_args, ctx) => {
       if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
@@ -1026,7 +1027,7 @@ export default function (pi: ExtensionAPI) {
       }
     },
   });
-  pi.registerCommand("mini-lens-tools", {
+  pi.registerCommand("pi-mini-mode-tools", {
     description: "Expand or collapse a tool's saved text or thinking in fullscreen minimal output",
     handler: async (_args, ctx) => {
       if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
@@ -1106,22 +1107,22 @@ export default function (pi: ExtensionAPI) {
         label: (text: string, selected: boolean) => {
           const name = text.trimEnd();
           if (selected) highlighted = items.find((item) => item.label === name)?.id as keyof MiniLensSettings | undefined;
-          const disabled = name === COPY.minimal && !settings["mini-lens-minimal-show"];
+          const disabled = name === COPY.minimal && !settings["pi-mini-mode-minimal-show"];
           if (selected) return theme.bg("selectedBg", theme.fg("accent", theme.bold(text)));
           return theme.fg(disabled ? "muted" : "text", text);
         },
         value: (text: string, selected: boolean) =>
           selected ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text))) : theme.fg("muted", text),
       };
-      const lensItems = () => settingsItems(settings).filter((item) => item.id !== "mini-lens-minimal-show" && !isCollapsedReplyChildSetting(item.id));
+      const lensItems = () => settingsItems(settings).filter((item) => item.id !== "pi-mini-mode-minimal-show" && !isCollapsedReplyChildSetting(item.id));
       const minimalItems = () => settingsItems(settings).filter((item) => isCollapsedReplyChildSetting(item.id));
       const collapseItem: SettingItem = {
-        id: "mini-lens-minimal-show", label: COPY.enableMinimal, description: COPY.enableMinimalDescription,
-        currentValue: settings["mini-lens-minimal-show"] ? "on" : "off", values: ["on", "off"],
+        id: "pi-mini-mode-minimal-show", label: COPY.enableMinimal, description: COPY.enableMinimalDescription,
+        currentValue: settings["pi-mini-mode-minimal-show"] ? "on" : "off", values: ["on", "off"],
       };
       const minimalGroup: SettingItem = { id: "minimal", label: COPY.minimal, currentValue: "›" };
       const applyCollapseState = () => {
-        const enabled = settings["mini-lens-minimal-show"];
+        const enabled = settings["pi-mini-mode-minimal-show"];
         collapseItem.currentValue = enabled ? "on" : "off";
         minimalGroup.currentValue = enabled ? "›" : "off";
         minimalGroup.description = enabled ? undefined : COPY.minimalLocked;
@@ -1133,9 +1134,7 @@ export default function (pi: ExtensionAPI) {
       };
       applyCollapseState();
       const groups: SettingItem[] = [
-        { id: "lens", label: COPY.lens, currentValue: "›", submenu: (_value, back) => new SettingsList(lensItems(), 12, settingsTheme, onChange, () => back(), { enableSearch: true }) },
-        collapseItem,
-        minimalGroup,
+        { id: "settings", label: COPY.lens, currentValue: "›", submenu: (_value, back) => new SettingsList([...lensItems(), collapseItem, minimalGroup], 12, settingsTheme, onChange, () => back(), { enableSearch: true }) },
       ];
       const settingsList = new SettingsList(groups, 12, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
       container.addChild(settingsList);
@@ -1157,11 +1156,11 @@ export default function (pi: ExtensionAPI) {
     });
   };
 
-  pi.registerCommand("mini-lens-settings", {
-    description: "Configure Lens, collapsed replies, and Minimal output",
+  pi.registerCommand("pi-mini-mode-settings", {
+    description: "Configure Pi Mini Mode settings",
     handler: async (_args, ctx) => openSettings(ctx),
   });
-  pi.registerCommand("mini-lens-history", {
+  pi.registerCommand("pi-mini-mode-history", {
     description: "View collapsed process entries for a conversation turn",
     handler: async (_args, ctx) => {
       if (ctx.mode !== "tui" || minimalTurns.length === 0) return;
@@ -1191,7 +1190,7 @@ export default function (pi: ExtensionAPI) {
       });
     },
   });
-  pi.registerCommand("mini-lens-minimal", {
+  pi.registerCommand("pi-mini-mode-minimal", {
     description: "Toggle collapsed replies (off keeps Pi's default conversation history)",
     handler: async (args, ctx) => {
       const normalized = args.trim().toLowerCase();
@@ -1205,16 +1204,16 @@ export default function (pi: ExtensionAPI) {
       }
       settings = {
         ...settings,
-        "mini-lens-minimal-show": normalized === "on" ? true : normalized === "off" ? false : !settings["mini-lens-minimal-show"],
+        "pi-mini-mode-minimal-show": normalized === "on" ? true : normalized === "off" ? false : !settings["pi-mini-mode-minimal-show"],
         onboardingCompleted: true,
       };
-      if (settings["mini-lens-minimal-show"]) nativeOutput = false;
+      if (settings["pi-mini-mode-minimal-show"]) nativeOutput = false;
       mountMinimalOutput(ctx);
       await persistSettings(ctx);
       // The mount already explains unsupported layouts; do not contradict it
       // with a success notification when only the preference was saved.
-      if (settings["mini-lens-minimal-show"] && !restoreTranscript) return;
-      ctx.ui.notify(`${COPY.minimalState}${settings["mini-lens-minimal-show"] ? "on" : "off"}`, "info");
+      if (settings["pi-mini-mode-minimal-show"] && !restoreTranscript) return;
+      ctx.ui.notify(`${COPY.minimalState}${settings["pi-mini-mode-minimal-show"] ? "on" : "off"}`, "info");
     },
   });
 
@@ -1232,7 +1231,7 @@ export default function (pi: ExtensionAPI) {
         invalidate() {},
         render(width: number): string[] {
           // switchTuiMode does not re-run setWidget; remount once the live renderer is fullscreen.
-          if (settings["mini-lens-minimal-show"] && !nativeOutput && ctx.mode === "tui" && !restoreTranscript
+          if (settings["pi-mini-mode-minimal-show"] && !nativeOutput && ctx.mode === "tui" && !restoreTranscript
             && tui.mode !== "regular" && lastAttachMode === "regular" && !remountQueued) {
             remountQueued = true;
             queueMicrotask(() => {
@@ -1247,7 +1246,7 @@ export default function (pi: ExtensionAPI) {
     refresh();
     if (!loaded.exists && ctx.mode === "tui" && ctx.hasUI) {
       const choice = await ctx.ui.select(
-        `Mini Lens ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s\n\n${COPY.onboarding}`,
+        `Pi Mini Mode ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s\n\n${COPY.onboarding}`,
         [COPY.keepDefaults, COPY.configureNow],
       );
       settings = { ...settings, onboardingCompleted: true };

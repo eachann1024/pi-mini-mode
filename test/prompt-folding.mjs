@@ -109,10 +109,10 @@ try {
 
   // Exercise the registered command using the real SelectList key handling.
   const dir = await mkdtemp(join(tmpdir(), 'prompt-folding-'));
-  process.env.MINI_LENS_AGENT_DIR = dir;
+  process.env.PI_MINI_MODE_AGENT_DIR = dir;
   const handlers = new Map();
   const commands = new Map();
-  await writeFile(join(dir, 'mini-lens.json'), JSON.stringify({ 'mini-lens-minimal-show': true, onboardingCompleted: true }));
+  await writeFile(join(dir, 'pi-mini-mode.json'), JSON.stringify({ 'pi-mini-mode-minimal-show': true, onboardingCompleted: true }));
   extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, command) { commands.set(name, command); }, registerEntryRenderer() {}, appendEntry() {} });
   let cancel = false;
   const ctx = { mode: 'tui', hasUI: true, sessionManager: { getBranch: () => turns.map(turn => ({ type: 'message', message: { role: 'user', content: turn.question } })) }, ui: {
@@ -198,19 +198,19 @@ try {
     assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN/);
     // Restore all details with keyboard before exercising the old prompt selector.
     input('\x0f'); await paint(); input('\x0f'); await paint();
-    await commands.get('mini-lens-prompts').handler('', ctx);
+    await commands.get('pi-mini-mode-prompts').handler('', ctx);
     assert.match(document.render(80).join('\n'), /END_OF_PROMPT/);
     cancel = true;
-    await commands.get('mini-lens-prompts').handler('', ctx);
+    await commands.get('pi-mini-mode-prompts').handler('', ctx);
     assert.match(document.render(80).join('\n'), /END_OF_PROMPT/, 'Escape preserves expansion');
     cancel = false;
-    await commands.get('mini-lens-prompts').handler('', ctx);
+    await commands.get('pi-mini-mode-prompts').handler('', ctx);
     assert.doesNotMatch(document.render(80).join('\n'), /END_OF_PROMPT/, 'keyboard can collapse again');
     await handlers.get('session_tree')({}, ctx);
     assert.doesNotMatch(document.render(80).join('\n'), /END_OF_PROMPT/, 'branch remount starts collapsed');
   } finally {
     await handlers.get('session_shutdown')({}, ctx);
-    delete process.env.MINI_LENS_AGENT_DIR;
+    delete process.env.PI_MINI_MODE_AGENT_DIR;
     await rm(dir, { recursive: true, force: true });
   }
 } finally { tui.stop(); }
