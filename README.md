@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> · <a href="#make-it-yours">Settings</a> · <a href="https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763">Watch demo</a>
+  <a href="#install">Install</a> · <a href="#make-it-yours">Settings</a> · <a href="https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763">Watch demo</a> · <a href="README.zh-CN.md">中文</a>
 </p>
 
 A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost estimate, context, and generation speed — at a glance.
