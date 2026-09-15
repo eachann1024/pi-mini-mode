@@ -17,7 +17,7 @@ export class Text { constructor() {} }
 export {};
 `;
 const tuiModule = `
-export { Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
+export { Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
 export const visibleWidth = (text) => String(text).replace(/\\x1b\\[[0-9;]*m/g, "").length;
 export const truncateToWidth = (text, width, suffix = "…") => {
   const plain = String(text).replace(/\\x1b\\[[0-9;]*m/g, "");
@@ -54,8 +54,8 @@ assert.equal(extension.DEFAULT_SETTINGS["mini-lens-minimal-show"], false);
 assert.equal(extension.parseSettings({})["mini-lens-minimal-show"], false, "missing collapsed-replies setting keeps Pi native history");
 assert.equal(extension.parseSettings({ "mini-lens-minimal-show": false })["mini-lens-minimal-show"], false);
 assert.equal(extension.parseSettings({ "mini-lens-minimal-show": true })["mini-lens-minimal-show"], true);
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.label, "Collapse replies");
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.description, "Off keeps Pi's default conversation history.");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.label, "折叠回复");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.description, "关闭后保留 Pi 默认会话历史。");
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "mini-lens-minimal-show")?.currentValue, "off");
 assert.equal("mini-lens-language" in extension.parseSettings({ "mini-lens-language": "zh" }), false);
 for (const key of ['mini-lens-agent-usage-show', 'mini-lens-agent-shortcut-show']) {
@@ -63,13 +63,13 @@ for (const key of ['mini-lens-agent-usage-show', 'mini-lens-agent-shortcut-show'
   assert.equal(extension.parseSettings({ [key]: false })[key], false);
 }
 const minimalTheme = { bg: (_token, text) => `\x1b[48;2;20;40;30m${text}\x1b[49m`, fg: (_token, text) => text, bold: (text) => text };
-const minimalTurn = { question: "测试问题", process: Array.from({ length: 9 }, (_, i) => `tool entry-${i}`), running: true, final: "secret final" };
+const minimalTurn = { question: "测试问题", process: Array.from({ length: 13 }, (_, i) => `tool entry-${i}`), running: true, final: "secret final" };
 const minimalView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn]);
 let minimalText = minimalView.render(100).join("\n");
 assert.doesNotMatch(minimalText, /已收起|我们的极简模块|用户提问|最终的结果/);
-assert.doesNotMatch(minimalText, /entry-[0-2]/);
-assert.equal((minimalText.match(/entry-/g) ?? []).length, 5);
-assert.match(minimalText, /Agent · 9\/9 · Ctrl\+O/);
+assert.doesNotMatch(minimalText, /entry-[0-2](?!\d)/);
+assert.equal((minimalText.match(/entry-/g) ?? []).length, 10);
+assert.match(minimalText, /Agent · 13\/13 · Ctrl\+O/);
 assert.doesNotMatch(minimalText, /展开|收起/);
 assert.match(minimalText, /secret final/);
 minimalTurn.running = false;
@@ -77,10 +77,10 @@ minimalText = minimalView.render(100).join("\n");
 assert.match(minimalText, /secret final/);
 let hintVisible = true;
 const hintView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn], () => false, () => hintVisible);
-assert.match(hintView.render(100).join("\n"), /9\/9 · Ctrl\+O/);
+assert.match(hintView.render(100).join("\n"), /13\/13 · Ctrl\+O/);
 hintVisible = false;
 assert.doesNotMatch(hintView.render(100).join("\n"), /Ctrl\+O/);
-assert.match(hintView.render(100).join("\n"), /Agent · 9\/9/);
+assert.match(hintView.render(100).join("\n"), /Agent · 13\/13/);
 assert.deepEqual(minimalView.render(0), []);
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
 assert.ok(minimalView.render(12).every((line) => stripAnsi(line).length <= 12));
@@ -90,6 +90,21 @@ for (const width of [1, 2, 12, 40, 100]) {
 assert.doesNotMatch(minimalView.render(100).find((line) => line.includes("secret final")), /\x1b\[48;/);
 const longView = extension.minimalOutputComponent(minimalTheme, () => [{ question: "long question ".repeat(20), process: ["output " + "long output ".repeat(50)], running: true }]);
 assert.ok(longView.render(40).every(line => stripAnsi(line).length <= 40));
+const wrappedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2)], running: false }]).render(40).map(stripAnsi).filter(row => row.trim());
+const outputRows = wrappedRows.slice(wrappedRows.findIndex(row => row.includes("Output")));
+assert.ok(outputRows.length > 1, "long output wraps instead of truncating");
+assert.ok(outputRows[0].startsWith("└─ ● Output "), "output heading stays inline with the first body chunk");
+assert.ok(outputRows.slice(1).every(row => row.startsWith(" ".repeat(12))), "wrapped output hangs under the body column");
+assert.match(outputRows.join(" "), /lambda mu/, "wrapped output keeps the full body");
+assert.doesNotMatch(outputRows.join("\n"), /…/, "wrapped output is not truncated");
+assert.ok(outputRows.every(row => row.length <= 40));
+const connectedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2), "tool next"], running: false }]).render(40).map(stripAnsi).filter(row => row.trim());
+const connectedStart = connectedRows.findIndex(row => row.includes("Output"));
+const connectedNext = connectedRows.findIndex((row, i) => i > connectedStart && /^[├└]─/.test(row));
+const connectedOutput = connectedRows.slice(connectedStart, connectedNext);
+assert.ok(connectedOutput[0].startsWith("├─ ● Output "), "non-final output keeps the tree branch");
+assert.ok(connectedOutput.length > 1, "non-final output still wraps");
+assert.ok(connectedOutput.slice(1).every(row => row.startsWith("│")), "wrapped output keeps the tree rail");
 for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   const theme = { ...minimalTheme, fg: (token, text) => token === "accent" ? `${accent}${text}\x1b[39m` : text };
   for (const [state, glyph] of [["running", "⠋"], ["done", "●"], ["error", "×"]]) {
@@ -148,44 +163,46 @@ const dotRows = extension.minimalOutputComponent(dotTheme, () => [{
   process: ["call expandable", "output passive"],
   agentCalls: [{ id: "expandable", name: "read", task: "path", state: "done" }],
 }]).render(100).join("\n");
-assert.match(dotRows, /<accent>●<\/accent>.*read/, "expandable tool dot uses the accent token");
+assert.match(dotRows, /<muted>●<\/muted>.*read/, "completed tool dot uses the muted token");
 assert.match(dotRows, /<muted>●<\/muted>.*Output/, "non-expandable output dot uses the muted token");
 const mixedTurn = { question: "mixed", process: ["tool one", "call a", "skill frontend", "tool two", "call b", "tool three", "skill last"], agentCalls: [{ id: "a", name: "researcher", task: "research", state: "done" }, { id: "b", name: "reviewer", task: "review", state: "running" }] };
 const mixedRows = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn]).render(100);
-assert.equal(mixedRows.filter(row => /^[├└]─/.test(row)).length, 5);
+assert.equal(mixedRows.filter(row => /^[├└]─/.test(row)).length, 7);
 assert.doesNotMatch(mixedRows.join("\n"), /S 0 \/ C 0/);
 assert.doesNotMatch(mixedRows.join("\n"), /较早记录/);
 assert.doesNotMatch(mixedRows.join("\n"), /工具 one|Agent 调用/);
 assert.ok(mixedRows.findIndex(row => row.includes("researcher")) < mixedRows.findIndex(row => row.includes("Skill last")));
 const mixedExpanded = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn], () => true).render(100);
 assert.equal(mixedExpanded.filter(row => /^[├└]─/.test(row)).length, 7);
-const integratedTurn = { question: 'Integrated', process: Array.from({ length: 8 }, (_, i) => `output MAIN_${i}`),
+const integratedTurn = { question: 'Integrated', process: Array.from({ length: 13 }, (_, i) => `output MAIN_${i}`),
   running: false, final: 'FINAL_REPLY', usage: { totalTokens: 320000, cacheRead: 246000 },
   subAgents: [{ runId: 'workflow', steps: Array.from({ length: 9 }, (_, i) => ({
-    runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, model: 'gpt-5', recentOutput: [`CHILD_${i}`], status: i < 4 ? 'completed' : 'running',
+    runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, description: `CHILD_${i}`, model: 'gpt-5', recentOutput: [`PREVIEW_${i}`], finalOutput: `CHILD_FINAL_${i}`, status: i < 4 ? 'completed' : 'running',
   })) }],
 };
 let expandIntegrated = false;
 const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => false, () => true, () => expandIntegrated);
 let integratedRows = integratedView.render(120).map(stripAnsi);
-assert.match(integratedRows.find(row => row.startsWith('Agent')), /Agent · 8\/8\s+Subagent 4\/9\s+S 320K \/ C 246K$/);
-assert.equal(integratedRows.filter(row => /^[├└]─/.test(row)).length, 14, 'five main entries plus live and briefly completed children');
-assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-2]|运行中|Ctrl\+S/);
-assert.ok(integratedRows.findIndex(row => row.includes('MAIN_7')) < integratedRows.findIndex(row => row.includes('CHILD_4')));
+assert.match(integratedRows.find(row => row.startsWith('Agent')), /Agent · 13\/13\s+Subagent 4\/9\s+S 320K \/ C 246K$/);
+assert.equal(integratedRows.filter(row => /^[├└]─/.test(row)).length, 19, 'ten main entries plus live and briefly completed children');
+assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-2](?!\d)|运行中|Ctrl\+S|PREVIEW_|CHILD_FINAL_/);
+assert.ok(integratedRows.findIndex(row => row.includes('MAIN_12')) < integratedRows.findIndex(row => row.includes('CHILD_4')));
 assert.ok(integratedRows.findIndex(row => row.includes('CHILD_8')) < integratedRows.findIndex(row => row.includes('FINAL_REPLY')));
-assert.match(integratedRows.find(row => row.includes('MAIN_7')), /^├─/);
+assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
 assert.match(integratedRows.find(row => row.includes('CHILD_8')), /^└─/);
 for (const width of [1, 12, 40]) assert.ok(integratedView.render(width).every(row => stripAnsi(row).length <= width));
 assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Subagent 4\/9/, 'narrow headers prioritize progress over token totals');
 for (let i = 9; i < 40; i++) integratedTurn.subAgents[0].steps.push({ runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, recentOutput: [`CHILD_${i}`], status: 'running' });
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 45, 'children are not subject to the main five-row cap');
+assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 50, 'children are not subject to the main ten-row cap');
 for (const child of integratedTurn.subAgents[0].steps) child.status = 'completed';
 integratedRows = integratedView.render(120).map(stripAnsi);
 assert.match(integratedRows.join('\n'), /Subagent 40\/40/);
 assert.match(integratedRows.join('\n'), /CHILD_/);
-assert.match(integratedRows.find(row => row.includes('MAIN_7')), /^├─/);
+assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
 expandIntegrated = true;
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 45, 'Ctrl+S does not change the terminal grace period');
+assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 50, 'Ctrl+S retains one heading per child');
+assert.match(integratedView.render(120).join('\n'), /CHILD_FINAL_0/);
+assert.doesNotMatch(integratedView.render(120).join('\n'), /PREVIEW_/);
 const savedNow = Date.now;
 try {
   Date.now = () => savedNow() + 60_000;
@@ -279,7 +296,7 @@ assert.ok(footerFactory, "session_start installs the global footer");
 const colors = [];
 const colorTexts = [];
 const theme = { bg(_color, text) { return text; }, fg(color, text) { colors.push(color); colorTexts.push([color, text]); return text; }, bold(text) { return text; } };
-const footer = footerFactory({ requestRender() { renders++; } }, theme, {});
+const footer = footerFactory({ requestRender() { renders++; } }, theme, { getExtensionStatuses() { return new Map(); } });
 
 let lines = footer.render(100);
 assert.equal(lines.length, 1, "footer always renders one line");
@@ -376,6 +393,34 @@ assert.match(noUnitLine, /40\.0$/, "speed-unit setting shows only the numeric sp
 assert.doesNotMatch(noUnitLine, /tok\/s/, "speed-unit setting removes tok/s from the footer");
 const hiddenEverything = extension.parseSettings(Object.fromEntries(Object.keys(extension.DEFAULT_SETTINGS).map((id) => [id, false])));
 assert.equal(extension.statusLine(ctx, theme, 140, sampleTotals, hiddenEverything, 40), "", "all footer fields can be disabled");
+assert.equal(extension.isPlannotatorPlanningStatus(undefined), false);
+assert.equal(extension.isPlannotatorPlanningStatus("\x1b[33m⏸ plan\x1b[39m"), true, "exact plannotator planning label after ANSI strip");
+assert.equal(extension.isPlannotatorPlanningStatus("📋 1/3"), false, "executing checklist is not planning");
+assert.equal(extension.isPlannotatorPlanningStatus("plan mode"), false, "fuzzy plan text is not planning");
+const planningStatuses = new Map([["plannotator", "\x1b[33m⏸ plan\x1b[39m"]]);
+const executingStatuses = new Map([["plannotator", "📋 1/3"]]);
+const otherPlanStatuses = new Map([["plan-mode", "⏸ plan"]]);
+const noPlanLine = extension.statusLine(ctx, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, 40);
+assert.doesNotMatch(noPlanLine, /PLAN/, "no statuses keeps the existing footer");
+assert.doesNotMatch(extension.statusLine(ctx, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, 40, undefined, undefined, executingStatuses), /PLAN/, "executing plannotator status is not a PLAN tag");
+assert.doesNotMatch(extension.statusLine(ctx, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, 40, undefined, undefined, otherPlanStatuses), /PLAN/, "only the exact plannotator key is consulted");
+const planLine = extension.statusLine(ctx, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, 40, undefined, undefined, planningStatuses);
+assert.match(planLine, /PLAN/, "exact plannotator planning status shows PLAN");
+assert.match(planLine, /deepseek-v4-flash  high/, "PLAN keeps existing left fields");
+assert.match(planLine, /50K\/100K/, "PLAN keeps context tokens");
+assert.match(planLine, /\x1b\[48;2;250;204;21m\x1b\[38;2;19;18;23mPLAN/, "PLAN uses scheme B yellow fill and dark text");
+assert.match(planLine, /\x1b\[39m\x1b\[49m/, "PLAN closes ANSI styles");
+const planPlain = stripAnsi(planLine);
+assert.ok(planPlain.startsWith("\uE0B6PLAN\uE0B4") || planPlain.startsWith(" PLAN "), "PLAN uses Powerline caps or square width fallback");
+assert.ok(stripAnsi(extension.planCapsule()).length >= 4, "PLAN capsule reports a terminal column width");
+for (const width of [0, 1, 8, 12, 40, 140]) {
+  const line = extension.statusLine(ctx, theme, width, sampleTotals, extension.DEFAULT_SETTINGS, 40, undefined, undefined, planningStatuses);
+  assert.ok(stripAnsi(line).length <= width, `PLAN-enabled width ${width} never overflows`);
+}
+const livePlanFooter = footerFactory({ requestRender() { renders++; } }, theme, { getExtensionStatuses() { return planningStatuses; } });
+assert.match(livePlanFooter.render(140)[0], /PLAN/, "custom footer reads the exact plannotator key");
+const idlePlanFooter = footerFactory({ requestRender() { renders++; } }, theme, { getExtensionStatuses() { return new Map(); } });
+assert.doesNotMatch(idlePlanFooter.render(140)[0], /PLAN/, "idle footer omits PLAN");
 
 ctx.model = { provider: "openai", id: "gpt-5", contextWindow: 200_000 };
 let settingsPanel;
@@ -393,12 +438,12 @@ const settingsCtx = {
 await commands.get("mini-lens-settings").handler("", settingsCtx);
 const settingsChildren = settingsPanel.render(100);
 const settingsPreview = settingsChildren[2];
-assert.deepEqual(settingsChildren[3].items.map((item) => item.label), ["Lens", "Collapse replies", "Minimal output"]);
+assert.deepEqual(settingsChildren[3].items.map((item) => item.label), ["Lens", "折叠回复", "极简输出"]);
 assert.equal(settingsChildren[3].items[1].currentValue, "off");
 assert.deepEqual(settingsChildren[3].items[1].values, ["on", "off"]);
 assert.equal(settingsChildren[3].items[2].submenu, undefined, "Minimal output stays disabled while Collapse replies is off");
 assert.equal(settingsChildren[3].items[2].currentValue, "off");
-assert.match(settingsChildren[3].items[2].description ?? "", /Turn on Collapse replies/);
+assert.match(settingsChildren[3].items[2].description ?? "", /打开「折叠回复」后才能配置这些选项/);
 settingsChildren[3].setValue("mini-lens-minimal-show", "on");
 assert.equal(settingsChildren[3].items[1].currentValue, "on");
 assert.equal(typeof settingsChildren[3].items[2].submenu, "function", "Minimal output unlocks after Collapse replies is on");
@@ -473,7 +518,8 @@ assert.equal(eventEmitter.listenerCount(mcpStatusEvent), 0, "shutdown removes sh
 // Exercise the real extension event wiring, including no early final and adapter restoration.
 const minimalHandlers = new Map();
 const minimalCommands = new Map();
-extension.default({ events, on(name, handler) { minimalHandlers.set(name, handler); }, registerCommand(name, command) { minimalCommands.set(name, command); } });
+const persistedAgentEntries = [];
+extension.default({ events, appendEntry(customType, data) { persistedAgentEntries.push({ type: 'custom', customType, data: structuredClone(data) }); }, on(name, handler) { minimalHandlers.set(name, handler); }, registerCommand(name, command) { minimalCommands.set(name, command); } });
 const box = (children = []) => ({ children, render: () => [], invalidate() {} });
 const doc = box([box(), box(), box()]);
 const originalDocRender = doc.render;
@@ -586,25 +632,27 @@ assert.doesNotMatch(doc.render(100).join("\n"), /Thinking/);
 const statusRoot = await mkdtemp(join(tmpdir(), "mini-live-status-"));
 const statusDirectory = join(statusRoot, "async-subagent-runs", "child");
 await mkdir(statusDirectory, { recursive: true });
-await writeFile(join(statusDirectory, "status.json"), JSON.stringify({ sessionId: "current-session", toolCallId: "agent-1", runId: "child", mode: "single", state: "running", steps: [{ agent: "reviewer", model: "9router/low", status: "running", recentOutput: ["child detail", "child summary"] }] }));
+await writeFile(join(statusDirectory, "status.json"), JSON.stringify({ sessionId: "current-session", toolCallId: "agent-1", runId: "child", mode: "single", state: "running", steps: [{ agent: "reviewer", model: "9router/low", status: "running", description: "child task", recentOutput: ["child detail", "child summary"] }] }));
 const previousStatusRoot = process.env.PI_SUBAGENTS_TEMP_ROOT;
 process.env.PI_SUBAGENTS_TEMP_ROOT = statusRoot;
 minimalCtx.sessionManager.getSessionFile = () => "current-session";
 await minimalCommands.get("mini-lens-minimal").handler("on", minimalCtx);
-assert.match(doc.render(100).join("\n"), /Subagent 0\/1[\s\S]*child summary[\s\S]*Follow-up answer/, "settled parent keeps children before its replies");
+assert.match(doc.render(100).join("\n"), /Subagent 0\/1[\s\S]*child task[\s\S]*Follow-up answer/, "settled parent keeps children before its replies");
 assert.deepEqual(testTui.children[3].render(100), [], 'nothing is rendered in the dock');
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/);
 inputListener("\x13");
-assert.match(doc.render(100).join("\n"), /child detail/, "Ctrl+S reveals retained child detail");
+assert.doesNotMatch(doc.render(100).join("\n"), /child detail/, "Ctrl+S cannot expose running child previews");
 minimalHandlers.get("message_start")({ message: { role: "user", content: "new question" } });
-assert.match(doc.render(100).join("\n"), /child summary[\s\S]*new question/, "running child remains under its original turn after a new user message");
+assert.match(doc.render(100).join("\n"), /child task[\s\S]*new question/, "running child remains under its original turn after a new user message");
 minimalHandlers.get("tool_execution_start")({ toolCallId: "agent-2", toolName: "subagent", args: { agent: "reviewer" } });
-assert.equal((doc.render(100).join("\n").match(/child summary/g) ?? []).length, 1, 'child appears exactly once');
-await writeFile(join(statusDirectory, 'status.json'), JSON.stringify({ sessionId: 'current-session', toolCallId: 'agent-1', runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'reviewer', status: 'running', recentOutput: ['completed child'] }] }));
+assert.equal((doc.render(100).join("\n").match(/child task/g) ?? []).length, 1, 'child appears exactly once');
+const childSessionFile = join(statusDirectory, 'session.jsonl');
+await writeFile(childSessionFile, JSON.stringify({ type: 'message', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'completed child' }] } }) + '\n');
+await writeFile(join(statusDirectory, 'status.json'), JSON.stringify({ sessionId: 'current-session', toolCallId: 'agent-1', runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'reviewer', status: 'running', sessionFile: childSessionFile, recentOutput: ['unsafe completed preview'] }] }));
 await setTimeout(1100);
 assert.match(doc.render(100).join('\n'), /Subagent 1\/1/);
 assert.doesNotMatch(doc.render(100).join('\n'), /child summary/);
-assert.match(doc.render(100).join('\n'), /completed child/);
+assert.doesNotMatch(doc.render(100).join('\n'), /completed child|unsafe completed preview/);
 minimalHandlers.get('agent_settled')({});
 const realNow = Date.now;
 try {
@@ -620,6 +668,12 @@ try {
   assert.match(doc.render(100).join('\n'), /Subagent|completed child/, 'remount retains current-session completed children');
 } finally { Date.now = realNow; }
 assert.deepEqual(testTui.children[3].render(100), []);
+assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'running'));
+assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'completed' && entry.data.steps[0].finalOutput === 'completed child'), 'polling persists structured final text without requiring expansion');
+await rm(statusDirectory, { recursive: true });
+minimalCtx.sessionManager.getBranch = () => persistedAgentEntries;
+await minimalCommands.get('mini-lens-minimal').handler('on', minimalCtx);
+assert.match(doc.render(100).join('\n'), /completed child/, 'session entries restore children after temporary status removal');
 await minimalCommands.get("mini-lens-minimal").handler("off", minimalCtx);
 if (previousStatusRoot === undefined) delete process.env.PI_SUBAGENTS_TEMP_ROOT;
 else process.env.PI_SUBAGENTS_TEMP_ROOT = previousStatusRoot;
@@ -661,14 +715,14 @@ const onboardingCtx = {
     setWidget() {},
     setFooter() {},
     notify() {},
-    async select(title, choices) { previews.push([title, choices]); return "Keep defaults"; },
+    async select(title, choices) { previews.push([title, choices]); return "保留默认"; },
     async custom() { customCalls++; },
   },
 };
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
-assert.deepEqual(previews[0]?.[1], ["Keep defaults", "Configure now"], "onboarding offers explicit default and configure paths");
+assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置"], "onboarding offers explicit default and configure paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
-assert.match(previews[0]?.[0] ?? "", /MCP count, dot-matrix style, and collapsed replies are off by default/, "onboarding describes opt-in fields accurately");
+assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和折叠回复默认关闭/, "onboarding describes opt-in fields accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
@@ -677,7 +731,7 @@ const configureDir = await mkdtemp(join(tmpdir(), "mini-lens-configure-"));
 process.env.MINI_LENS_AGENT_DIR = configureDir;
 const configureHandlers = new Map();
 onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(name, handler); }, registerCommand() {} });
-await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "Configure now"; } } });
+await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
 assert.equal(customCalls, 1, "Configure now opens the settings list after showing the preview");
 
 await rm(configDir, { recursive: true, force: true });

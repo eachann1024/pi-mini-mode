@@ -39,56 +39,25 @@ export function attachStickyTool(tui: unknown, document: Component, view: Sticky
   try { if (!inspect(originalRoot) || primaries !== 1 || !scroll) return; }
   catch { return; }
   const transcript = scroll;
-  const requestRender = () => host.requestRender!();
   let currentId: string | undefined;
-  let previousY: number | undefined;
-  let previousTop = transcript.scrollTop;
   let shown: { id: string; line: string } | undefined;
   const heading: Component = {
     invalidate() {},
     render(width) {
       // Measure the unchanged document before moving the existing ScrollView.
       setMinHeight(0);
-      const lines = document.render(transcript.getContentWidth(width));
+      document.render(transcript.getContentWidth(width));
       const target = view.pinnedTool();
       if (!target) {
         currentId = undefined;
         shown = undefined;
-        previousY = undefined;
         return [];
       }
-      if (target.autoScroll === false) {
-        // SubAgent details expand where they were clicked. Do not reserve a
-        // heading row or move the viewport until its original row scrolls past.
-        currentId = target.id;
-        previousY = target.y;
-        previousTop = transcript.scrollTop;
-        shown = transcript.scrollTop > target.y ? target : undefined;
-        setMinHeight(0);
-        return shown ? [truncateToWidth(width < 5 ? "▾" : shown.line, width, "")] : [];
-      }
-      // The next viewport can grow before ScrollView exposes its new height.
-      // Reserve a terminal-height tail so resize/dock shrink cannot clamp past
-      // the heading or silently resume follow-end at the reading position.
-      const minHeight = target.y + 1 + Math.max(1, host.terminal?.rows ?? transcript.viewportHeight);
-      // Short results need trailing space to align the heading without hiding text.
-      setMinHeight(minHeight);
       if (target.id !== currentId) {
         currentId = target.id;
-        transcript.updateLayout(Math.max(lines.length, minHeight), Math.max(1, transcript.viewportHeight - (shown ? 0 : 1)), requestRender);
-        transcript.scrollTo(target.y + 1, { disableFollow: true });
-      } else if (previousY !== undefined && target.y !== previousY && shown) {
-        transcript.updateLayout(Math.max(lines.length, minHeight), transcript.viewportHeight, requestRender);
-        transcript.scrollTo(transcript.scrollTop + target.y - previousY, { disableFollow: true });
-      } else if (target.y === previousY && transcript.scrollTop < target.y && transcript.scrollTop < previousTop) {
-        view.unpinTool();
-        setMinHeight(0);
-        currentId = undefined;
-        shown = undefined;
-        return [];
+        // Suspend follow-end before layout grows, without moving the reading position.
+        transcript.scrollTo(transcript.scrollTop, { disableFollow: true });
       }
-      previousY = target.y;
-      previousTop = transcript.scrollTop;
       // At the original heading, use its document row rather than duplicating it.
       shown = transcript.scrollTop > target.y ? target : undefined;
       return shown ? [truncateToWidth(width < 5 ? "▾" : shown.line, width, "")] : [];

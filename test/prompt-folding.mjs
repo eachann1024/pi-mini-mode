@@ -136,18 +136,19 @@ try {
     class CustomMessageComponent extends Text {}
     const notice = new CustomMessageComponent('FULL_NATIVE_CARD', 0, 0);
     notice.message = { customType: 'subagent_supervisor_request', content: 'Run: INTERNAL_RUN\nReply with: subagent_supervisor(...)',
-      details: { agent: 'worker', reason: 'need_decision', expectsReply: true, requestBody: '是否继续执行？' } };
+      details: { agent: 'worker', reason: 'need_decision', expectsReply: true, requestBody: '是否继续执行？',
+        interview: { title: '继续执行', questions: [{ prompt: '选哪条路径？', options: [{ label: 'INTERVIEW_OPTION_A' }] }] } } };
     document.children[2].addChild(notice);
     await paint();
-    assert.match(document.render(80).join('\n'), /内部协作/);
-    assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN/);
+    assert.match(document.render(80).join('\n'), /需要裁决.*是否继续执行/);
+    assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN|INTERVIEW_OPTION_A/);
     // Explicit notice control uses the same document/scroll geometry as prompts.
     let noticeRow = document.render(80).findIndex(row => plain(row).includes('[详情]'));
     scroll.scrollToEnd();
     await paint();
     click(1, noticeRow - scroll.scrollTop);
     await paint();
-    assert.match(document.render(80).join('\n'), /是否继续执行/, 'actual SGR click reveals notification details');
+    assert.match(document.render(80).join('\n'), /是否继续执行[\s\S]*INTERVIEW_OPTION_A/, 'actual SGR click reveals interview details');
     assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN/);
     scroll.scrollTo(0);
     await paint();
@@ -155,14 +156,16 @@ try {
     await wait(550); // a second intentional single click, not double-click selection
     click(1, noticeRow - scroll.scrollTop);
     await paint();
-    assert.doesNotMatch(document.render(80).join('\n'), /是否继续执行/, 'actual SGR click collapses details');
+    assert.match(document.render(80).join('\n'), /需要裁决.*是否继续执行/, 'collapsed ask keeps the prompt');
+    assert.doesNotMatch(document.render(80).join('\n'), /INTERVIEW_OPTION_A/, 'actual SGR click collapses interview details');
     input('\x0f');
     await paint();
-    assert.match(document.render(80).join('\n'), /是否继续执行/, 'actual Ctrl+O reveals notification fields');
+    assert.match(document.render(80).join('\n'), /INTERVIEW_OPTION_A/, 'actual Ctrl+O reveals notification fields');
     assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN/);
     input('\x0f');
     await paint();
-    assert.doesNotMatch(document.render(80).join('\n'), /是否继续执行/, 'Ctrl+O compacts notifications again');
+    assert.doesNotMatch(document.render(80).join('\n'), /INTERVIEW_OPTION_A/, 'Ctrl+O compacts interview details again');
+    assert.match(document.render(80).join('\n'), /需要裁决.*是否继续执行/);
     // Progress replacements preserve the native user's scroll/focus ownership.
     terminal.rows = 8;
     await paint();

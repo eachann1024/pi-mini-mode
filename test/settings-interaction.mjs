@@ -37,51 +37,51 @@ await commands.get("mini-lens-settings").handler("", {
   },
 });
 const plain = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
-assert.match(panel.render(100).join("\n"), /Collapse replies/);
-assert.match(panel.render(100).join("\n"), /Minimal output/);
-assert.match(plain(panel.render(100).join("\n")), /Collapse replies\s+off/);
-panel.handleInput("\x1b[B"); // Collapse replies
-panel.handleInput("\x1b[B"); // Minimal output (disabled)
+assert.match(panel.render(100).join("\n"), /折叠回复/);
+assert.match(panel.render(100).join("\n"), /极简输出/);
+assert.match(plain(panel.render(100).join("\n")), /折叠回复\s+off/);
+panel.handleInput("\x1b[B"); // 折叠回复
+panel.handleInput("\x1b[B"); // 极简输出 (disabled)
 panel.handleInput("\r");
-assert.match(plain(panel.render(100).join("\n")), /Collapse replies/, "disabled Minimal output does not open");
-assert.doesNotMatch(plain(panel.render(100).join("\n")), /Show thinking/);
-assert.match(plain(panel.render(100).join("\n")), /Turn on Collapse replies to configure these options/);
-panel.handleInput("\x1b[A"); // Collapse replies
+assert.match(plain(panel.render(100).join("\n")), /折叠回复/, "disabled 极简输出 does not open");
+assert.doesNotMatch(plain(panel.render(100).join("\n")), /显示思考/);
+assert.match(plain(panel.render(100).join("\n")), /打开「折叠回复」后才能配置这些选项/);
+panel.handleInput("\x1b[A"); // 折叠回复
 panel.handleInput("\r"); // on
-assert.match(plain(panel.render(100).join("\n")), /Collapse replies\s+on/);
-panel.handleInput("\x1b[B"); // Minimal output
+assert.match(plain(panel.render(100).join("\n")), /折叠回复\s+on/);
+panel.handleInput("\x1b[B"); // 极简输出
 panel.handleInput("\r"); // enter unlocked group
-assert.match(plain(panel.render(100).join("\n")), /Show thinking/);
-assert.doesNotMatch(plain(panel.render(100).join("\n")), /Collapse replies/);
+assert.match(plain(panel.render(100).join("\n")), /显示思考/);
+assert.doesNotMatch(plain(panel.render(100).join("\n")), /折叠回复/);
 panel.handleInput("\x1b"); // back to groups
 panel.handleInput("\x1b[A"); // Collapse replies
 panel.handleInput("\x1b[A"); // Lens
 panel.handleInput("\r"); // Enter the Lens group.
 for (const width of [140, 80, 40]) {
   let lines = panel.render(width);
-  const row = lines.findIndex((line) => plain(line).includes("Show thinking level"));
+  const row = lines.findIndex((line) => plain(line).includes("显示思考等级"));
   assert.ok(row >= 0);
   const beforeHover = plain(lines[row]).replace(/^[→ ]+/, "");
   const result = panel.handleMouse({ type: "move", button: "none", x: 4, y: row, screenX: 4, screenY: row, width, height: lines.length });
   assert.equal(result?.handled, true, "panel routes hover through header and preview to settings");
   lines = panel.render(width);
-  assert.match(lines[row], /\x1b\[47m\x1b\[32m.*Show thinking level/, "hovered option has background and green text");
+  assert.match(lines[row], /\x1b\[47m\x1b\[32m.*显示思考等级/, "hovered option has background and green text");
   const previewLines = lines.slice(0, row - 2).join("\n");
   if (width >= 80) assert.match(previewLines, /\x1b\[47m\x1b\[32m\x1b\[1mhigh/, "hover highlights the corresponding preview field");
   assert.equal(plain(lines[row]).replace(/^[→ ]+/, ""), beforeHover, "hover does not toggle the value");
-  assert.equal(lines.filter((line) => line.includes("\x1b[32m") && plain(line).includes("Show ")).length, 1, "exactly one option is highlighted");
+  assert.equal(lines.filter((line) => line.includes("\x1b[32m") && plain(line).includes("显示")).length, 1, "exactly one option is highlighted");
   panel.handleInput("\x1b[B");
   lines = panel.render(width);
-  assert.match(lines[row + 1], /\x1b\[32m.*Show total session tokens/, "keyboard follows footer field order");
+  assert.match(lines[row + 1], /\x1b\[32m.*显示会话总 token/, "keyboard follows footer field order");
   if (width >= 140) assert.match(lines.slice(0, row - 2).join("\n"), /\x1b\[32m\x1b\[1mTotal/, "keyboard updates preview highlight");
   assert.ok(lines.every((line) => visibleWidth(line) <= width), "panel stays within terminal width");
 }
 panel.handleInput("mcp");
 let lines = panel.render(140);
-assert.ok(lines.some((line) => /Show enabled MCP servers.*off/.test(plain(line))), "search finds MCP toggle defaulting to off");
+assert.ok(lines.some((line) => /显示已启用 MCP 服务器.*off/.test(plain(line))), "search finds MCP toggle defaulting to off");
 panel.handleInput("\r");
 lines = panel.render(140);
-assert.ok(lines.some((line) => /Show enabled MCP servers.*on/.test(plain(line))), "Enter enables MCP count");
+assert.ok(lines.some((line) => /显示已启用 MCP 服务器.*on/.test(plain(line))), "Enter enables MCP count");
 assert.match(lines.join("\n"), /\x1b\[47m\x1b\[32m\x1b\[1m◇ MCP 3/, "selected MCP toggle highlights its example field");
 for (const width of [140, 80, 40, 20]) {
   assert.ok(panel.render(width).every((line) => visibleWidth(line) <= width), `MCP settings stay within ${width} columns`);

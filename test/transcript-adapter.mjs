@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { Container, Text, ScrollView, visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
 initTheme('dark', false);
-const { attachTranscript, compactSupervisorNotice } = await import('../lib/transcript-adapter.ts');
+const { attachTranscript, compactSupervisorNotice, supervisorNotice, supervisorNoticeBody } = await import('../lib/transcript-adapter.ts');
+const { CustomEntryComponent } = await import('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/custom-entry.js');
 
 // Real Pi TUI container and ScrollView objects, not an imitation of their render path.
 const document = new Container();
@@ -153,10 +154,18 @@ for (const width of [1, 2, 8, 20, 40, 80, 160]) {
 assert.equal(compactSupervisorNotice(supervisor, supervisorTheme, 160, false).length, 1, 'normal width uses one compact line');
 assert.match(compactSupervisorNotice(supervisor, supervisorTheme, 160, false).join('\n'), /进度.*已完成用户消息折叠/);
 for (const reason of ['need_decision', 'interview_request']) {
-  const rows = compactSupervisorNotice({ ...supervisor, details: { ...supervisor.details, reason, expectsReply: true } }, supervisorTheme, 100, false).join('\n');
-  assert.match(rows, /内部协作/);
-  assert.doesNotMatch(rows, /需要你|确认|\x1b\[33m/);
+  const rows = compactSupervisorNotice({ ...supervisor, details: { ...supervisor.details, reason, expectsReply: true, requestBody: reason === 'interview_request' ? '需要结构化输入' : '是否继续执行？' } }, supervisorTheme, 100, false).join('\n');
+  assert.match(rows, reason === 'interview_request' ? /需要提问/ : /需要裁决/);
+  assert.match(rows, /\x1b\[33m/);
+  assert.match(rows, reason === 'interview_request' ? /需要结构化输入/ : /是否继续执行/);
+  assert.doesNotMatch(rows, /内部协作|代理间沟通已收纳|RUN_ID|Reply with/);
 }
+const interviewAsk = { ...supervisor, details: { ...supervisor.details, reason: 'interview_request', expectsReply: true, requestBody: '需要选择实现路径',
+  interview: { title: '实现路径', questions: [{ prompt: '用哪条方案？', options: [{ label: '最小改动' }, { label: '重写模块' }] }] } } };
+assert.match(compactSupervisorNotice(interviewAsk, supervisorTheme, 160, false).join('\n'), /需要提问.*需要选择实现路径/);
+assert.doesNotMatch(compactSupervisorNotice(interviewAsk, supervisorTheme, 160, false).join('\n'), /用哪条方案|最小改动/);
+assert.match(compactSupervisorNotice(interviewAsk, supervisorTheme, 160, true).join('\n'), /用哪条方案[\s\S]*最小改动[\s\S]*重写模块/);
+assert.equal(compactSupervisorNotice({ ...interviewAsk, details: { ...interviewAsk.details, requestBody: '' } }, supervisorTheme, 160, false).join('\n').includes('实现路径'), true, 'interview title is the collapsed prompt when the body is empty');
 for (const body of ['已完成：错误用 error 色，失败用 warning', 'Build failed', '当前阻塞，需要授权', 'No errors; failure handling tested']) {
   const rows = compactSupervisorNotice({ ...supervisor, details: { ...supervisor.details, requestBody: body } }, supervisorTheme, 160, false).join('\n');
   assert.match(rows, /进度/);
@@ -173,6 +182,14 @@ assert.doesNotMatch(complete, /RUN_ID|REQUEST_ID|CHILD_TARGET|Reply with/);
 assert.match(complete, /已完成用户消息折叠/);
 assert.ok(complete.includes('\x1b[34m[收起]\x1b[0m'), 'expanded control uses accent');
 assert.equal(JSON.stringify(supervisor), snapshot);
+assert.equal(compactSupervisorNotice(supervisor, supervisorTheme, 160, true).length, 1, 'standalone progress has no expanded body');
+const progressHistory = { ...supervisor, details: { ...supervisor.details, requestBody: 'HIDDEN_PROGRESS', expectsReply: true } };
+const decisionHistory = ['need_decision', 'interview_request'].map(reason => ({ ...supervisor,
+  details: { ...supervisor.details, reason, expectsReply: true, requestBody: `VISIBLE_${reason}` },
+}));
+const independentDetails = compactSupervisorNotice(attention, supervisorTheme, 160, true, '', [progressHistory, ...decisionHistory, attention, progressHistory]).slice(1).join('\n');
+assert.doesNotMatch(independentDetails, /HIDDEN_PROGRESS/);
+assert.match(independentDetails, /VISIBLE_need_decision[\s\S]*VISIBLE_interview_request[\s\S]*Waiting for supervisor reply/);
 
 // pi-subagents 0.67.0 incremental child notifications only carry their known
 // customType and formatted content. Keep task/result/error visible; fold IDs,
@@ -208,6 +225,18 @@ const renderedIncrementalDetails = document.render(160).join('\n');
 assert.match(renderedIncrementalDetails, /Workflow run: cf5f2c47/);
 assert.match(renderedIncrementalDetails, /Run fan-out: 2\/64 used, 62 remaining/);
 restoreIncremental();
+const handledChildren = new Set(['98b2852e-2054-4c91-8fa9-bcc1ebf55323']);
+let collectedNotice;
+const restoreCollected = attachTranscript(tui, receiptView, {
+  supervisor: { theme: supervisorTheme, expanded: () => false, handledRunIds: () => handledChildren,
+    onNotices: groups => { collectedNotice = [...groups.values()][0]; } },
+});
+assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Connection error/);
+assert.equal(collectedNotice.notice.runId, [...handledChildren][0]);
+assert.equal(collectedNotice.messages[0], incrementalChildFailure, 'collected errors retain full original details');
+handledChildren.clear();
+assert.match(document.render(160).join('\n'), /执行失败.*Connection error/, 'unowned failures must never be hidden');
+restoreCollected();
 // Route only recognized native custom messages; retain receipts, prompts, and turn position.
 chat.clear();
 chat.addChild(new UserMessageComponent('USER'));
@@ -229,7 +258,7 @@ restoreCompact();
 assert.equal(document.render, anotherExtension, 'cleanup restores the prior renderer');
 assert.match(chat.render(120).join('\n'), /NATIVE_FULL_SUPERVISOR_CARD/);
 assert.equal(JSON.stringify(supervisor), snapshot);
-console.log('Supervisor notices PASS: typed metadata, one/two rows, Chinese states, prose error never escalates, internal asks, true control failures, full details and restore.');
+console.log('Supervisor notices PASS: typed metadata, one/two rows, Chinese states, prose error never escalates, visible asks, true control failures, full details and restore.');
 
 // Stable run+child groups retain their first turn/row and every original detail.
 chat.clear();
@@ -252,8 +281,8 @@ const groupedRestore = attachTranscript(tui, { invalidate() {}, render(_width, n
 detailsExpanded = false;
 let grouped = document.render(160).join('\n');
 assert.equal((grouped.match(/\[详情\]/g) ?? []).length, 5);
-assert.doesNotMatch(grouped, /OLD_PROGRESS|PRIVATE_QUESTION|worker|RUN_ID/);
-assert.match(grouped, /FIRST[\s\S]*NEW_PROGRESS[\s\S]*SECOND[\s\S]*OTHER_CHILD/);
+assert.doesNotMatch(grouped, /OLD_PROGRESS|NEW_PROGRESS|worker|RUN_ID/);
+assert.match(grouped, /FIRST[\s\S]*需要裁决.*PRIVATE_QUESTION[\s\S]*SECOND[\s\S]*OTHER_CHILD/);
 assert.match(grouped, /任务 1/);
 assert.match(grouped, /OTHER_RUN/);
 assert.match(grouped, /MISSING_IDENTITY_A[\s\S]*MISSING_IDENTITY_B/);
@@ -263,13 +292,15 @@ for (const change of [{ type: 'drag' }, { type: 'wheel' }, { shift: true }, { ct
 assert.deepEqual(hit({ ...event, type: 'press' }), { handled: true });
 assert.deepEqual(hit(event), { handled: true, render: true });
 grouped = document.render(160).join('\n');
-assert.match(grouped, /OLD_PROGRESS[\s\S]*NEW_PROGRESS[\s\S]*PRIVATE_QUESTION/);
+assert.match(grouped, /PRIVATE_QUESTION/);
+assert.doesNotMatch(grouped, /OLD_PROGRESS|NEW_PROGRESS/, 'click expansion does not revive progress history');
 assert.doesNotMatch(grouped, /REQUEST_ID/);
 assert.equal((grouped.match(/\[收起\]/g) ?? []).length, 1, 'click opens only this task');
 detailsExpanded = true;
 assert.equal((document.render(160).join('\n').match(/\[收起\]/g) ?? []).length, 5, 'keyboard opens all');
 detailsExpanded = false;
-assert.doesNotMatch(document.render(160).join('\n'), /OLD_PROGRESS|PRIVATE_QUESTION/, 'keyboard closes clicked details too');
+assert.match(document.render(160).join('\n'), /需要裁决.*PRIVATE_QUESTION/, 'pending ask stays in the collapsed prompt');
+assert.doesNotMatch(document.render(160).join('\n'), /OLD_PROGRESS/, 'keyboard closes clicked details too');
 const failure = { ...attention, details: { event: { ...attention.details.event, runId: 'RUN_ID', index: 0, reason: 'tool_failures', label: '验证', message: 'TEST_COMMAND_FAILED' } } };
 addNotice(failure);
 addNotice(update('LATER_ORDINARY_PROGRESS'));
@@ -282,7 +313,7 @@ for (const width of [1, 2, 8, 20, 40, 80, 160]) { document.render(width); assert
 groupedRestore();
 assert.equal(chat.children.length, 12, 'aggregation never removes native messages');
 assert.match(chat.render(160).join('\n'), /NATIVE/);
-console.log('Supervisor aggregation PASS: first-turn placement, stable run+child, missing/nested identity isolation, internal asks in details, sticky failures, click/key independence.');
+console.log('Supervisor aggregation PASS: first-turn placement, stable run+child, missing/nested identity isolation, visible asks, sticky failures, click/key independence.');
 
 const internalAttention = { ...attention, details: { event: { ...attention.details.event, reason: 'supervisor_request' } } };
 assert.match(compactSupervisorNotice(internalAttention, supervisorTheme, 100, false).join('\n'), /内部协作/);
@@ -294,3 +325,157 @@ for (const nestedRunId of ['nested-a', 'nested-b']) addNotice({ ...failure, deta
 const nestedRestore = attachTranscript(tui, receiptView, { supervisor: { theme: supervisorTheme, expanded: () => false } });
 assert.equal((document.render(160).join('\n').match(/\[详情\]/g) ?? []).length, 2);
 nestedRestore();
+
+// Replies are durable custom entries, not CustomMessageComponent messages.
+const reply = { type: 'custom', id: 'reply-entry', parentId: null, timestamp: '2026-09-11T02:00:00Z',
+  customType: 'subagent_supervisor_reply', data: { requestId: 'REQUEST_ID', runId: 'RUN_ID', agent: 'worker',
+    childIndex: 0, message: 'REPLY_BODY\n\nReply second paragraph: failed/error is prose.', createdAt: 1000 } };
+const replySnapshot = JSON.stringify(reply);
+const nativeReply = entry => new CustomEntryComponent(entry, () => new Text('Supervisor reply to child\nNATIVE_REPLY_BODY', 0, 0));
+for (const reason of [undefined, 'need_decision', 'interview_request', 'progress_update']) {
+  const entry = { ...reply, data: { ...reply.data, reason } };
+  assert.equal(supervisorNotice(entry).internal, true);
+  assert.equal(supervisorNotice(entry).alert, false);
+  assert.equal(supervisorNoticeBody(entry), reply.data.message, 'progress_update reply still has detail prose');
+  for (const width of [1, 2, 8, 20, 40, 80, 160]) {
+    const rows = compactSupervisorNotice(entry, supervisorTheme, width, false);
+    assert.ok(rows.length <= 2 && rows.every(row => visibleWidth(row) <= width));
+    assert.doesNotMatch(rows.join('\n'), /REPLY_BODY|REQUEST_ID|RUN_ID|failed|error/);
+  }
+}
+for (const childIndex of [-1, 0.5]) assert.equal(supervisorNotice({ ...reply, data: { ...reply.data, childIndex } }).key, undefined);
+for (const extra of [{ nestedRunId: 'nested' }, { nestingPath: [0] }]) {
+  assert.equal(supervisorNotice({ ...reply, data: { ...reply.data, ...extra } }).key, undefined);
+}
+const invalidReplies = [
+  ...[undefined, 'custom_message', 'message'].map(type => ({ ...reply, type })),
+  { role: 'user', content: 'Supervisor reply to child' },
+  { ...reply, customType: 'unknown-reply' },
+  { ...reply, customType: 'subagent_supervisor_request', details: supervisor.details },
+  ...[undefined, null, [], {}, { ...reply.data, message: 123 }, { ...reply.data, requestId: null },
+    { ...reply.data, runId: 1 }, { ...reply.data, agent: false }, { ...reply.data, childIndex: NaN },
+    { ...reply.data, createdAt: Infinity }, { ...reply.data, reason: 'unknown' },
+    { ...reply.data, reason: { toString: () => 'need_decision' } },
+    { ...reply.data, childTarget: 123 }].map(data => ({ ...reply, data })),
+];
+for (const invalid of invalidReplies) {
+  assert.equal(supervisorNotice(invalid), undefined);
+  chat.clear(); chat.addChild(nativeReply(invalid));
+  const cleanup = attachTranscript(tui, view, { supervisor: { theme: supervisorTheme, expanded: () => false } });
+  assert.match(document.render(160).join('\n'), /Supervisor reply to child[\s\S]*NATIVE_REPLY_BODY/, 'invalid/unknown entries retain native rendering even with the same title');
+  cleanup();
+}
+chat.clear();
+chat.addChild(nativeReply(reply)); // No user turn or child snapshot: prefix notice remains inspectable.
+let replyExpanded = false;
+let replyGroups;
+const replyOptions = { supervisor: { theme: supervisorTheme, expanded: () => replyExpanded, onNotices: groups => { replyGroups = groups; } } };
+let restoreReply = attachTranscript(tui, view, replyOptions);
+let replyRows = document.render(160);
+assert.match(replyRows.join('\n'), /内部协作.*代理间沟通已收纳/);
+assert.doesNotMatch(replyRows.join('\n'), /Supervisor reply to child|NATIVE_REPLY_BODY|REPLY_BODY/);
+assert.equal([...replyGroups.values()][0].messages[0], reply);
+const replyClick = { ...event, y: 1 }; // HEADER precedes prefix notices.
+assert.deepEqual(document.handleMouse({ ...replyClick, type: 'press' }), { handled: true });
+assert.deepEqual(document.handleMouse(replyClick), { handled: true, render: true });
+assert.match(document.render(160).join('\n'), /REPLY_BODY[\s\S]*Reply second paragraph/);
+for (const width of [2, 8, 20, 40, 80, 160]) assert.ok(document.render(width).slice(0, -1).every(row => visibleWidth(row) <= width));
+document.handleMouse(replyClick);
+assert.doesNotMatch(document.render(160).join('\n'), /REPLY_BODY/);
+replyExpanded = true;
+assert.match(document.render(160).join('\n'), /REPLY_BODY/);
+replyExpanded = false;
+assert.doesNotMatch(document.render(160).join('\n'), /REPLY_BODY/);
+restoreReply();
+assert.match(chat.render(160).join('\n'), /Supervisor reply to child[\s\S]*NATIVE_REPLY_BODY/);
+chat.clear(); chat.addChild(nativeReply(JSON.parse(replySnapshot)));
+restoreReply = attachTranscript(tui, view, replyOptions); // /reload reconstructs the native component.
+assert.doesNotMatch(document.render(160).join('\n'), /REPLY_BODY|NATIVE_REPLY_BODY/);
+document.handleMouse(replyClick);
+assert.match(document.render(160).join('\n'), /REPLY_BODY/);
+restoreReply();
+
+// Request/reply share the first turn; replies never clear an earlier failure.
+chat.clear();
+chat.addChild(new UserMessageComponent('FIRST'));
+addNotice(update('REQUEST_BODY', { reason: 'need_decision' }));
+chat.addChild(new UserMessageComponent('SECOND'));
+chat.addChild(nativeReply(reply));
+const restoreReplyGroup = attachTranscript(tui, { invalidate() {}, render(_width, notices) {
+  captured = notices;
+  return ['FIRST', ...(notices.get(0) ?? []), 'SECOND', ...(notices.get(1) ?? [])];
+} }, replyOptions);
+assert.equal((document.render(160).join('\n').match(/\[详情\]/g) ?? []).length, 1);
+assert.equal(captured.get(1), undefined);
+assert.match(document.render(160).join('\n'), /内部协作.*代理间沟通已收纳/);
+assert.doesNotMatch(document.render(160).join('\n'), /需要裁决|REQUEST_BODY/, 'a reply resolves the visible ask');
+captured.get(0).handleMouse(event);
+assert.match(document.render(160).join('\n'), /FIRST[\s\S]*REQUEST_BODY[\s\S]*REPLY_BODY[\s\S]*SECOND/);
+addNotice(failure);
+chat.addChild(nativeReply({ ...reply, data: { ...reply.data, message: 'LATER_REPLY' } }));
+assert.match(document.render(160).join('\n'), /执行失败.*TEST_COMMAND_FAILED/);
+assert.match(document.render(160).join('\n'), /REQUEST_BODY[\s\S]*REPLY_BODY[\s\S]*TEST_COMMAND_FAILED[\s\S]*LATER_REPLY/);
+restoreReplyGroup();
+assert.equal(JSON.stringify(reply), replySnapshot);
+console.log('Supervisor reply PASS: real CustomEntryComponent, strict envelope/data whitelist, standalone, request grouping, sticky failure, reload, click/Ctrl+O, narrow width, native fallback.');
+
+// Exercise the existing notice -> owning child -> persisted snapshot chain with the real view.
+const { minimalOutputComponent } = await import('../extensions/footer-status.ts');
+const { AGENT_STATUS_ENTRY, agentChildren, agentStatusesByTurn, savedAgentStatuses, retainAgentStatuses } = await import('../lib/agent-view.ts');
+const childTheme = { fg: (_color, text) => text, bg: (_color, text) => text, bold: text => text };
+const dispatchTurns = [{ question: 'DISPATCH_TURN', process: [], agentCalls: [{ id: 'dispatch', name: 'subagent', state: 'done' }] },
+  { question: 'FOLLOWUP_TURN', process: [], agentCalls: [] }];
+let childStatuses = [{ runId: 'RUN_ID', toolCallId: 'dispatch', mode: 'single', state: 'failed', startedAt: 1000, endedAt: 2000,
+  steps: [{ agent: 'worker', status: 'failed', error: 'CHILD_ERROR', finalOutput: 'FINAL_OUTPUT', recentOutput: ['UNSAFE_LOG'] }] }];
+const ownedRuns = new Set();
+const matchedView = () => minimalOutputComponent(childTheme, () => {
+  const assigned = agentStatusesByTurn(childStatuses, dispatchTurns);
+  ownedRuns.clear();
+  return dispatchTurns.map((turn, i) => {
+    const subAgents = agentChildren(assigned.get(i) ?? []);
+    subAgents.forEach(child => ownedRuns.add(child.runId));
+    return { ...turn, subAgents };
+  });
+});
+chat.clear();
+chat.addChild(new UserMessageComponent('DISPATCH_TURN'));
+chat.addChild(new UserMessageComponent('FOLLOWUP_TURN'));
+const matchedNative = nativeReply(reply);
+chat.addChild(matchedNative);
+const matchedOptions = { supervisor: { theme: childTheme, expanded: () => false, handledRunIds: () => ownedRuns,
+  onNotices: groups => {
+    // Same snapshot fields used by footer-status.ts; no new persistence format.
+    for (const group of groups.values()) childStatuses = childStatuses.map(status => status.runId === group.notice.runId
+      ? { ...status, notice: group.notice, noticeMessages: group.messages } : status);
+  },
+} };
+let childView = matchedView();
+let restoreMatched = attachTranscript(tui, childView, matchedOptions);
+document.render(160); // Existing handledRunIds is populated by the first view render.
+let matchedRows = document.render(160);
+assert.equal((matchedRows.join('\n').match(/代理间沟通已收纳/g) ?? []).length, 1);
+assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|NATIVE_REPLY_BODY|FINAL_OUTPUT|UNSAFE_LOG/);
+let childY = matchedRows.findIndex(row => row.includes('SubAgent'));
+assert.ok(childY > 0);
+assert.deepEqual(document.handleMouse({ ...event, x: 3, y: childY }), { handled: true, render: true });
+matchedRows = document.render(160);
+assert.match(matchedRows.join('\n'), /DISPATCH_TURN[\s\S]*REPLY_BODY[\s\S]*FINAL_OUTPUT[\s\S]*CHILD_ERROR[\s\S]*FOLLOWUP_TURN/);
+assert.doesNotMatch(matchedRows.join('\n'), /UNSAFE_LOG|NATIVE_REPLY_BODY/);
+for (const width of [8, 20, 40, 80, 160]) assert.ok(document.render(width).every(row => visibleWidth(row) <= width));
+const savedReplyStatuses = JSON.parse(JSON.stringify(childStatuses.map(data => ({ type: 'custom', customType: AGENT_STATUS_ENTRY, data }))));
+restoreMatched();
+assert.ok(chat.children.includes(matchedNative), 'collection does not remove the native entry');
+// A compacted/reloaded suffix can omit the original reply; the stored child remains inspectable.
+chat.clear(); chat.addChild(new UserMessageComponent('FOLLOWUP_TURN'));
+childStatuses = retainAgentStatuses(savedAgentStatuses(savedReplyStatuses), []);
+childView = matchedView();
+restoreMatched = attachTranscript(tui, childView, { ...matchedOptions, turnCount: () => dispatchTurns.length });
+matchedRows = document.render(160);
+assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|FINAL_OUTPUT/);
+childY = matchedRows.findIndex(row => row.includes('SubAgent'));
+document.handleMouse({ ...event, x: 3, y: childY });
+matchedRows = document.render(160);
+assert.match(matchedRows.join('\n'), /DISPATCH_TURN[\s\S]*REPLY_BODY[\s\S]*FINAL_OUTPUT[\s\S]*CHILD_ERROR[\s\S]*FOLLOWUP_TURN/);
+restoreMatched();
+assert.equal(JSON.stringify(reply), replySnapshot);
+console.log('Supervisor reply ownership PASS: real minimal child click, delayed reply stays at dispatch turn, no duplicate card, finalOutput/error whitelist retained, JSON snapshot + empty live status + compacted suffix reload.');

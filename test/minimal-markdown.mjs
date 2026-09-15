@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
-import { minimalSurface, secondaryAccent } from '../lib/minimal-theme.ts';
+import { minimalSurface } from '../lib/minimal-theme.ts';
 import { diagramMarkdown, normalizeProseMarkdown } from '../lib/minimal-markdown.ts';
 const moduleUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
 const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
@@ -74,13 +74,17 @@ for (const name of ['dark', 'light']) {
   const receiptRows = plain(receiptView.render(160).join('\n'));
   assert.match(receiptRows, /Control subagent · dispatch · returned/);
   assert.doesNotMatch(receiptRows, /Run fan-out|The async run is detached/);
-  const secondary = secondaryAccent(theme, 'body');
-  assert.equal(plain(secondary), 'body');
-  assert.notEqual(secondary, theme.fg('accent', 'body'));
-  assert.notEqual(secondary, theme.fg('text', 'body'));
   const output = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output body'], running: false }]).render(100).join('\n');
   assert.match(plain(output), /Output body/);
-  assert.ok(output.includes(secondary));
+  assert.ok(output.includes(theme.fg('text', theme.bold('Output'))), 'Output label uses neutral foreground');
+  assert.ok(output.includes(theme.fg('muted', 'body')), 'Output body uses neutral gray');
+  const neutral = minimalOutputComponent(theme, () => [{ question: '', process: ['call r', 'skill frontend'], agentCalls: [{ id: 'r', name: 'read', task: 'README.md', state: 'done' }] }]).render(100).join('\n');
+  for (const label of ['Agent', 'read', 'Skill']) assert.ok(neutral.includes(theme.fg('text', theme.bold(label))), label);
+  for (const body of ['README.md', 'frontend']) assert.ok(neutral.includes(theme.fg('muted', body)), body);
+  assert.ok(!neutral.includes(theme.fg('accent', '')), 'settled plain process contains no accent foreground');
+  const mdOutput = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output 重点区分 **SAPI 网关** 的职责'], running: false }]).render(100).join('\n');
+  assert.doesNotMatch(plain(mdOutput), /\*\*/);
+  assert.ok(mdOutput.includes(theme.bold('SAPI 网关')), 'Output prose renders Markdown emphasis');
   const turn = { question: '**User**\n\n> quote', process: ['thinking **plan**\n\n```js\nconst count = 1;\n```'], running: true, final: '# Answer\n\n| Name | Value |\n| --- | --- |\n| First | 42 |\n\n```js\nconst value = 42;\n```\n\n' + diagram };
   const usageTurns = minimalTurnsFromBranch([
     { type: 'message', message: { role: 'user', content: 'first' } },
@@ -102,7 +106,7 @@ for (const name of ['dark', 'light']) {
   for (const width of [1, 12, 30, 40]) assert.ok(usageView.render(width).every(line => visibleWidth(line) <= width));
   const styled = minimalOutputComponent(theme, () => [{ question: '', process: ['thinking **bold** *italic* [link](https://example.com)'], running: true, thinking: 0 }]).render(100).find(line => plain(line).includes('Thinking'));
   assert.doesNotMatch(plain(styled), /\*\*|\*italic\*/);
-  assert.ok(styled.includes(theme.fg('accent', theme.bold('Thinking'))));
+  assert.ok(styled.includes(theme.fg('text', theme.bold('Thinking'))));
   const toolRow = minimalOutputComponent(theme, () => [{ question: '', process: ['call t'], agentCalls: [{ id: 't', name: 'subagent', task: 'Requesting exact model IDs', state: 'running' }] }]).render(100).find(line => plain(line).includes('subagent'));
   assert.equal(toolRow, undefined, 'management calls are hidden from compact progress');
   if (theme.bold("probe").includes("\x1b[1m")) {

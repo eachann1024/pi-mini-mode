@@ -1,8 +1,8 @@
-import { agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
+import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
 import { CONFIG_DIR_NAME, getSettingsListTheme, getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
 import { diagramMarkdown, minimalMarkdownTheme } from "../lib/minimal-markdown.ts";
-import { minimalSurface, secondaryAccent } from "../lib/minimal-theme.ts";
+import { minimalSurface } from "../lib/minimal-theme.ts";
 import { Container, Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, SettingsList, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -62,12 +62,12 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
 const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<keyof MiniLensSettings>;
 
 const COPY = {
-  title: "Mini Lens settings", preview: "Preview (example data)", lens: "Lens", minimal: "Minimal output",
-  model: "Show model", thinking: "Show thinking level", total: "Show total session tokens", cached: "Show session cache tokens", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "Show cache hit rate (CH)", price: "Show session price", mcp: "Show enabled MCP servers", context: "Show context tokens and progress bar", dots: "↳ Use dot-matrix progress bar", percent: "Show context percentage", speed: "Show latest generation speed", speedUnit: "↳ Show tok/s unit", enableMinimal: "Collapse replies", showThinking: "Show thinking", tools: "Show tool calls", output: "Show process output", skills: "Show skills", agentUsage: "Show Agent token usage", shortcut: "Show Ctrl+O hint for new Agent (6s)",
-  totalDescription: "Total: all tokens used on the current session branch, including tool-reported LLM usage.", cachedDescription: "Cached: cumulative cache-read + cache-write tokens (part of Total).", cacheHitDescription: "CH (cache hit): cache-read / (input + cache-read). Cache writes are not included in this rate.",
-  enableMinimalDescription: "Off keeps Pi's default conversation history.",
-  minimalLocked: "Turn on Collapse replies to configure these options.",
-  tuiRequired: "/mini-lens-settings requires TUI mode", saveFailed: "Could not save Mini Lens settings", minimalRequired: "/mini-lens-minimal requires TUI mode", minimalUsage: "Usage: /mini-lens-minimal [on|off]", minimalState: "Mini Lens collapsed replies:", onboarding: "MCP count, dot-matrix style, and collapsed replies are off by default; other fields are on.", keepDefaults: "Keep defaults", configureNow: "Configure now",
+  title: "Mini Lens 设置", preview: "预览（示例数据）", lens: "Lens", minimal: "极简输出",
+  model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", enableMinimal: "折叠回复", showThinking: "显示思考", tools: "显示工具调用", output: "显示过程输出", skills: "显示技能", agentUsage: "显示 Agent token 用量", shortcut: "新 Agent 显示 Ctrl+O 提示（6 秒）",
+  totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
+  enableMinimalDescription: "关闭后保留 Pi 默认会话历史。",
+  minimalLocked: "打开「折叠回复」后才能配置这些选项。",
+  tuiRequired: "/mini-lens-settings 需要 TUI 模式", saveFailed: "无法保存 Mini Lens 设置", minimalRequired: "/mini-lens-minimal 需要 TUI 模式", minimalUsage: "用法：/mini-lens-minimal [on|off]", minimalState: "Mini Lens 折叠回复：", onboarding: "MCP 数量、点阵样式和折叠回复默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
 } as const;
 
 export function settingsPath(agentDir = process.env.MINI_LENS_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
@@ -205,6 +205,37 @@ export function formatSpeed(speed: number, showUnit: boolean): string {
   return showUnit ? `${value} tok/s` : value;
 }
 
+const PLANNOTATOR_STATUS_KEY = "plannotator";
+const PLANNOTATOR_PLANNING_LABEL = "⏸ plan";
+const PLAN_CAP_LEFT = "\uE0B6";
+const PLAN_CAP_RIGHT = "\uE0B4";
+const PLAN_BG = "250;204;21";
+const PLAN_FG = "19;18;23";
+
+function plannotatorStatusText(text: string | undefined): string {
+  return stripVTControlCharacters(text ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Exact plannotator planning label from @plannotator/pi-extension (`⏸ plan`). */
+export function isPlannotatorPlanningStatus(text: string | undefined): boolean {
+  return plannotatorStatusText(text) === PLANNOTATOR_PLANNING_LABEL;
+}
+
+/** Scheme B PLAN capsule. visibleWidth===1 only protects columns; it is not a font check. */
+export function planCapsule(): string {
+  const paint = (text: string) => `\x1b[48;2;${PLAN_BG}m\x1b[38;2;${PLAN_FG}m${text}\x1b[39m\x1b[49m`;
+  if (visibleWidth(PLAN_CAP_LEFT) === 1 && visibleWidth(PLAN_CAP_RIGHT) === 1) {
+    const cap = (ch: string) => `\x1b[38;2;${PLAN_BG}m${ch}\x1b[39m`;
+    return `${cap(PLAN_CAP_LEFT)}${paint("PLAN")}${cap(PLAN_CAP_RIGHT)}`;
+  }
+  return paint(" PLAN ");
+}
+
+function plannotatorPlanTag(statuses: ReadonlyMap<string, string> | undefined): string {
+  const text = statuses?.get(PLANNOTATOR_STATUS_KEY);
+  return isPlannotatorPlanningStatus(text) ? planCapsule() : "";
+}
+
 function renderRight(
   theme: ExtensionContext["ui"]["theme"],
   settings: MiniLensSettings,
@@ -256,6 +287,7 @@ export function statusLine(
   speed: number | undefined,
   highlighted?: keyof MiniLensSettings,
   mcpCount?: number,
+  statuses?: ReadonlyMap<string, string>,
 ): string {
   if (highlighted === "mini-lens-context-dots-show") highlighted = "mini-lens-context-show";
   const field = (id: keyof MiniLensSettings, color: Parameters<typeof theme.fg>[0], text: string) =>
@@ -276,6 +308,7 @@ export function statusLine(
   const tokenText = tokens === undefined || contextWindow === undefined ? "" : `${formatTokens(Math.max(0, tokens))}/${formatTokens(Math.max(0, contextWindow))}`;
   const showContext = settings["mini-lens-context-show"] && Boolean(tokenText);
   const mcpText = settings["mini-lens-mcp-show"] && mcpCount !== undefined ? `◇ MCP ${mcpCount}` : "";
+  const planTag = plannotatorPlanTag(statuses);
 
   const right = renderRight(theme, settings, percentText, speed, highlighted);
   const rightWidth = visibleWidth(right);
@@ -287,6 +320,7 @@ export function statusLine(
   }
 
   const leftParts = [
+    planTag,
     settings["mini-lens-model-show"] && model && field("mini-lens-model-show", "accent", model),
     settings["mini-lens-thinking-show"] && thinking && field("mini-lens-thinking-show", "muted", thinking),
     settings["mini-lens-session-tokens-show"] && usageTotals.totalTokens > 0 && field("mini-lens-session-tokens-show", "text", `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`),
@@ -296,6 +330,7 @@ export function statusLine(
     mcpText && field("mini-lens-mcp-show", "muted", mcpText),
   ].filter((part): part is string => Boolean(part));
   const unstyledLeft = [
+    planTag && stripVTControlCharacters(planTag),
     settings["mini-lens-model-show"] && model,
     settings["mini-lens-thinking-show"] && thinking,
     settings["mini-lens-session-tokens-show"] && usageTotals.totalTokens > 0 && `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`,
@@ -522,7 +557,7 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
 
 export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>()) {
   const markdown = (text: string, width: number, process = false) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: (value) => process ? secondaryAccent(theme, value) : theme.fg("text", value) }, { transform: (source, available) => diagramMarkdown(source, available) }).render(width);
+    { color: (value) => theme.fg(process ? "muted" : "text", value) }, { transform: (source, available) => diagramMarkdown(source, available) }).render(width);
   const surface = (rows: string[], width: number, user: boolean) => {
     const padding = Math.min(2, Math.floor((width - 1) / 2));
     return ["", ...rows, ""].map((row) => {
@@ -690,17 +725,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
         if (entries.length || turn.running || turn.usage || agents.total) {
           const expanded = isExpanded();
-          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || expandedThinking.has(entry.id)).slice(-5);
+          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || expandedThinking.has(entry.id)).slice(-10);
           const done = entries.filter(entry => entry.state === "done").length;
-          const progressHeader = theme.bold(theme.fg("accent", "Agent")) + (entries.length ? theme.fg("muted", ` · ${done}/${entries.length}`) : "")
-            + (agents.total ? theme.bold(theme.fg("accent", "     Subagent")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
+          const progressHeader = theme.bold(theme.fg("text", "Agent")) + (entries.length ? theme.fg("muted", ` · ${done}/${entries.length}`) : "")
+            + (agents.total ? theme.bold(theme.fg("text", "     Subagent")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
               + (agents.errors ? theme.fg("error", ` · ${agents.errors} failed`) : "") : "");
           const header = progressHeader + theme.fg("muted", showShortcut(turn) ? " · Ctrl+O" : "");
           const usage = addUsage({ ...EMPTY_USAGE, ...turn.usage, cost: turn.usage?.cost ?? 0 }, turn.pendingUsage);
           const hasUsage = usage.totalTokens > 0 || usage.cacheRead > 0;
           const totals = hasUsage
-            ? theme.fg("accent", "S") + theme.fg("muted", ` ${formatTokens(usage.totalTokens)} / `)
-              + theme.fg("accent", "C") + theme.fg("muted", ` ${formatTokens(usage.cacheRead)}`)
+            ? theme.fg("text", "S") + theme.fg("muted", ` ${formatTokens(usage.totalTokens)} / `)
+              + theme.fg("text", "C") + theme.fg("muted", ` ${formatTokens(usage.cacheRead)}`)
             : "";
           const totalsWidth = visibleWidth(totals);
           if (hasUsage && showUsage() && width >= totalsWidth + visibleWidth(agents.total ? progressHeader : "Agent") + 1) {
@@ -710,7 +745,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             lines.push("", truncateToWidth(header, width));
           }
           if (!shown.length && turn.running && turn.awaitingResponse && !turn.final) {
-            const prefix = theme.fg("accent", `${agents.rows.length ? "├─" : "└─"} ${runningGlyph()} `) + theme.fg("accent", theme.bold("Thinking")) + theme.fg("success", ` ${formatElapsed(turn.startedAt)}`) + " ";
+            const prefix = theme.fg("dim", `${agents.rows.length ? "├─" : "└─"} `) + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold("Thinking")) + theme.fg("success", ` ${formatElapsed(turn.startedAt)}`) + " ";
             lines.push(truncateToWidth(prefix + theme.fg("text", "…"), width, ""));
           }
           shown.forEach((entry, row) => {
@@ -722,7 +757,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const body = split < 0 ? "" : text.slice(split + 1);
             const activeThinking = entry.thinking && entry.state === "running";
             const thinkingElapsed = entry.thinking ? theme.fg(activeThinking ? "success" : "muted", ` ${formatElapsed(turn.startedAt)}`) : "";
-            const summary = theme.fg("accent", theme.bold(label)) + thinkingElapsed + " ";
+            const summary = theme.fg("text", theme.bold(label)) + thinkingElapsed + " ";
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : !!(entry.thinking && expandedThinking.has(entry.id));
@@ -730,34 +765,44 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
             const status = entry.state === "error" ? "×" : entry.state === "running" ? runningGlyph() : "●";
             const arrow = !!controlId && (open || hoveredTool?.id === controlId);
-            const glyph = arrow ? (open ? "▾" : "▸") + (entry.state !== "done" ? ` ${status}` : "") : status;
-            const glyphColor = entry.state === "error" ? "error" : controlId ? "accent" : "muted";
+            const keepStatus = entry.state === "running" || (open && entry.state === "error");
+            const glyph = arrow ? (open ? "▾" : "▸") + (keepStatus ? ` ${status}` : "") : status;
+            const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
             const last = row === shown.length - 1 && !agents.rows.length;
-            const prefix = theme.fg("accent", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
+            const prefix = theme.fg("dim", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
             if (activeThinking) {
               const renderedBody = markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim();
               const bodyWidth = Math.max(0, width - visibleWidth(prefix));
               const overflow = Math.max(0, visibleWidth(renderedBody) - bodyWidth);
               const offset = overflow ? Math.max(0, Math.floor((Date.now() - (turn.startedAt ?? Date.now())) / THINKING_SCROLL_INTERVAL_MS) % (overflow + 9) - 4) : 0;
               lines.push(truncateToWidth(prefix + (bodyWidth ? sliceByColumn(renderedBody, Math.min(overflow, offset), bodyWidth, true) : ""), width, ""));
-            } else lines.push(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : secondaryAccent(theme, body)), width, controlId ? "" : "…"));
+            } else if (label === "Output") {
+              // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
+              const indent = visibleWidth(prefix);
+              const wrapped = markdown(body, Math.max(1, width - indent), true);
+              const rail = !last && indent > 0 ? theme.fg("dim", "│") + " ".repeat(indent - 1) : " ".repeat(indent);
+              lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
+              for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
+            } else {
+              lines.push(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg("muted", body)), width, controlId ? "" : "…"));
+            }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
               // ponytail: saved text only; native view retains images, args and custom renderers.
               const output = stripVTControlCharacters(call.output ?? "").replace(/\r\n?/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-              const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
+              const rail = width > 5 ? (last ? "     " : theme.fg("dim", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               const details = new Text(output || (entry.state === "running" ? "等待工具文本结果…" : "无文本结果"), 0, 0).render(detailWidth);
-              lines.push(...details.map(line => truncateToWidth(rail + theme.fg(entry.state === "error" ? "error" : "text", line), width, "")));
+              lines.push(...details.map(line => truncateToWidth(rail + theme.fg("muted", line), width, "")));
             } else if (open && entry.thinking) {
-              const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
+              const rail = width > 5 ? (last ? "     " : theme.fg("dim", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               lines.push(...markdown(entry.detail, detailWidth, true).map(line => truncateToWidth(rail + line, width, "")));
             } else if (expanded && entry.state === "error" && entry.detail) {
-              const rail = last ? "   " : theme.fg("accent", "│  ");
+              const rail = last ? "   " : theme.fg("dim", "│  ");
               const details = entry.detail.split(/\r?\n/).filter(line => line.trim());
               // ponytail: four diagnostic lines; full output remains in the native transcript.
-              lines.push(...details.slice(1, 5).map(line => truncateToWidth(rail + theme.fg("error", line), width)));
+              lines.push(...details.slice(1, 5).map(line => truncateToWidth(rail + theme.fg("muted", line), width)));
               if (details.length > 5) lines.push(truncateToWidth(rail + theme.fg("muted", `… +${details.length - 5} lines · /mini-lens-minimal off`), width));
             }
           });
@@ -795,6 +840,7 @@ export default function (pi: ExtensionAPI) {
   let unsubscribeMinimalInput: (() => void) | undefined;
   let restoreAgentWidgets: (() => void) | undefined;
   let restoreTranscript: (() => void) | undefined;
+  let persistAgentStatuses: (() => void) | undefined;
   let promptView: ReturnType<typeof minimalOutputComponent> | undefined;
   let lastAttachMode: string | undefined;
   let remountQueued = false;
@@ -817,6 +863,7 @@ export default function (pi: ExtensionAPI) {
   const refresh = () => refreshFooter?.();
   const refreshMinimalOutput = () => refreshMinimal?.();
   const mountMinimalOutput = (ctx: ExtensionContext) => {
+    persistAgentStatuses = undefined;
     if (shortcutTimer) clearTimeout(shortcutTimer);
     shortcutTimer = undefined;
     if (waitingTimer) clearInterval(waitingTimer);
@@ -854,7 +901,20 @@ export default function (pi: ExtensionAPI) {
       // Retain children under their originating user turn, including while idle,
       // after a follow-up user message, and when rebuilding a saved session.
       const sessionKey = ctx.sessionManager.getSessionFile?.() ?? ctx.sessionManager.getSessionId?.() ?? "";
-      let statuses = readAgentStatuses(sessionKey);
+      let statuses = savedAgentStatuses(ctx.sessionManager.getBranch());
+      const persisted = new Map(statuses.map(status => [String(status.runId), JSON.stringify(status)]));
+      const saveStatuses = () => {
+        for (const status of statuses) {
+          const value = JSON.stringify(status);
+          const key = String(status.runId);
+          if (persisted.get(key) === value) continue;
+          pi.appendEntry(AGENT_STATUS_ENTRY, status);
+          persisted.set(key, value);
+        }
+      };
+      statuses = retainAgentStatuses(statuses, readAgentStatuses(sessionKey));
+      persistAgentStatuses = saveStatuses;
+      saveStatuses();
       let lastStatusRead = Date.now();
       const supervisorNotices = new Map<string, { notice: any; messages: any[] }>();
       const handledRunIds = new Set<string>();
@@ -865,7 +925,7 @@ export default function (pi: ExtensionAPI) {
         handledRunIds.clear();
         return minimalTurns.map((turn, index) => {
           const turnAgents = assigned.get(index) ?? [];
-          const withNotices = turnAgents.map(sub => {
+          const withNotices = agentChildren(turnAgents).map(sub => {
             if (sub.runId) handledRunIds.add(String(sub.runId));
             const n = supervisorNotices.get(String(sub.runId));
             return n ? { ...sub, notice: n.notice, noticeMessages: n.messages } : sub;
@@ -886,6 +946,7 @@ export default function (pi: ExtensionAPI) {
       // unmount in reverse order so neither adapter resurrects stale handlers.
       restoreAgentWidgets = attachAgentWidgets(tui, theme, () => subAgentsExpanded, undefined, true);
       restoreTranscript = attachTranscript(tui, view, {
+        turnCount: () => minimalTurns.length,
         supervisor: {
           theme,
           expanded: () => processExpanded,
@@ -896,13 +957,23 @@ export default function (pi: ExtensionAPI) {
               const runId = String(group.notice.runId ?? "");
               if (runId) {
                 const prev = supervisorNotices.get(runId);
-                if (!prev || prev.messages.length !== group.messages.length || prev.notice !== group.notice) {
+                if (!prev || JSON.stringify(prev) !== JSON.stringify({ notice: group.notice, messages: group.messages })) {
                   supervisorNotices.set(runId, { notice: group.notice, messages: group.messages });
                   changed = true;
                 }
               }
             }
-            if (changed) tui.requestRender();
+            if (changed) {
+              // Preserve notices inside their owning snapshot as well as Pi's original message.
+              statuses = statuses.map(status => {
+                const children = agentChildren([status]).map(child => {
+                  const notice = supervisorNotices.get(String(child.runId));
+                  return notice ? { ...child, notice: notice.notice, noticeMessages: notice.messages } : child;
+                });
+                return children.length ? { ...status, steps: children, workflowChildren: undefined, children: undefined } : status;
+              });
+              tui.requestRender();
+            }
           },
         },
         isPrompt: text => !!activeUIPrompt && (!activeUIPrompt.title || text.includes(activeUIPrompt.title)),
@@ -921,9 +992,10 @@ export default function (pi: ExtensionAPI) {
         waitingTimer = setInterval(() => {
           let changed = false;
           if (Date.now() - lastStatusRead >= 1000) {
-            const next = readAgentStatuses(sessionKey, undefined, statuses);
+            const next = retainAgentStatuses(statuses, readAgentStatuses(sessionKey, undefined, statuses));
             changed = JSON.stringify(next) !== JSON.stringify(statuses);
             statuses = next;
+            saveStatuses();
             lastStatusRead = Date.now();
           }
           if (changed || Date.now() >= view.agentExpiry() || activeMinimalTurn?.running || statuses.some(status => /^(running|active|starting|queued|pending)$/.test(String(status.state)))) tui.requestRender();
@@ -1154,7 +1226,7 @@ export default function (pi: ExtensionAPI) {
     pendingMinimalFinal = "";
     minimalToolOutputIndices.clear();
     mountMinimalOutput(ctx);
-    ctx.ui.setFooter((tui, theme) => {
+    ctx.ui.setFooter((tui, theme, footerData) => {
       refreshFooter = () => tui.requestRender();
       return {
         invalidate() {},
@@ -1168,7 +1240,7 @@ export default function (pi: ExtensionAPI) {
               mountMinimalOutput(ctx);
             });
           }
-          return [statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount)];
+          return [statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.())];
         },
       };
     });
@@ -1399,6 +1471,8 @@ export default function (pi: ExtensionAPI) {
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    persistAgentStatuses?.();
+    persistAgentStatuses = undefined;
     agentDeadlines.clear();
     promptView = undefined;
     if (shortcutTimer) clearTimeout(shortcutTimer);
