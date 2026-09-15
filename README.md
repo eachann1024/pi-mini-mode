@@ -10,7 +10,7 @@ A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost
 
 ## Minimal output
 
-`/mini-lens-settings` now has **Lens**, a separate **Collapse replies** switch, and **Minimal output**. Collapsed replies are off by default, so Pi's conversation history stays native until you turn them on. While the switch is off, Minimal output options stay disabled.
+`/pi-mini-mode-settings` now has **Lens**, a separate **Collapse replies** switch, and **Minimal output**. Collapsed replies are off by default, so Pi's conversation history stays native until you turn them on. While the switch is off, Minimal output options stay disabled.
 
 - `/mini-lens-minimal on` shows the user's Markdown on an accent-tinted surface, a background-free process summary, and the final reply without a heading or extra background. No duplicate dock panel.
 - Each turn uses one shared tree showing the latest **ten summary entries**: available thinking, tool calls, streaming tool output, and skill reads. `Ctrl+O` expands the full Markdown process and toggles it closed again; new questions start collapsed; tools without output show an elapsed wait counter, and empty progress events never overwrite existing content; there are no section headings, collapsed counts, or completion labels. Original session messages remain intact.
@@ -72,7 +72,7 @@ Choose the fields you need. Preview each change instantly, in your Pi theme.
 </tr>
 </table>
 
-Customize with `/mini-lens-settings`. Changes take effect immediately.
+Customize with `/pi-mini-mode-settings`. Changes take effect immediately.
 
 **Fits your terminal.** Follows your Pi theme and adapts to narrow widths. Only the footer changes; Pi's built-in tool and thinking views stay intact.
 
@@ -95,7 +95,7 @@ The first-run picker offers **Keep defaults** and **Configure now**. Keeping def
 Open that settings UI any time with:
 
 ```text
-/mini-lens-settings
+/pi-mini-mode-settings
 ```
 
 The focused option and its corresponding preview field use bold theme `accent` text with a `selectedBg` background. Fullscreen Pi supports hover to focus and click to toggle; regular terminal mode uses keyboard navigation. Hovering never changes a setting.
@@ -129,12 +129,19 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/mini
 | `mini-lens-session-tokens-show` | `true` | Accumulated session tokens (`Total`) |
 | `mini-lens-cache-tokens-show` | `true` | Accumulated cache read + cache write tokens |
 | `mini-lens-cost-show` | `true` | Estimated session list price |
+| `mini-lens-mcp-show` | `false` | Enabled MCP server count |
 | `mini-lens-context-show` | `true` | Used/total context tokens and progress bar |
 | `mini-lens-context-dots-show` | `false` | Use a single-line dot-matrix bar instead of the default solid bar |
 | `mini-lens-context-percent-show` | `true` | Context-use percentage |
 | `mini-lens-speed-show` | `true` | Generation speed at the far right |
 | `mini-lens-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
 | `mini-lens-minimal-show` | `false` | Collapse replies; off keeps Pi's default conversation history |
+| `mini-lens-minimal-thinking-show` | `true` | Show thinking in collapsed replies |
+| `mini-lens-minimal-tools-show` | `true` | Show tool calls and agent calls |
+| `mini-lens-minimal-output-show` | `true` | Show process output |
+| `mini-lens-minimal-skills-show` | `true` | Show skill reads |
+| `mini-lens-agent-usage-show` | `true` | Show Agent token usage |
+| `mini-lens-agent-shortcut-show` | `true` | Show the temporary `Ctrl+O` hint for new Agents |
 | `onboardingCompleted` | `false` initially | Internal marker that prevents another first-run prompt |
 
 - **Generation speed**

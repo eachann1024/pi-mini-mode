@@ -14,7 +14,7 @@
 
 ## 极简输出
 
-`/mini-lens-settings` 现在包含 **Lens**、独立的 **Collapse replies（折叠回复）** 和 **Minimal output（极简输出）** 设置。折叠回复默认关闭；关闭时，极简输出选项也会禁用，因此 Pi 的对话历史会保持原生显示。
+`/pi-mini-mode-settings` 现在包含 **Lens**、独立的 **Collapse replies（折叠回复）** 和 **Minimal output（极简输出）** 设置。折叠回复默认关闭；关闭时，极简输出选项也会禁用，因此 Pi 的对话历史会保持原生显示。
 
 - `/mini-lens-minimal on` 显示带主题色背景的用户 Markdown、无背景的过程摘要，以及没有标题或额外背景的最终回复，不会重复显示停靠面板。
 - 每轮使用一棵共享树，显示最新 **10 条摘要**，包括可用的思考、工具调用、流式工具输出和技能读取。按 `Ctrl+O` 可展开完整 Markdown 过程，再按一次收起；新问题默认收起。没有输出的工具会显示已等待时间，空的进度事件不会覆盖已有内容，也不会显示分组标题、折叠数量或完成标签。原始会话消息保持不变。
@@ -57,7 +57,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 运行以下命令即可配置显示字段，修改立即生效，并会按照当前 Pi 主题预览：
 
 ```text
-/mini-lens-settings
+/pi-mini-mode-settings
 ```
 
 页脚会跟随 Pi 主题并适配窄终端。只有页脚会变化，Pi 内置的工具和思考视图保持不变。内置的 `cc-light` / `cc-dark` 主题来自 [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions)，采用 MIT 许可。
@@ -80,6 +80,7 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
   "mini-lens-session-tokens-show": true,
   "mini-lens-cache-tokens-show": true,
   "mini-lens-cost-show": true,
+  "mini-lens-mcp-show": false,
   "mini-lens-context-show": true,
   "mini-lens-context-dots-show": false,
   "mini-lens-context-percent-show": true,
@@ -97,12 +98,19 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
 | `mini-lens-session-tokens-show` | `true` | 显示会话累计令牌（`Total`） |
 | `mini-lens-cache-tokens-show` | `true` | 显示缓存读取与写入令牌（已包含在 Total 中） |
 | `mini-lens-cost-show` | `true` | 显示会话费用估算 |
+| `mini-lens-mcp-show` | `false` | 显示已启用的 MCP 服务器数量 |
 | `mini-lens-context-show` | `true` | 显示已用/总上下文令牌和进度条 |
 | `mini-lens-context-dots-show` | `false` | 使用单行点阵进度条替代默认实心进度条 |
 | `mini-lens-context-percent-show` | `true` | 显示上下文使用百分比 |
 | `mini-lens-speed-show` | `true` | 显示最新生成速度 |
 | `mini-lens-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
 | `mini-lens-minimal-show` | `false` | 折叠回复；关闭则使用 Pi 默认历史显示 |
+| `mini-lens-minimal-thinking-show` | `true` | 显示折叠回复中的思考 |
+| `mini-lens-minimal-tools-show` | `true` | 显示工具调用和 Agent 调用 |
+| `mini-lens-minimal-output-show` | `true` | 显示过程输出 |
+| `mini-lens-minimal-skills-show` | `true` | 显示技能读取 |
+| `mini-lens-agent-usage-show` | `true` | 显示 Agent token 用量 |
+| `mini-lens-agent-shortcut-show` | `true` | 新 Agent 显示临时 `Ctrl+O` 提示 |
 | `onboardingCompleted` | 初始为 `false` | 防止再次显示首次设置提示的内部标记 |
 
 生成速度设置中的 **显示 tok/s 单位** 是 **显示最新生成速度** 下方的缩进子设置。关闭它只会移除 `tok/s`，保留速度数字；即使隐藏生成速度，该子设置仍会保留。
