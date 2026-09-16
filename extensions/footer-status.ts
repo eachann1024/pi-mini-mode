@@ -1008,44 +1008,6 @@ export default function (pi: ExtensionAPI) {
       return { render: () => [], invalidate() {} };
     });
   };
-  pi.registerCommand("pi-mini-mode-prompts", {
-    description: "Expand or collapse a user prompt in fullscreen minimal output",
-    handler: async (_args, ctx) => {
-      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
-        if (ctx.hasUI) ctx.ui.notify("Prompt folding requires fullscreen minimal output.", "info");
-        return;
-      }
-      const view = promptView;
-      const choices = view.promptChoices();
-      if (!choices.length) { ctx.ui.notify("No user prompts exceed four lines at this width.", "info"); return; }
-      const labels = choices.map(choice => `${choice.index + 1}. ${choice.label} · ${preview(choice.question)}`);
-      const selected = await ctx.ui.select("User prompts · Enter to toggle · Esc to cancel", labels);
-      const choice = choices[labels.indexOf(selected ?? "")];
-      if (choice && promptView === view) {
-        view.togglePrompt(choice.index, choice.question);
-        refreshMinimalOutput();
-      }
-    },
-  });
-  pi.registerCommand("pi-mini-mode-tools", {
-    description: "Expand or collapse a tool's saved text or thinking in fullscreen minimal output",
-    handler: async (_args, ctx) => {
-      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
-        if (ctx.hasUI) ctx.ui.notify("Tool folding requires fullscreen minimal output.", "info");
-        return;
-      }
-      const view = promptView;
-      const choices = view.toolChoices();
-      if (!choices.length) { ctx.ui.notify("No visible tool calls. Ctrl+O shows older calls.", "info"); return; }
-      const labels = choices.map((choice, index) => `${index + 1}. ${choice.expanded ? "收起" : "展开"} · ${preview(choice.title)}`);
-      const selected = await ctx.ui.select("Tool results · Enter to toggle · Esc to cancel", labels);
-      const choice = choices[labels.indexOf(selected ?? "")];
-      if (choice && promptView === view) {
-        view.toggleTool(choice.id);
-        refreshMinimalOutput();
-      }
-    },
-  });
   // All factories run before session_start; retain startup broadcasts until the footer mounts.
   const unsubscribeMcpStatus = pi.events.on("pi-mcp-adapter/status/v1", (value: unknown) => {
     const count = enabledMcpServerCount(value);
@@ -1114,29 +1076,24 @@ export default function (pi: ExtensionAPI) {
         value: (text: string, selected: boolean) =>
           selected ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text))) : theme.fg("muted", text),
       };
-      const lensItems = () => settingsItems(settings).filter((item) => item.id !== "pi-mini-mode-minimal-show" && !isCollapsedReplyChildSetting(item.id));
       const minimalItems = () => settingsItems(settings).filter((item) => isCollapsedReplyChildSetting(item.id));
       const collapseItem: SettingItem = {
         id: "pi-mini-mode-minimal-show", label: COPY.enableMinimal, description: COPY.enableMinimalDescription,
         currentValue: settings["pi-mini-mode-minimal-show"] ? "on" : "off", values: ["on", "off"],
       };
       const minimalGroup: SettingItem = { id: "minimal", label: COPY.minimal, currentValue: "›" };
+      const separator: SettingItem = { id: "settings-separator", label: "────────────", currentValue: "" };
       const applyCollapseState = () => {
         const enabled = settings["pi-mini-mode-minimal-show"];
         collapseItem.currentValue = enabled ? "on" : "off";
         minimalGroup.currentValue = enabled ? "›" : "off";
         minimalGroup.description = enabled ? undefined : COPY.minimalLocked;
-        if (enabled) {
-          minimalGroup.submenu = (_value, back) => new SettingsList(minimalItems(), 8, settingsTheme, onChange, () => back(), { enableSearch: true });
-        } else {
-          delete minimalGroup.submenu;
-        }
+        if (enabled) minimalGroup.submenu = (_value, back) => new SettingsList(minimalItems(), 8, settingsTheme, onChange, () => back(), { enableSearch: true });
+        else delete minimalGroup.submenu;
       };
       applyCollapseState();
-      const groups: SettingItem[] = [
-        { id: "settings", label: COPY.lens, currentValue: "›", submenu: (_value, back) => new SettingsList([...lensItems(), collapseItem, minimalGroup], 12, settingsTheme, onChange, () => back(), { enableSearch: true }) },
-      ];
-      const settingsList = new SettingsList(groups, 12, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
+      const smallItems = settingsItems(settings).filter((item) => item.id !== "pi-mini-mode-minimal-show" && !isCollapsedReplyChildSetting(item.id));
+      const settingsList = new SettingsList([collapseItem, minimalGroup, separator, ...smallItems], 14, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
       container.addChild(settingsList);
       return {
         render: (width: number) => {
@@ -1156,40 +1113,6 @@ export default function (pi: ExtensionAPI) {
     });
   };
 
-  pi.registerCommand("pi-mini-mode-settings", {
-    description: "Configure Pi Mini Mode settings",
-    handler: async (_args, ctx) => openSettings(ctx),
-  });
-  pi.registerCommand("pi-mini-mode-history", {
-    description: "View collapsed process entries for a conversation turn",
-    handler: async (_args, ctx) => {
-      if (ctx.mode !== "tui" || minimalTurns.length === 0) return;
-      const labels = minimalTurns.map((turn, index) => `${index + 1}. ${preview(turn.question)}`);
-      const selected = await ctx.ui.select("Select process entry (keep collapsed view)", labels);
-      const index = selected === undefined ? -1 : labels.indexOf(selected);
-      if (index < 0) return;
-      const snapshot = [...minimalTurns[index].process];
-      await ctx.ui.custom((tui, theme, _keys, done) => {
-        let offset = 0;
-        return {
-          invalidate() {},
-          render(width: number) {
-            const page = snapshot.slice(offset, offset + 5);
-            return [
-              truncateToWidth(theme.fg("accent", `Process ${offset + 1}–${Math.min(offset + 5, snapshot.length)} / ${snapshot.length} · ↑↓ Browse · Esc Close`), width),
-              ...page.flatMap((line) => new Markdown(line, 0, 0, minimalMarkdownTheme(getMarkdownTheme()), undefined, { transform: diagramMarkdown }).render(Math.max(1, width))),
-            ];
-          },
-          handleInput(data: string) {
-            if (data === "\u001b" || data === "q") done(undefined);
-            else if (data === "\u001b[B" || data === "j") offset = Math.min(Math.max(0, snapshot.length - 5), offset + 1);
-            else if (data === "\u001b[A" || data === "k") offset = Math.max(0, offset - 1);
-            tui.requestRender();
-          },
-        };
-      });
-    },
-  });
   pi.registerCommand("pi-mini-mode-minimal", {
     description: "Toggle collapsed replies (off keeps Pi's default conversation history)",
     handler: async (args, ctx) => {
@@ -1210,13 +1133,48 @@ export default function (pi: ExtensionAPI) {
       if (settings["pi-mini-mode-minimal-show"]) nativeOutput = false;
       mountMinimalOutput(ctx);
       await persistSettings(ctx);
-      // The mount already explains unsupported layouts; do not contradict it
-      // with a success notification when only the preference was saved.
       if (settings["pi-mini-mode-minimal-show"] && !restoreTranscript) return;
       ctx.ui.notify(`${COPY.minimalState}${settings["pi-mini-mode-minimal-show"] ? "on" : "off"}`, "info");
     },
   });
 
+  pi.registerCommand("pi-mini-mode-prompts", {
+    description: "Expand or collapse a user prompt in fullscreen minimal output",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
+        if (ctx.hasUI) ctx.ui.notify("Prompt folding requires fullscreen minimal output.", "info");
+        return;
+      }
+      const view = promptView;
+      const choices = view.promptChoices();
+      if (!choices.length) { ctx.ui.notify("No user prompts exceed four lines at this width.", "info"); return; }
+      const labels = choices.map(choice => `${choice.index + 1}. ${choice.label} · ${preview(choice.question)}`);
+      const selected = await ctx.ui.select("User prompts · Enter to toggle · Esc to cancel", labels);
+      const choice = choices[labels.indexOf(selected ?? "")];
+      if (choice && promptView === view) { view.togglePrompt(choice.index, choice.question); refreshMinimalOutput(); }
+    },
+  });
+  pi.registerCommand("pi-mini-mode-tools", {
+    description: "Expand or collapse a tool's saved text or thinking in fullscreen minimal output",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
+        if (ctx.hasUI) ctx.ui.notify("Tool folding requires fullscreen minimal output.", "info");
+        return;
+      }
+      const view = promptView;
+      const choices = view.toolChoices();
+      if (!choices.length) { ctx.ui.notify("No visible tool calls. Ctrl+O shows older calls.", "info"); return; }
+      const labels = choices.map((choice, index) => `${index + 1}. ${choice.expanded ? "收起" : "展开"} · ${preview(choice.title)}`);
+      const selected = await ctx.ui.select("Tool results · Enter to toggle · Esc to cancel", labels);
+      const choice = choices[labels.indexOf(selected ?? "")];
+      if (choice && promptView === view) { view.toggleTool(choice.id); refreshMinimalOutput(); }
+    },
+  });
+
+  pi.registerCommand("pi-mini-mode-settings", {
+    description: "Configure Pi Mini Mode settings",
+    handler: async (_args, ctx) => openSettings(ctx),
+  });
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
     settings = loaded.settings;
