@@ -3,15 +3,22 @@ import { render } from "grok-mermaid";
 
 const parser = new Marked();
 
+/** A fence's info string is "language [options]"; only the first token names a language. */
+const languageToken = (lang?: string) => lang?.trim().split(/\s+/)[0].toLowerCase() ?? "";
+
 /** Theme emphasis remains visible when the terminal's CJK font lacks bold/italic faces. */
 export function minimalMarkdownTheme(base: MarkdownTheme): MarkdownTheme {
   // Inline prose arrives with its default foreground already applied. Remove
   // those foreground codes before wrapping, otherwise they override emphasis.
   const emphasis = (text: string) => base.heading(text.replace(/\x1b\[(?:38;(?:2;\d+;\d+;\d+|5;\d+)|3[0-9]|9[0-7])m/g, ""));
+  const highlightCode = base.highlightCode;
   return {
     ...base,
     bold: text => emphasis(base.bold(text)),
     italic: text => emphasis(base.italic(text)),
+    // highlight.js knows languages, not info strings, so `ts title=x.ts` would
+    // otherwise lose highlighting entirely.
+    ...(highlightCode && { highlightCode: (code: string, lang?: string) => highlightCode(code, languageToken(lang)) }),
   };
 }
 
@@ -92,22 +99,51 @@ export function normalizeProseMarkdown(source: string): string {
   return parser.lexer(source).map(rewrite).join("");
 }
 
+/** Lexer tokens that are Markdown block structure regardless of how the body looks. */
+const BLOCK_TOKENS = new Set(["code", "heading", "blockquote", "list", "table", "hr"]);
+/** A hard break alone may be a shell continuation, not Markdown prose. */
+const INLINE_TOKENS = new Set(["strong", "em", "del", "codespan", "link", "image"]);
+/** Source that opens like code stays literal even when it also parses as inline Markdown. */
+const LOOKS_LIKE_SOURCE = /^(?:const|let|var|function|class|import|export|SELECT|INSERT|UPDATE|DELETE)\b/m;
+/** Preserve the existing tolerance for unfinished or malformed inline markup. */
+const SLOPPY_EMPHASIS = /(?:\*\*|__|~~|`[^`\n]+`|\[[^\]\n]+\]\([^\n)]+\))/;
+
+/** A body that is only a closed or streaming fence must not be sliced mid-block. */
+export function isFencedMarkdown(source: string): boolean {
+  const tokens = parser.lexer(source.trim()).filter(token => token.type !== "space");
+  return tokens.length === 1 && tokens[0].type === "code";
+}
+
 /** Markdown is rendered only for semantic prose bodies; structured tool output stays literal. */
 export function isMarkdownProse(source: string): boolean {
   const text = source.trim();
-  if (!text || /^(?:\{[\s\S]*\}|\[[\s\S]*\])$/.test(text)) {
+  if (!text) return false;
+  if (/^(?:\{[\s\S]*\}|\[[\s\S]*\])$/.test(text)) {
     try { JSON.parse(text); return false; } catch { /* a Markdown list may start with [ */ }
   }
-  if (/^(?:\s*```|\s*#{1,6}\s|\s*>\s|\s*(?:[-+*]\s+|\d+[.)]\s))/m.test(text)) return true;
-  return /(?:\*\*|__|~~|`[^`\n]+`|\[[^\]\n]+\]\([^\n)]+\))/.test(text)
-    && !/^(?:const|let|var|function|class|import|export|SELECT|INSERT|UPDATE|DELETE)\b/m.test(text);
+  // The lexer decides what the body actually is: block structure first, then
+  // inline structure. Raw HTML alone is not prose, so `html` tokens are ignored.
+  let block = false;
+  let inline = false;
+  parser.walkTokens(parser.lexer(text), (token) => {
+    if (BLOCK_TOKENS.has(token.type)) block = true;
+    else if (INLINE_TOKENS.has(token.type)) inline = true;
+  });
+  if (block) return true;
+  if (LOOKS_LIKE_SOURCE.test(text)) return false;
+  return inline || SLOPPY_EMPHASIS.test(text);
+}
+
+/** A malformed diagram must not break the render, so its own source is the fallback. */
+function diagramArt(source: string) {
+  try { return render(source); } catch { return undefined; }
 }
 
 /** Keep incomplete, unsupported and over-wide diagrams readable as source. */
 export function diagramMarkdown(source: string, width: number): string {
   return parser.lexer(normalizeProseMarkdown(source)).map((token) => {
-    if (token.type !== "code" || token.lang?.trim().toLowerCase() !== "mermaid") return token.raw;
-    const art = render(token.text);
+    if (token.type !== "code" || languageToken(token.lang) !== "mermaid") return token.raw;
+    const art = diagramArt(token.text);
     if (!art || art.width > width || art.warnings.length) return token.raw;
     return art.plain.map((line) => {
       const content = line || "\u00a0";
