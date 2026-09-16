@@ -14,7 +14,20 @@
 
 ## 极简输出
 
-`/pi-mini-mode-settings` 现在包含 **Lens**、独立的 **Collapse replies（折叠回复）** 和 **Minimal output（极简输出）** 设置。折叠回复默认关闭；关闭时，极简输出选项也会禁用，因此 Pi 的对话历史会保持原生显示。
+`/pi-mini-mode-settings` 中，**极简输出**只保留一个开关，默认关闭。开启后统一折叠过程，关闭恢复 Pi 原生历史；旧的思考、工具、技能等细项不再单独展示或过滤内容。Lens 页脚设置保持不变。
+
+## 输入增强
+
+同一设置列表中的 **输入增强**默认开启，一个开关控制以下功能（关闭不影响 Pi 原生粘贴）：
+
+- `Ctrl+V` 粘贴剪贴板图片，Windows/WSL 使用 `Alt+V`；终端实际发送 `Cmd+V` 按键时也可转发原生粘贴。
+- 编辑光标移入图片路径即可预览，全屏模式也支持鼠标悬停。预览使用终端原生图片协议，不支持时显示路径提示；按 Esc 关闭，图片读取上限 20 MB。
+- 输入起点或空白后输入 `/` 搜索技能，选择后在当前光标处插入 `/skill:name`，提交时展开行内技能；不抢占 URL 或路径中的斜杠。
+- 输入框及消息中的图片显示为 `[image1]` 等带下划线的标签；Cmd+点击图片标签及其他文件路径，使用系统默认应用打开原文件。全屏悬停标签会切换为链接指针，移出恢复。支持绝对路径、相对路径和引号/反引号包裹的含空格路径。
+
+点击修饰键由终端决定，通常为 macOS `Cmd+点击`、Windows/Linux `Ctrl+点击`；Ghostty 全屏可能需要 `Shift+Cmd` / `Shift+Ctrl`。Pi 全屏自身也支持直接点击链接。图片文件被清理后不能再预览或打开。图片与链接兼容性参见 [Pi 终端设置](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md)。
+
+### 极简输出行为
 
 - `/pi-mini-mode-minimal on` 显示带主题色背景的用户 Markdown、无背景的过程摘要，以及没有标题或额外背景的最终回复，不会重复显示停靠面板。
 - 每轮使用一棵共享树，显示最新 **10 条摘要**，包括可用的思考、工具调用、流式工具输出和技能读取。按 `Ctrl+O` 可展开完整 Markdown 过程，再按一次收起；新问题默认收起。没有输出的工具会显示已等待时间，空的进度事件不会覆盖已有内容，也不会显示分组标题、折叠数量或完成标签。原始会话消息保持不变。
@@ -104,13 +117,8 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
 | `pi-mini-mode-context-percent-show` | `true` | 显示上下文使用百分比 |
 | `pi-mini-mode-speed-show` | `true` | 显示最新生成速度 |
 | `pi-mini-mode-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
-| `pi-mini-mode-minimal-show` | `false` | 折叠回复；关闭则使用 Pi 默认历史显示 |
-| `pi-mini-mode-minimal-thinking-show` | `true` | 显示折叠回复中的思考 |
-| `pi-mini-mode-minimal-tools-show` | `true` | 显示工具调用和 Agent 调用 |
-| `pi-mini-mode-minimal-output-show` | `true` | 显示过程输出 |
-| `pi-mini-mode-minimal-skills-show` | `true` | 显示技能读取 |
-| `pi-mini-mode-agent-usage-show` | `true` | 显示 Agent token 用量 |
-| `pi-mini-mode-agent-shortcut-show` | `true` | 新 Agent 显示临时 `Ctrl+O` 提示 |
+| `pi-mini-mode-minimal-show` | `false` | 极简输出总开关；关闭则使用 Pi 默认历史显示 |
+| `pi-mini-mode-input-enhancements` | `true` | 图片预览、行内技能补全与展开、消息文件链接 |
 | `onboardingCompleted` | 初始为 `false` | 防止再次显示首次设置提示的内部标记 |
 
 生成速度设置中的 **显示 tok/s 单位** 是 **显示最新生成速度** 下方的缩进子设置。关闭它只会移除 `tok/s`，保留速度数字；即使隐藏生成速度，该子设置仍会保留。
