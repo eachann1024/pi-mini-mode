@@ -22,7 +22,7 @@
 		"muted": "#625f68",
 		"dim": "#76717d",
 		"selectedBg": "#e3e8f5",
-		"userMessageBg": "#f0eef4",
+		"userMessageBg": "#edf2fc",
 		"toolPendingBg": "#f1f3f9",
 		"toolSuccessBg": "#edf7f0",
 		"toolErrorBg": "#fceff1",
