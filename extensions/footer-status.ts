@@ -1,10 +1,12 @@
 import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
 import { CONFIG_DIR_NAME, getSettingsListTheme, getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
-import { diagramMarkdown, minimalMarkdownTheme } from "../lib/minimal-markdown.ts";
+import { diagramMarkdown, isFencedMarkdown, minimalMarkdownTheme } from "../lib/minimal-markdown.ts";
 import { minimalSurface } from "../lib/minimal-theme.ts";
 import { Container, Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, SettingsList, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import type { InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
+import { linkMessageFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { dirname, join } from "node:path";
@@ -27,6 +29,7 @@ export interface MiniLensSettings {
   "pi-mini-mode-speed-show": boolean;
   "pi-mini-mode-speed-unit-show": boolean;
   "pi-mini-mode-minimal-show": boolean;
+  "pi-mini-mode-input-enhancements": boolean;
   "pi-mini-mode-minimal-thinking-show": boolean;
   "pi-mini-mode-minimal-tools-show": boolean;
   "pi-mini-mode-minimal-output-show": boolean;
@@ -50,6 +53,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
   "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-input-enhancements": true,
   "pi-mini-mode-minimal-thinking-show": true,
   "pi-mini-mode-minimal-tools-show": true,
   "pi-mini-mode-minimal-output-show": true,
@@ -63,11 +67,11 @@ const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<keyof MiniLensSetting
 
 const COPY = {
   title: "Pi Mini Mode 设置", preview: "预览（示例数据）", lens: "设置", minimal: "极简输出",
-  model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", enableMinimal: "折叠回复", showThinking: "显示思考", tools: "显示工具调用", output: "显示过程输出", skills: "显示技能", agentUsage: "显示 Agent token 用量", shortcut: "新 Agent 显示 Ctrl+O 提示（6 秒）",
+  model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", inputEnhancements: "输入增强", showThinking: "显示思考", tools: "显示工具调用", output: "显示过程输出", skills: "显示技能", agentUsage: "显示 Agent token 用量", shortcut: "新 Agent 显示 Ctrl+O 提示（6 秒）",
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
-  enableMinimalDescription: "关闭后保留 Pi 默认会话历史。",
-  minimalLocked: "打开「折叠回复」后才能配置这些选项。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 折叠回复：", onboarding: "MCP 数量、点阵样式和折叠回复默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
+  enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
+  inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量、点阵样式和极简输出默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
 } as const;
 
 export function settingsPath(agentDir = process.env.PI_MINI_MODE_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
@@ -84,6 +88,8 @@ export function parseSettings(value: unknown): MiniLensSettings {
   for (const id of SETTING_IDS) {
     if (isBoolean(candidate[id])) settings[id] = candidate[id];
   }
+  // 折叠回复的旧细项已合并进极简输出总开关：旧值不再暗中过滤内容，始终按默认全开。
+  for (const id of LEGACY_MINIMAL_SETTING_IDS) settings[id] = true;
   return settings;
 }
 
@@ -363,19 +369,30 @@ export function statusLine(
   return truncateToWidth(`${content}${content ? gap : ""}${right}`, width, "");
 }
 
+const LEGACY_MINIMAL_SETTING_IDS = [
+  "pi-mini-mode-minimal-thinking-show", "pi-mini-mode-minimal-tools-show", "pi-mini-mode-minimal-output-show",
+  "pi-mini-mode-minimal-skills-show", "pi-mini-mode-agent-usage-show", "pi-mini-mode-agent-shortcut-show",
+] as const satisfies ReadonlyArray<keyof MiniLensSettings>;
+
+/** 模式总开关：设置列表顶部只展示这两项，旧细分项不再展示但仍保留兼容。 */
+const MODE_SETTING_IDS = ["pi-mini-mode-minimal-show", "pi-mini-mode-input-enhancements"] as const;
+
+function isModeSetting(id: string): boolean {
+  return (MODE_SETTING_IDS as readonly string[]).includes(id);
+}
+
 export function isCollapsedReplyChildSetting(id: string): boolean {
-  return id === "pi-mini-mode-minimal-thinking-show" || id === "pi-mini-mode-minimal-tools-show" || id === "pi-mini-mode-minimal-output-show"
-    || id === "pi-mini-mode-minimal-skills-show" || id === "pi-mini-mode-agent-usage-show" || id === "pi-mini-mode-agent-shortcut-show";
+  return (LEGACY_MINIMAL_SETTING_IDS as readonly string[]).includes(id);
 }
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
   const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted">, string> = {
-    "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.enableMinimal, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
+    "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
   };
   return (Object.keys(labels) as Array<keyof typeof labels>).map((id) => ({
     id, label: labels[id],
-    description: id === "pi-mini-mode-minimal-show" ? COPY.enableMinimalDescription : id === "pi-mini-mode-session-tokens-show" ? COPY.totalDescription : id === "pi-mini-mode-cache-tokens-show" ? COPY.cachedDescription : id === "pi-mini-mode-ch-show" ? COPY.cacheHitDescription : undefined,
+    description: id === "pi-mini-mode-minimal-show" ? COPY.enableMinimalDescription : id === "pi-mini-mode-input-enhancements" ? COPY.inputEnhancementsDescription : id === "pi-mini-mode-session-tokens-show" ? COPY.totalDescription : id === "pi-mini-mode-cache-tokens-show" ? COPY.cachedDescription : id === "pi-mini-mode-ch-show" ? COPY.cacheHitDescription : undefined,
     currentValue: settings[id] ? values[0] : values[1], values,
   }));
 }
@@ -555,9 +572,9 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
   });
 }
 
-export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>()) {
+export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text) {
   const markdown = (text: string, width: number, process = false) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: (value) => theme.fg(process ? "muted" : "text", value) }, { transform: (source, available) => diagramMarkdown(source, available) }).render(width);
+    { color: (value) => theme.fg(process ? "muted" : "text", value) }, { transform: (source, available) => transformText(diagramMarkdown(source, available)) }).render(width);
   const surface = (rows: string[], width: number, user: boolean) => {
     const padding = Math.min(2, Math.floor((width - 1) / 2));
     return ["", ...rows, ""].map((row) => {
@@ -692,10 +709,12 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         const questionRows = markdown(turn.question, inner);
         const loopSummary = piLoopSummary(turn.question);
         const expanded = expandedPrompts.get(index) === turn.question;
+        // A fence is one visual unit; slicing it mid-block looks like raw source.
+        const keepFence = !loopSummary && isFencedMarkdown(turn.question);
         // Loop wakeups are system-generated user messages. Collapse them even when
         // their short prompt would otherwise fit the normal four-row allowance.
-        const userRows = expanded ? [...questionRows] : loopSummary ? markdown(loopSummary, inner) : questionRows.slice(0, 4);
-        if (loopSummary || questionRows.length > 4) {
+        const userRows = expanded || keepFence ? [...questionRows] : loopSummary ? markdown(loopSummary, inner) : questionRows.slice(0, 4);
+        if (!keepFence && (loopSummary || questionRows.length > 4)) {
           const label = expanded ? "▴ 收起" : loopSummary ? "▾ 展开" : `▾ 展开 (${questionRows.length} 行)`;
           const control = truncateToWidth(label, inner, "");
           promptControls.push({ index, question: turn.question, y: lines.length + 1 + userRows.length,
@@ -858,6 +877,10 @@ export default function (pi: ExtensionAPI) {
   const minimalToolOutputIndices = new Map<string, number>();
   let speedTimer: ReturnType<typeof setInterval> | undefined;
   let settings: MiniLensSettings = { ...DEFAULT_SETTINGS };
+  let cleanupInputEnhancements: InputEnhancementsCleanup | undefined;
+  let messageCwd = process.cwd();
+  const messageLinks = (text: string) => settings["pi-mini-mode-input-enhancements"] ? linkMessageFiles(text, messageCwd) : text;
+  pi.registerMarkdownTransformer?.(messageLinks);
   let saveChain: Promise<void> = Promise.resolve();
   const configPath = settingsPath();
 
@@ -926,6 +949,7 @@ export default function (pi: ExtensionAPI) {
         handledRunIds.clear();
         return minimalTurns.map((turn, index) => {
           const turnAgents = assigned.get(index) ?? [];
+          for (const status of turnAgents) if (status.runId) handledRunIds.add(String(status.runId));
           const withNotices = agentChildren(turnAgents).map(sub => {
             if (sub.runId) handledRunIds.add(String(sub.runId));
             const n = supervisorNotices.get(String(sub.runId));
@@ -934,7 +958,7 @@ export default function (pi: ExtensionAPI) {
           return { ...turn, subAgents: withNotices };
         });
       };
-      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["pi-mini-mode-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["pi-mini-mode-agent-usage-show"], () => subAgentsExpanded, agentDeadlines);
+      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["pi-mini-mode-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["pi-mini-mode-agent-usage-show"], () => subAgentsExpanded, agentDeadlines, messageLinks);
       const hintRemaining = (activeMinimalTurn?.shortcutHintUntil ?? 0) - Date.now();
       if (hintRemaining > 0) {
         shortcutTimer = setTimeout(() => tui.requestRender(), hintRemaining);
@@ -1055,7 +1079,7 @@ export default function (pi: ExtensionAPI) {
       const onChange = (id: string, value: string) => {
         settings = { ...settings, [id]: value === "on", onboardingCompleted: true };
         items = settingsItems(settings);
-        applyCollapseState();
+        cleanupInputEnhancements?.refresh();
         preview.setText(settingsPreviewLine(theme, settings));
         mountMinimalOutput(ctx);
         void persistSettings(ctx);
@@ -1069,31 +1093,16 @@ export default function (pi: ExtensionAPI) {
         label: (text: string, selected: boolean) => {
           const name = text.trimEnd();
           if (selected) highlighted = items.find((item) => item.label === name)?.id as keyof MiniLensSettings | undefined;
-          const disabled = name === COPY.minimal && !settings["pi-mini-mode-minimal-show"];
           if (selected) return theme.bg("selectedBg", theme.fg("accent", theme.bold(text)));
-          return theme.fg(disabled ? "muted" : "text", text);
+          return theme.fg("text", text);
         },
         value: (text: string, selected: boolean) =>
           selected ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text))) : theme.fg("muted", text),
       };
-      const minimalItems = () => settingsItems(settings).filter((item) => isCollapsedReplyChildSetting(item.id));
-      const collapseItem: SettingItem = {
-        id: "pi-mini-mode-minimal-show", label: COPY.enableMinimal, description: COPY.enableMinimalDescription,
-        currentValue: settings["pi-mini-mode-minimal-show"] ? "on" : "off", values: ["on", "off"],
-      };
-      const minimalGroup: SettingItem = { id: "minimal", label: COPY.minimal, currentValue: "›" };
       const separator: SettingItem = { id: "settings-separator", label: "────────────", currentValue: "" };
-      const applyCollapseState = () => {
-        const enabled = settings["pi-mini-mode-minimal-show"];
-        collapseItem.currentValue = enabled ? "on" : "off";
-        minimalGroup.currentValue = enabled ? "›" : "off";
-        minimalGroup.description = enabled ? undefined : COPY.minimalLocked;
-        if (enabled) minimalGroup.submenu = (_value, back) => new SettingsList(minimalItems(), 8, settingsTheme, onChange, () => back(), { enableSearch: true });
-        else delete minimalGroup.submenu;
-      };
-      applyCollapseState();
-      const smallItems = settingsItems(settings).filter((item) => item.id !== "pi-mini-mode-minimal-show" && !isCollapsedReplyChildSetting(item.id));
-      const settingsList = new SettingsList([collapseItem, minimalGroup, separator, ...smallItems], 14, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
+      const modeItems = items.filter((item) => isModeSetting(item.id));
+      const lensItems = items.filter((item) => !isModeSetting(item.id) && !isCollapsedReplyChildSetting(item.id));
+      const settingsList = new SettingsList([...modeItems, separator, ...lensItems], 14, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
       container.addChild(settingsList);
       return {
         render: (width: number) => {
@@ -1114,7 +1123,7 @@ export default function (pi: ExtensionAPI) {
   };
 
   pi.registerCommand("pi-mini-mode-minimal", {
-    description: "Toggle collapsed replies (off keeps Pi's default conversation history)",
+    description: "Toggle minimal output (off keeps Pi's default conversation history)",
     handler: async (args, ctx) => {
       const normalized = args.trim().toLowerCase();
       if (ctx.mode !== "tui") {
@@ -1178,6 +1187,10 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
     settings = loaded.settings;
+    messageCwd = ctx.cwd;
+    // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
+    const { installInputEnhancements } = await import("../lib/input-enhancements.ts");
+    cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"]);
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
@@ -1428,6 +1441,8 @@ export default function (pi: ExtensionAPI) {
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    cleanupInputEnhancements?.();
+    cleanupInputEnhancements = undefined;
     persistAgentStatuses?.();
     persistAgentStatuses = undefined;
     agentDeadlines.clear();

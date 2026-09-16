@@ -9,6 +9,8 @@ const stub = `data:text/javascript,${encodeURIComponent(`
 export const CONFIG_DIR_NAME = '.pi';
 export const getMarkdownTheme = () => Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
+export class CustomEditor { constructor() {} }
+export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 `)}`;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(stub)}};return n(s,c)}`)}`, import.meta.url);
 const { Container, Text, TuiAltScreen, ScrollView, VStack, SelectList, visibleWidth, setCapabilities } = await import('@earendil-works/pi-tui');
@@ -92,7 +94,7 @@ const placeholder = minimalOutputComponent(theme, () => [{ question: 'q', proces
 placeholder.render(80);
 assert.equal(placeholder.toolChoices().length, 0, 'empty Thinking placeholder is not expandable');
 
-// Running SubAgents expand literal live activity; only structured finals enter completed details.
+// Running SubAgents expand one-line tools; only structured finals enter completed details.
 const child = { agent: 'worker', status: 'running', currentTool: 'bash', currentToolArgs: 'npm test', recentOutput: [] };
 const agentTurn = { question: 'q', process: [], subAgents: [{ runId: 'live-child', mode: 'single', state: 'running', steps: [child] }] };
 const agentView = minimalOutputComponent(theme, () => [agentTurn]);
@@ -101,22 +103,25 @@ const agentDetails = () => agentView.render(80).slice(agentHeading() + 1).join('
 assert.equal(agentDetails(), '');
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() }, { type: 'press' })), { handled: true });
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() })), { handled: true, render: true });
-assert.match(agentDetails(), /当前活动：bash npm test/);
+assert.match(agentDetails(), /● bash npm test/);
 child.currentToolArgs = 'npm run check';
-assert.match(agentDetails(), /当前活动：bash npm run check/, 'expanded live activity refreshes');
+assert.match(agentDetails(), /● bash npm run check/, 'expanded live activity refreshes');
 agentView.handleMouse(event({ y: agentHeading() }));
 assert.equal(agentDetails(), '', 'running run can collapse');
 agentView.handleMouse(event({ y: agentHeading() }));
 child.currentTool = '';
 child.currentToolArgs = '';
-assert.match(agentDetails(), /当前活动：running/, 'empty live run shows its state');
+assert.match(agentDetails(), /● running/, 'empty live run shows its state');
 child.recentOutput = ['LIVE_OUTPUT'];
 assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
-assert.match(agentDetails(), /当前活动：running/);
+assert.match(agentDetails(), /● running/);
+child.currentTool = 'bash';
+child.currentToolArgs = 'npm test';
+child.recentTools = [{ tool: 'bash', args: 'npm test' }];
 agentTurn.subAgents[0].state = 'complete';
 child.finalOutput = 'FINAL_OUTPUT';
 assert.match(agentDetails(), /FINAL_OUTPUT/, 'completion preserves click expansion');
-assert.doesNotMatch(agentDetails(), /当前活动/, 'final output replaces live activity');
+assert.doesNotMatch(agentDetails(), /当前活动|● bash|● running/, 'final output replaces live activity');
 assert.doesNotMatch(agentView.render(80).join('\n'), /LIVE_OUTPUT/);
 agentView.handleMouse(event({ y: agentHeading() }));
 assert.equal(agentDetails(), '', 'completed run can collapse');
@@ -254,6 +259,7 @@ const branch = [
 ];
 const ctx = { mode: 'tui', hasUI: true, sessionManager: { getBranch: () => branch }, ui: {
   theme, setFooter() {}, notify(text) { notice = text; }, onTerminalInput(listener) { return tui.addInputListener(listener); },
+  getEditorComponent() {}, setEditorComponent() {}, addAutocompleteProvider() {},
   setWidget(_name, factory) { factory?.(tui, theme); },
   async select(_title, labels) {
     assert.equal(labels.length, 1);
@@ -270,7 +276,7 @@ const ctx = { mode: 'tui', hasUI: true, sessionManager: { getBranch: () => branc
 } };
 try {
   await writeFile(join(dir, 'pi-mini-mode.json'), JSON.stringify({ 'pi-mini-mode-minimal-show': true, onboardingCompleted: true }));
-  extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, cmd) { commands.set(name, cmd); }, registerEntryRenderer() {}, appendEntry() {} });
+  extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, cmd) { commands.set(name, cmd); }, registerShortcut() {}, registerEntryRenderer() {}, appendEntry() {} });
   await handlers.get('session_start')({}, ctx);
   tui.start(); await paint(); scroll.scrollTo(0); await paint();
   // Run the real extension mounting path, not just manually composed adapters.

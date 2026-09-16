@@ -11,6 +11,8 @@ const piStub = `data:text/javascript,${encodeURIComponent(`
 export const CONFIG_DIR_NAME = '.pi';
 export const getMarkdownTheme = () => Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
+export class CustomEditor { constructor() {} }
+export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 `)}`;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piStub)}};return n(s,c)}`)}`, import.meta.url);
 const { Container, Text, Markdown, SelectList, TuiAltScreen, ScrollView, visibleWidth, truncateToWidth, setCapabilities } = await import('@earendil-works/pi-tui');
@@ -43,6 +45,13 @@ for (const short of ['', 'one', 'one\ntwo\nthree\nfour', '[Attachment]']) {
   shortView.render(80);
   assert.deepEqual(shortView.promptChoices(), [], 'up to four visual rows has no control');
 }
+const screenshotFence = '```text\n现在\n    Agents\n        pi · goose-notes\n        Terminals\n            goose-2fa\n            goose-2fa      ← 插在这里\n\n改完\n混排会话\n    pi · goose-notes\n    goose-2fa\n    新会话               ← 落在最下面\n```';
+const fenceView = minimalOutputComponent(theme, () => [{ question: screenshotFence, process: [] }]);
+const fenceRows = fenceView.render(80);
+assert.deepEqual(fenceView.promptChoices(), [], 'a closed fence is one visual unit');
+assert.match(plain(fenceRows.join('\n')), /插在这里/);
+assert.match(plain(fenceRows.join('\n')), /落在最下面/);
+assert.doesNotMatch(plain(fenceRows.join('\n')), /展开/);
 const wrapped = minimalOutputComponent(theme, () => [{ question: 'word '.repeat(20), process: [] }]);
 wrapped.render(120);
 assert.equal(wrapped.promptChoices().length, 0);
@@ -113,10 +122,11 @@ try {
   const handlers = new Map();
   const commands = new Map();
   await writeFile(join(dir, 'pi-mini-mode.json'), JSON.stringify({ 'pi-mini-mode-minimal-show': true, onboardingCompleted: true }));
-  extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, command) { commands.set(name, command); }, registerEntryRenderer() {}, appendEntry() {} });
+  extension({ events: { on() { return () => {}; } }, on(name, fn) { handlers.set(name, fn); }, registerCommand(name, command) { commands.set(name, command); }, registerShortcut() {}, registerEntryRenderer() {}, appendEntry() {} });
   let cancel = false;
   const ctx = { mode: 'tui', hasUI: true, sessionManager: { getBranch: () => turns.map(turn => ({ type: 'message', message: { role: 'user', content: turn.question } })) }, ui: {
     theme, setFooter() {}, notify() {}, onTerminalInput(listener) { return tui.addInputListener(listener); },
+    getEditorComponent() {}, setEditorComponent() {}, addAutocompleteProvider() {},
     setWidget(_name, factory) { factory?.(tui, theme); },
     async select(_title, labels) {
       assert.equal(labels.length, 1, 'only long prompts are keyboard choices');
