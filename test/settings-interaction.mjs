@@ -37,14 +37,8 @@ await commands.get("pi-mini-mode-settings").handler("", {
   },
 });
 const plain = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
-panel.handleInput("\r"); // enter 设置
-panel.handleInput("\r");
 assert.match(plain(panel.render(100).join("\n")), /显示模型/);
-assert.doesNotMatch(plain(panel.render(100).join("\n")), /折叠回复/);
-panel.handleInput("\x1b"); // back to groups
-panel.handleInput("\x1b[A"); // Collapse replies
-panel.handleInput("\x1b[A"); // Lens
-panel.handleInput("\r"); // Enter the Lens group.
+assert.match(plain(panel.render(100).join("\n")), /折叠回复/);
 for (const width of [140, 80, 40]) {
   let lines = panel.render(width);
   const row = lines.findIndex((line) => plain(line).includes("显示思考等级"));

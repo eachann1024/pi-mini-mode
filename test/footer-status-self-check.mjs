@@ -438,11 +438,8 @@ const settingsCtx = {
 await commands.get("pi-mini-mode-settings").handler("", settingsCtx);
 const settingsChildren = settingsPanel.render(100);
 const settingsPreview = settingsChildren[2];
-assert.deepEqual(settingsChildren[3].items.map((item) => item.label), ["设置"]);
-assert.equal(typeof settingsChildren[3].items[0].submenu, "function");
-const settingsSubmenu = settingsChildren[3].items[0].submenu("›", () => {});
-assert.deepEqual(settingsSubmenu.items.map((item) => item.label), ["显示模型", "显示思考等级", "显示会话总 token", "显示会话缓存 token", "显示缓存命中率 (CH)", "显示会话价格", "显示已启用 MCP 服务器", "显示上下文 token 与进度条", "↳ 使用点阵进度条", "显示上下文百分比", "显示最近生成速度", "↳ 显示 tok/s 单位", "折叠回复", "极简输出"]);
-const settingsList = settingsSubmenu;
+assert.deepEqual(settingsChildren[3].items.map((item) => item.label).slice(0, 3), ["折叠回复", "极简输出", "────────────"]);
+const settingsList = settingsChildren[3];
 colors.length = 0;
 settingsList.theme.label("Focused option", true);
 settingsList.theme.value("off", true);
