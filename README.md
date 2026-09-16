@@ -10,7 +10,7 @@ A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost
 
 ## Minimal output
 
-`/pi-mini-mode-settings` now has **Lens**, a separate **Collapse replies** switch, and **Minimal output**. Collapsed replies are off by default, so Pi's conversation history stays native until you turn them on. While the switch is off, Minimal output options stay disabled.
+`/pi-mini-mode-settings` has one **Minimal output** switch, off by default. On collapses the process; off restores Pi's native history. Legacy per-item controls are hidden and no longer filter content. Lens settings are unchanged.
 
 - `/pi-mini-mode-minimal on` shows the user's Markdown on an accent-tinted surface, a background-free process summary, and the final reply without a heading or extra background. No duplicate dock panel.
 - Each turn uses one shared tree showing the latest **ten summary entries**: available thinking, tool calls, streaming tool output, and skill reads. `Ctrl+O` expands the full Markdown process and toggles it closed again; new questions start collapsed; tools without output show an elapsed wait counter, and empty progress events never overwrite existing content; there are no section headings, collapsed counts, or completion labels. Original session messages remain intact.
@@ -24,6 +24,17 @@ A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost
 The user surface blends the active Pi accent with its user background. Process and answer text have no background. User padding is two terminal columns horizontally and one row vertically. Markdown, highlighted code, tables and Mermaid terminal diagrams work in light/dark themes; incomplete, unsupported or over-wide diagrams retain their source. **Minimal mode uses a private Pi 0.85.x layout adapter**, without patching the Pi installation. Unknown layouts refuse activation and retain native output. Recheck compatibility after Pi upgrades; another extension replacing the transcript may conflict.
 
 Checks: `npm run check && npm test`. Real terminal smoke test: `python3 test/minimal-pty.py` (Python 3, Node, and the installed dependency's bundled Pi CLI). It uses temporary fixtures, tests regular/fullscreen, toggling, ten-entry process and Ctrl+O expand/collapse, restored results, and narrow terminals, without model calls.
+
+## Input enhancements
+
+One **Input enhancements** switch (on by default) adds image-path previews, inline skill completion/expansion, and message file links. Turning it off leaves Pi's native clipboard behavior intact.
+
+- Paste images with native `Ctrl+V` (`Alt+V` on Windows/WSL); forwarded `Cmd+V` key events are also supported when the terminal sends them.
+- Move the editing cursor into an image path, or hover it in fullscreen, to preview it. Requires a terminal image protocol; otherwise a path hint is shown. Esc dismisses it. Reads are limited to 20 MB.
+- Type `/` at the beginning or after whitespace to select a skill at the current cursor. Inline `/skill:name` tokens expand on submission; URL/path slashes keep native behavior.
+- Images appear as underlined `[image1]` labels in the editor and messages. Cmd+click opens the original file with its default application; other file paths remain clickable too. Fullscreen editor hover requests a link pointer and restores it on exit. Quoted paths support spaces.
+
+Link modifiers depend on the terminal: usually Cmd+click on macOS and Ctrl+click on Windows/Linux; Ghostty fullscreen may require Shift+Cmd/Shift+Ctrl. Pi fullscreen also handles direct link clicks. Deleted temporary images cannot be reopened. See [Pi terminal setup](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
 
 ## Install
 
@@ -135,13 +146,8 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
 | `pi-mini-mode-context-percent-show` | `true` | Context-use percentage |
 | `pi-mini-mode-speed-show` | `true` | Generation speed at the far right |
 | `pi-mini-mode-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
-| `pi-mini-mode-minimal-show` | `false` | Collapse replies; off keeps Pi's default conversation history |
-| `pi-mini-mode-minimal-thinking-show` | `true` | Show thinking in collapsed replies |
-| `pi-mini-mode-minimal-tools-show` | `true` | Show tool calls and agent calls |
-| `pi-mini-mode-minimal-output-show` | `true` | Show process output |
-| `pi-mini-mode-minimal-skills-show` | `true` | Show skill reads |
-| `pi-mini-mode-agent-usage-show` | `true` | Show Agent token usage |
-| `pi-mini-mode-agent-shortcut-show` | `true` | Show the temporary `Ctrl+O` hint for new Agents |
+| `pi-mini-mode-minimal-show` | `false` | Minimal output; off keeps Pi's default conversation history |
+| `pi-mini-mode-input-enhancements` | `true` | Image previews, inline skills, and message file links |
 | `onboardingCompleted` | `false` initially | Internal marker that prevents another first-run prompt |
 
 - **Generation speed**
