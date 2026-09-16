@@ -38,7 +38,9 @@ await commands.get("pi-mini-mode-settings").handler("", {
 });
 const plain = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
 assert.match(plain(panel.render(100).join("\n")), /显示模型/);
-assert.match(plain(panel.render(100).join("\n")), /折叠回复/);
+assert.match(plain(panel.render(100).join("\n")), /极简输出.*off/);
+assert.match(plain(panel.render(100).join("\n")), /输入增强.*on/);
+assert.doesNotMatch(plain(panel.render(100).join("\n")), /显示工具调用|显示过程输出|显示技能|Agent token 用量|Ctrl\+O 提示/, "极简输出的旧细项不再展示");
 for (const width of [140, 80, 40]) {
   let lines = panel.render(width);
   const row = lines.findIndex((line) => plain(line).includes("显示思考等级"));

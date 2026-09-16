@@ -12,12 +12,14 @@ export const CONFIG_DIR_NAME = ".pi";
 export const getMarkdownTheme = () => Object.fromEntries(["heading", "link", "linkUrl", "code", "codeBlock", "codeBlockBorder", "quote", "quoteBorder", "hr", "listBullet", "bold", "italic", "strikethrough", "underline"].map(key => [key, text => text]));
 export const getAgentDir = () => process.env.PI_MINI_MODE_AGENT_DIR;
 export const getSettingsListTheme = () => ({});
+export class CustomEditor { constructor() {} }
+export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 export class Container { addChild() {} render() { return []; } invalidate() {} }
 export class Text { constructor() {} }
 export {};
 `;
 const tuiModule = `
-export { Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
+export { Image, allocateImageId, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
 export const visibleWidth = (text) => String(text).replace(/\\x1b\\[[0-9;]*m/g, "").length;
 export const truncateToWidth = (text, width, suffix = "…") => {
   const plain = String(text).replace(/\\x1b\\[[0-9;]*m/g, "");
@@ -54,14 +56,18 @@ assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-minimal-show"], false);
 assert.equal(extension.parseSettings({})["pi-mini-mode-minimal-show"], false, "missing collapsed-replies setting keeps Pi native history");
 assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": false })["pi-mini-mode-minimal-show"], false);
 assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": true })["pi-mini-mode-minimal-show"], true);
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.label, "折叠回复");
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.description, "关闭后保留 Pi 默认会话历史。");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.label, "极简输出");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.description, "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。");
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "off");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-input-enhancements"], true, "input enhancements default to on");
+assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*消息文件路径，用系统默认应用打开/);
 assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
-for (const key of ['pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
+for (const key of ['pi-mini-mode-minimal-thinking-show', 'pi-mini-mode-minimal-tools-show', 'pi-mini-mode-minimal-output-show', 'pi-mini-mode-minimal-skills-show', 'pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
   assert.equal(extension.DEFAULT_SETTINGS[key], true);
-  assert.equal(extension.parseSettings({ [key]: false })[key], false);
+  assert.equal(extension.parseSettings({ [key]: false })[key], true, `${key} legacy false no longer gates minimal output`);
+  assert.equal(extension.isCollapsedReplyChildSetting(key), true);
 }
+assert.equal(extension.parseSettings({ "pi-mini-mode-input-enhancements": false })["pi-mini-mode-input-enhancements"], false);
 const minimalTheme = { bg: (_token, text) => `\x1b[48;2;20;40;30m${text}\x1b[49m`, fg: (_token, text) => text, bold: (text) => text };
 const minimalTurn = { question: "测试问题", process: Array.from({ length: 13 }, (_, i) => `tool entry-${i}`), running: true, final: "secret final" };
 const minimalView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn]);
@@ -193,14 +199,14 @@ assert.match(integratedRows.find(row => row.includes('CHILD_8')), /^└─/);
 for (const width of [1, 12, 40]) assert.ok(integratedView.render(width).every(row => stripAnsi(row).length <= width));
 assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Subagent 4\/9/, 'narrow headers prioritize progress over token totals');
 for (let i = 9; i < 40; i++) integratedTurn.subAgents[0].steps.push({ runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, recentOutput: [`CHILD_${i}`], status: 'running' });
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 46, 'children are not subject to the main six-row cap');
+assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^[├└]─/.test(row)).length, 46, 'children are not subject to the main six-row cap');
 for (const child of integratedTurn.subAgents[0].steps) child.status = 'completed';
 integratedRows = integratedView.render(120).map(stripAnsi);
 assert.match(integratedRows.join('\n'), /Subagent 40\/40/);
 assert.match(integratedRows.join('\n'), /CHILD_/);
 assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
 expandIntegrated = true;
-assert.equal(integratedView.render(120).filter(row => /^[├└]─/.test(row)).length, 46, 'Ctrl+S retains one heading per child');
+assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^[├└]─/.test(row)).length, 46, 'Ctrl+S retains one heading per child');
 assert.match(integratedView.render(120).join('\n'), /CHILD_FINAL_0/);
 assert.doesNotMatch(integratedView.render(120).join('\n'), /PREVIEW_/);
 const savedNow = Date.now;
@@ -248,6 +254,8 @@ const runtimeDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-runtime-"));
 process.env.PI_MINI_MODE_AGENT_DIR = runtimeDir;
 const handlers = new Map();
 const commands = new Map();
+const shortcuts = new Map();
+let registeredCommands = [];
 const eventEmitter = new EventEmitter();
 const events = {
   on(name, handler) { eventEmitter.on(name, handler); return () => eventEmitter.off(name, handler); },
@@ -264,6 +272,8 @@ const pi = {
   events,
   on(name, handler) { handlers.set(name, handler); },
   registerCommand(name, command) { commands.set(name, command); },
+  registerShortcut(name, shortcut) { shortcuts.set(name, shortcut); },
+  getCommands: () => registeredCommands,
 };
 extension.default(pi);
 events.emit(mcpStatusEvent, startupSnapshot);
@@ -438,8 +448,12 @@ const settingsCtx = {
 await commands.get("pi-mini-mode-settings").handler("", settingsCtx);
 const settingsChildren = settingsPanel.render(100);
 const settingsPreview = settingsChildren[2];
-assert.deepEqual(settingsChildren[3].items.map((item) => item.label).slice(0, 3), ["折叠回复", "极简输出", "────────────"]);
+assert.deepEqual(settingsChildren[3].items.map((item) => item.label).slice(0, 3), ["极简输出", "输入增强", "────────────"]);
 const settingsList = settingsChildren[3];
+assert.ok(settingsList.items.every((item) => !item.submenu), "极简输出不再有子菜单");
+assert.ok(settingsList.items.every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
+assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "off", "极简输出总开关仍默认关闭");
+assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
 colors.length = 0;
 settingsList.theme.label("Focused option", true);
 settingsList.theme.value("off", true);
@@ -449,6 +463,25 @@ settingsList.theme.label("Normal option", false);
 assert.deepEqual(colors, ["text"], "unfocused labels are not highlighted");
 assert.match(settingsPreview.text, /deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "settings preview uses fixed example data instead of the current session");
 assert.doesNotMatch(settingsPreview.text, /25\.0%|50K\/100K|gpt-5/, "settings preview never reads live session values");
+// 输入增强直接接线到 lib/input-enhancements.ts：设置变更即时生效，无需重装。
+const skillDir = join(runtimeDir, "demo-skill");
+const skillPath = join(skillDir, "SKILL.md");
+await mkdir(skillDir, { recursive: true });
+await writeFile(skillPath, "---\nname: demo\n---\nDEMO_SKILL_BODY\n", "utf8");
+registeredCommands = [{ name: "skill:demo", source: "skill", sourceInfo: { path: skillPath, baseDir: skillDir } }];
+assert.equal(shortcuts.size, 0, "input enhancements do not override global shortcuts");
+const inputHandler = handlers.get("input");
+const skillPrompt = "请用 /skill:demo 完成任务";
+assert.deepEqual(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), {
+  action: "transform",
+  text: `请用 <skill name="demo" location="${skillPath}">\nReferences are relative to ${skillDir}.\n\nDEMO_SKILL_BODY\n</skill> 完成任务`,
+}, "行内 /skill:demo 展开为原生技能包装");
+assert.equal(await inputHandler({ text: "/skill:demo 任务", source: "interactive" }, settingsCtx), undefined, "行首技能交给核心，不重复展开");
+assert.equal(await inputHandler({ text: skillPrompt, source: "print" }, settingsCtx), undefined, "非交互输入不处理");
+settingsList.setValue("pi-mini-mode-input-enhancements", "off");
+assert.equal(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), undefined, "关闭输入增强后保留 Pi 原生输入");
+settingsList.setValue("pi-mini-mode-input-enhancements", "on");
+assert.ok(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), "重新打开后立即生效，无需重装");
 assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
 settingsList.setValue("pi-mini-mode-mcp-show", "on");
 assert.match(settingsPreview.text, /◇ MCP 3/, "MCP toggle updates example preview immediately");
@@ -501,7 +534,7 @@ assert.equal(eventEmitter.listenerCount(mcpStatusEvent), 0, "shutdown removes sh
 const minimalHandlers = new Map();
 const minimalCommands = new Map();
 const persistedAgentEntries = [];
-extension.default({ events, appendEntry(customType, data) { persistedAgentEntries.push({ type: 'custom', customType, data: structuredClone(data) }); }, on(name, handler) { minimalHandlers.set(name, handler); }, registerCommand(name, command) { minimalCommands.set(name, command); } });
+extension.default({ events, appendEntry(customType, data) { persistedAgentEntries.push({ type: 'custom', customType, data: structuredClone(data) }); }, on(name, handler) { minimalHandlers.set(name, handler); }, registerCommand(name, command) { minimalCommands.set(name, command); }, registerShortcut() {} });
 const box = (children = []) => ({ children, render: () => [], invalidate() {} });
 const doc = box([box(), box(), box()]);
 const originalDocRender = doc.render;
@@ -686,7 +719,7 @@ const onboardingDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-onboarding-"));
 process.env.PI_MINI_MODE_AGENT_DIR = onboardingDir;
 const onboardingExtension = await import(pathToFileURL(source.pathname).href + `?onboarding=${Date.now()}`);
 const onboardingHandlers = new Map();
-onboardingExtension.default({ events, on(name, handler) { onboardingHandlers.set(name, handler); }, registerCommand() {} });
+onboardingExtension.default({ events, on(name, handler) { onboardingHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
 const previews = [];
 let customCalls = 0;
 const onboardingCtx = {
@@ -697,6 +730,9 @@ const onboardingCtx = {
     setWidget() {},
     setFooter() {},
     notify() {},
+    getEditorComponent() {},
+    setEditorComponent() {},
+    addAutocompleteProvider() {},
     async select(title, choices) { previews.push([title, choices]); return "保留默认"; },
     async custom() { customCalls++; },
   },
@@ -704,7 +740,7 @@ const onboardingCtx = {
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
 assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置"], "onboarding offers explicit default and configure paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
-assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和折叠回复默认关闭/, "onboarding describes opt-in fields accurately");
+assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和极简输出默认关闭/, "onboarding describes opt-in fields accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
@@ -712,7 +748,7 @@ assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboa
 const configureDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-configure-"));
 process.env.PI_MINI_MODE_AGENT_DIR = configureDir;
 const configureHandlers = new Map();
-onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(name, handler); }, registerCommand() {} });
+onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
 await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
 assert.equal(customCalls, 1, "Configure now opens the settings list after showing the preview");
 
