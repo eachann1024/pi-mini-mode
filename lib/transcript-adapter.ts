@@ -137,6 +137,41 @@ export function supervisorNotice(message: unknown) {
       body: content,
     };
   }
+  if (item?.customType === "subagent-notify") {
+    const content = typeof item.content === "string" ? item.content : undefined;
+    const header = content?.match(/^(?:Background task|Detached foreground task) (completed|failed|paused|stopped):\s+\*\*([^\*\n]+)\*\*/m);
+    if (!content || !header) return;
+    const status = header[1];
+    const failed = status === "failed" || status === "stopped";
+    const attention = status === "paused";
+    const workflowRunId = content.match(/^Workflow run:\s*([0-9a-f-]{36})\s*$/mi)?.[1];
+    const childRunIds = content.match(/^Child runs:\s*(.+)$/mi)?.[1]
+      ?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [];
+    const runIds = [...new Set([workflowRunId, ...childRunIds].filter((id): id is string => !!id))];
+    const runId = workflowRunId || childRunIds[0];
+    const metadata = /^(?:Workflow (?:receipt|run):|Child runs:|Session(?: file| share error)?:|Retention-managed|Reconciled detached|Parallel handoff:|Watchdog blockers:)/i;
+    let preview = "";
+    for (const line of content.split("\n").slice(1)) {
+      const text = line.trim();
+      if (!text || text.startsWith("Workflow receipt:")) continue;
+      if (metadata.test(text)) break;
+      preview = text;
+      break;
+    }
+    return {
+      key: runId ? JSON.stringify(["subagent-notify", runId]) : undefined,
+      runId,
+      runIds,
+      internal: false,
+      alert: failed || attention,
+      state: failed ? "执行失败" : attention ? "需要关注" : "已完成",
+      color: failed ? "error" as const : attention ? "warning" as const : "muted" as const,
+      summary: clean(preview) || (failed ? "子任务失败" : attention ? "等待回复" : "子任务已完成"),
+      label: clean(header[2]),
+      showLabel: true,
+      body: content,
+    };
+  }
   const details = record(item?.details);
   if (!details) return;
   const event = record(details.event);
@@ -406,7 +441,8 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         if (group && group.first !== child) continue;
         if (group && options.supervisor) {
           const handled = options.supervisor.handledRunIds?.();
-          if (handled && notice?.runId && handled.has(notice.runId)) continue;
+          const noticeIds = [notice?.runId, ...((notice as { runIds?: string[] } | undefined)?.runIds ?? [])].filter((id): id is string => !!id);
+          if (handled && noticeIds.some(id => handled.has(id))) continue;
           const open = expandedNotices.get(key) ?? expanded;
           const label = group.notice.showLabel
             ? group.notice.label ?? ""

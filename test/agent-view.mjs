@@ -57,7 +57,7 @@ for (const name of ['dark', 'light']) {
   assert.match(clean(frameA), /…\s*$/);
   snapshot[0].steps[0].recentOutput = ['AI 回复 ' + '中文回复🙂 '.repeat(40)];
   const replyStart = render(clock + 3000, 120, true);
-  assert.match(clean(replyStart.rows.slice(1).join('\n')), /当前活动：bash npm test/, 'running expansion shows current tool activity');
+  assert.match(clean(replyStart.rows.slice(1).join('\n')), /● bash npm test/, 'running expansion shows the current tool on one line');
   assert.doesNotMatch(clean(replyStart.rows.join('\n')), /AI 回复/, 'unstructured prose stays hidden');
   assert.doesNotMatch(clean(replyStart.rows[0]), /AI 回复/);
   assert.equal(clean(replyStart.rows[0]).split(' : ')[1], clean(render(clock + 5000).rows[0]).split(' : ')[1], 'activity never plays back recentOutput');
@@ -75,6 +75,8 @@ for (const name of ['dark', 'light']) {
     const heading = `└─ ${runningGlyph(clock)} SubAgent • GPT-6Astra high 0:49 : `;
     assert.equal(clean(row), heading + 'x'.repeat(width - visibleWidth(heading) - 1) + '…', 'body occupies every remaining column, no reserved right area');
     assert.ok(row.includes(theme.fg('muted', ' high')), 'thinking stays gray even when expanded');
+    assert.equal(row.includes(theme.getBgAnsi('selectedBg')), expanded, 'only the expanded heading fills selectedBg');
+    assert.ok(row.includes(theme.fg(expanded ? 'accent' : 'text', theme.bold('SubAgent'))), 'expanded heading emphasizes SubAgent');
   }
   const sessionDir = mkdtempSync(join(tmpdir(), 'mini-agent-session-'));
   try {
@@ -197,6 +199,10 @@ for (const name of ['dark', 'light']) {
   assert.ok(markdownDetails.includes(theme.bold('重点')), 'expanded SubAgent output uses the shared Markdown emphasis');
   const jsonDetails = liveAgentRows([{ runId: 'json-details', steps: [{ agent: 'scout', status: 'completed', finalOutput: '{"key":"**literal**"}' }] }], theme, 100, true).join('\n');
   assert.match(clean(jsonDetails), /\{\"key\":\"\*\*literal\*\*\"\}/, 'structured output stays literal');
+  const acceptance = '本轮代码已完成。\n\n```acceptance-report\n{\n  "criteriaSatisfied": [\n    { "id": "criterion-1", "status": "satisfied", "evidence": "ok" }\n  ]\n}\n```';
+  const acceptanceDetails = liveAgentRows([{ runId: 'acceptance', steps: [{ agent: 'worker', status: 'completed', finalOutput: acceptance }] }], theme, 100, true).join('\n');
+  assert.match(clean(acceptanceDetails), /本轮代码已完成/);
+  assert.doesNotMatch(clean(acceptanceDetails), /acceptance-report|criteriaSatisfied/, 'gate JSON stays out of the child card');
   assert.equal(liveAgentRows(outputStatus, theme, 100, true).length, 3, 'running expansion shows its state, not raw replies');
   assert.doesNotMatch(clean(liveAgentRows(outputStatus, theme, 100, true).join('\n')), /FIRST_DETAIL/);
   for (const state of ['queued', 'running', 'completed', 'failed']) {
@@ -428,25 +434,76 @@ const collapsedNoticeView = liveAgentView([subagentWithNotice], testTheme, 120, 
 assert.match(clean(collapsedNoticeView.rows[0]), /SubAgent • GPT-5.6Terra medium 1:59 : 本轮代码已完成并通过所有测试/);
 assert.doesNotMatch(clean(collapsedNoticeView.rows[0]), /进度/);
 assert.ok(collapsedNoticeView.rows[0].includes(testTheme.fg('muted', '本轮代码已完成并通过所有测试')));
+assert.ok(!collapsedNoticeView.rows[0].includes(testTheme.getBgAnsi('selectedBg')), 'collapsed heading has no selectedBg');
 assert.equal(collapsedNoticeView.rows.length, 1, 'collapsed subagent has 1 heading row');
 
 const expandedControls = [];
 const expandedNoticeView = liveAgentView([subagentWithNotice], testTheme, 120, true, true, new Map(), completeClock, undefined, expandedControls);
 assert.equal(expandedControls.length, 1);
 assert.equal(expandedControls[0].runId, singleAsyncId);
-assert.equal(expandedNoticeView.rows[0], collapsedNoticeView.rows[0], 'expanding preserves all summary colors');
+assert.ok(expandedNoticeView.rows[0].includes(testTheme.getBgAnsi('selectedBg')), 'expanded heading uses selectedBg');
+assert.ok(expandedNoticeView.rows[0].includes(testTheme.fg('accent', testTheme.bold('SubAgent'))), 'expanded heading emphasizes SubAgent');
+assert.equal(clean(expandedNoticeView.rows[0]), clean(collapsedNoticeView.rows[0]), 'expanding preserves heading text');
 assert.ok(expandedNoticeView.rows[0].includes(testTheme.fg('muted', ' medium')), 'expanded thinking stays gray');
 const renderedExpandedText = clean(expandedNoticeView.rows.join('\n'));
 assert.match(renderedExpandedText, /本轮代码已完成并通过所有测试/);
-assert.match(clean(expandedNoticeView.rows.slice(1).join('\n')), /当前活动：本轮代码已完成并通过所有测试/, 'running expansion shows the current notice, not its history');
+assert.match(clean(expandedNoticeView.rows.slice(1).join('\n')), /本轮代码已完成并通过所有测试/, 'running expansion renders the current notice, not its history');
+assert.doesNotMatch(clean(expandedNoticeView.rows.slice(1).join('\n')), /当前活动/);
 assert.doesNotMatch(renderedExpandedText, /Subagent progress update|Run:|Child index|Live guidance|subagent\(|REQUEST_ID/);
 
 const clickedIds = new Set([singleAsyncId]);
 const clickedNoticeView = liveAgentView([subagentWithNotice], testTheme, 120, false, true, new Map(), completeClock, clickedIds);
-assert.equal(clickedNoticeView.rows[0], collapsedNoticeView.rows[0], 'click expansion preserves all summary colors');
+assert.ok(clickedNoticeView.rows[0].includes(testTheme.getBgAnsi('selectedBg')), 'clicked expanded heading uses selectedBg');
+assert.equal(clean(clickedNoticeView.rows[0]), clean(collapsedNoticeView.rows[0]), 'click expansion preserves heading text');
 const markdownDetail = liveAgentView([{ ...completedStatus, steps: [{ agent: 'worker', status: 'completed', finalOutput: '验证结果：\n\n- 数据行保持不变' }] }], testTheme, 100, true, true, new Map(), completeClock);
 assert.ok(markdownDetail.rows.slice(1).join('\n').includes(testTheme.fg('muted', '数据行保持不变')), 'Markdown list prose uses normal foreground');
 assert.match(clean(clickedNoticeView.rows.join('\n')), /本轮代码已完成并通过所有测试/);
+
+const stacked = liveAgentView([{
+  runId: 'stacked-report', mode: 'single', state: 'running', startedAt: 1000,
+  steps: [{
+    agent: 'worker', status: 'running',
+    recentTools: [{ tool: 'read', args: '/Users/eachann/Work/goose-notes/' + 'very-long-baseline-path/'.repeat(8) + 'table.ts' }],
+    notice: { summary: '已读截图并对照 原生模型支持 headeredCols 与单元格颜色' },
+    noticeMessages: [{
+      customType: 'subagent_supervisor_request',
+      details: {
+        runId: 'stacked-report', agent: 'worker', reason: 'progress_update', expectsReply: false,
+        requestBody: '已读截图并对照。\n\n- **原生模型**支持 `headeredCols`\n- 单元格 textColor / backgroundColor',
+      },
+    }],
+  }],
+}], testTheme, 80, true, true, new Map(), completeClock);
+const stackedDetails = stacked.rows.slice(1);
+assert.match(clean(stackedDetails[0]), /^ {3}● read /);
+assert.match(clean(stackedDetails[0]), /…\s*$/, 'tool process stays on one truncated line');
+assert.doesNotMatch(clean(stackedDetails[0]), /原生模型|headeredCols|textColor/);
+assert.doesNotMatch(clean(stackedDetails.join('\n')), /当前活动/);
+assert.ok(stackedDetails.some(row => row.includes(testTheme.bold('原生模型'))), 'expanded notice keeps Markdown emphasis');
+assert.ok(stackedDetails.filter(row => /headeredCols|textColor/.test(clean(row))).length >= 2, 'notice prose keeps its line breaks');
+
+// Screenshot regression: tool process, notice prose and activity previews stay
+// in separate channels when a running child is expanded.
+const compacted = liveAgentView([{
+  runId: 'screenshot-child', mode: 'single', state: 'running', startedAt: 1000,
+  steps: [{
+    agent: 'worker', status: 'running',
+    recentTools: [{ tool: 'read', args: '/Users/eachann/Work/goose-notes/' + 'very-long-baseline-path/'.repeat(8) + 'Column.tsx' }],
+    recentOutput: ['碎片一 正在整理', '碎片二 继续整理', '碎片三 仍需整理'],
+    notice: { summary: '代理间沟通已收纳', state: '内部协作', color: 'muted', internal: true },
+    noticeMessages: [{ type: 'custom', customType: 'subagent_supervisor_reply', data: {
+      requestId: 'req-1', runId: 'screenshot-child', agent: 'worker', childIndex: 0, createdAt: 1,
+      message: '已读截图并对照：\n\n- **原生模型**支持 `headeredCols`\n- 单元格 textColor / backgroundColor',
+    } }],
+  }],
+}], testTheme, 80, true, true, new Map(), completeClock);
+const compactedDetails = compacted.rows.slice(1);
+assert.match(clean(compacted.rows[0]), /代理间沟通已收纳/);
+assert.match(clean(compactedDetails[0]), /^ {3}● read .*…$/, 'tool process stays one truncated line above the prose');
+assert.ok(compacted.rows.every(row => visibleWidth(row) <= 80));
+assert.doesNotMatch(clean(compactedDetails.join('\n')), /当前活动|碎片/);
+assert.ok(compactedDetails.some(row => row.includes(testTheme.bold('原生模型'))), 'expanded reply keeps Markdown emphasis');
+assert.equal(compactedDetails.filter(row => /headeredCols|textColor/.test(clean(row))).length, 2, 'expanded reply keeps one list item per row');
 
 const unclickedNoticeView = liveAgentView([subagentWithNotice], testTheme, 120, false, true, new Map(), completeClock, new Set());
 assert.ok(unclickedNoticeView.rows[0].includes(testTheme.fg('muted', '本轮代码已完成并通过所有测试')), 'unclicked subagent activity reverts to normal style');
@@ -488,20 +545,27 @@ try {
   const render = (statuses, expanded = true, ids) => liveAgentView(statuses, testTheme, 120, expanded, false, new Map(), 2000, ids);
   const body = statuses => clean(render(statuses).rows.slice(1).join('\n'));
   write([process, oldFinal, process]);
-  assert.equal(body([status]), '', 'a later toolUse invalidates the earlier stopped answer');
-  for (const invalid of [
-    entry('toolUse', [txt('REJECTED')]), entry('length', [txt('REJECTED')]),
-    entry('error', [txt('REJECTED')]), entry('aborted', [txt('REJECTED')]), entry('pending', [txt('REJECTED')]),
-    entry(undefined, [txt('REJECTED')]), entry('stop', [txt('REJECTED'), tool]),
-    entry('stop', [txt('REJECTED')], { channel: 'commentary' }),
-    entry('stop', [txt('REJECTED')], { channel: 'analysis' }),
-    entry('stop', 'REJECTED'), entry('stop', [null, { type: 'text', text: 42 }, { type: 'thinking', thinking: 'REJECTED' }]),
-    entry('stop', [txt('REJECTED')], { role: 'toolResult' }),
-    entry('stop', [txt('REJECTED')], { role: 'user' }),
-    { type: 'custom', message: { role: 'assistant', stopReason: 'stop', content: [txt('REJECTED')] } },
+  assert.equal(body([status]).trim(), 'PROCESS_ONLY', 'the newest narration replaces the earlier stopped answer');
+  assert.doesNotMatch(body([status]), /OLD_FINAL/);
+  for (const [invalid, narration] of [
+    [entry('toolUse', [txt('NARRATION')]), 'NARRATION'],
+    [entry('length', [txt('NARRATION')]), 'NARRATION'],
+    [entry('error', [txt('NARRATION')]), 'NARRATION'],
+    [entry('aborted', [txt('NARRATION')]), 'NARRATION'],
+    [entry('pending', [txt('NARRATION')]), 'NARRATION'],
+    [entry(undefined, [txt('NARRATION')]), 'NARRATION'],
+    [entry('stop', [txt('NARRATION'), tool]), 'NARRATION'],
+    [entry('stop', [txt('NARRATION')], { channel: 'commentary' }), 'NARRATION'],
+    [entry('stop', [txt('NARRATION')], { channel: 'analysis' }), 'NARRATION'],
+    [entry('stop', 'NARRATION'), ''],
+    [entry('stop', [null, { type: 'text', text: 42 }, { type: 'thinking', thinking: 'NARRATION' }]), ''],
+    [entry('stop', [txt('NARRATION')], { role: 'toolResult' }), ''],
+    [entry('stop', [txt('NARRATION')], { role: 'user' }), ''],
+    [{ type: 'custom', message: { role: 'assistant', stopReason: 'stop', content: [txt('NARRATION')] } }, ''],
   ]) {
-    write([process, invalid]);
-    assert.equal(body([status]), '', 'unknown roles, stop reasons, channels and blocks fail closed');
+    write([invalid]);
+    assert.equal(body([status]).trim(), narration, 'only a string text block of an assistant message is rendered');
+    assert.equal(agentChildren(retainAgentStatuses([], [status]))[0].finalOutput, '', 'non-stopped messages never become the durable final');
   }
   write([process, oldFinal, process, final]);
   const source = JSON.stringify(status);
@@ -524,7 +588,8 @@ try {
   write([process, oldFinal, process]);
   retained = retainAgentStatuses(retained, [status]);
   assert.equal(agentChildren(retained)[0].finalOutput, '', 'continued work clears persisted old final');
-  assert.equal(body(retained), '');
+  assert.equal(body(retained).trim(), 'PROCESS_ONLY', 'continued work shows only its newest narration');
+  assert.doesNotMatch(body(retained), /OLD_FINAL|LOG_ONLY|TOOL_INPUT/);
   write([process, final]);
   retained = retainAgentStatuses(retained, []);
   assert.match(body(retained), /FINAL_SECOND/, 'retained runs hydrate even after status directory disappears');
@@ -554,5 +619,34 @@ try {
   assert.doesNotMatch(details, /PROGRESS_HISTORY|RAW_NOTICE|UNKNOWN_NOTICE|LOG_ONLY/);
   assert.match(clean(render(notified, false).rows[0]), /× .*KEEP_ERROR/);
 } finally { rmSync(finalRoot, { recursive: true, force: true }); }
+
+// Completed child body: the child's own newest prose, never activity previews.
+const bodyRoot = mkdtempSync(join(tmpdir(), 'mini-agent-body-'));
+try {
+  const sessionFile = join(bodyRoot, 'session.jsonl');
+  const text = value => ({ type: 'text', text: value });
+  const stop = { type: 'message', message: { role: 'assistant', stopReason: 'stop',
+    content: [text('三段正文：\n\n第一段说明改了什么。\n第二段说明验证了什么。')] } };
+  const toolTurn = { type: 'message', message: { role: 'assistant', stopReason: 'toolUse',
+    content: [text('现在改动 renderer。'), { type: 'toolCall', name: 'write', arguments: { path: 'renderer.ts' } }] } };
+  const child = { runId: 'body-child', mode: 'single', state: 'complete', startedAt: 1000, endedAt: 2000,
+    steps: [{ agent: 'worker', status: 'complete', sessionFile, recentOutput: ['墙一 墙二 墙三'] }] };
+  const write = entries => writeFileSync(sessionFile, entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+  const details = () => liveAgentView([child], testTheme, 120, true, true, new Map(), completeClock).rows.slice(1).map(clean);
+  write([toolTurn, stop]);
+  assert.equal(details().filter(row => /第一段|第二段/.test(row)).length, 2, 'a stopped answer keeps its line breaks');
+  assert.doesNotMatch(details().join('\n'), /墙一|现在改动/);
+  write([toolTurn]);
+  assert.match(details().join('\n'), /现在改动 renderer/, 'a child that ended on a tool call shows its newest prose instead of nothing');
+  assert.doesNotMatch(details().join('\n'), /墙一|● write/);
+  assert.equal(liveAgentView([child], testTheme, 120).rows.length, 1, 'activity previews stay hidden while collapsed');
+  write([{ type: 'message', message: { role: 'assistant', stopReason: 'stop', content: [text('中'.repeat(60))] } }]);
+  const wrapped = liveAgentView([child], testTheme, 40, true, true, new Map(), completeClock);
+  assert.equal([...clean(wrapped.rows.slice(1).join(''))].filter(ch => ch === '中').length, 60, 'literal CJK prose keeps every character when wrapped');
+  assert.ok(wrapped.rows.every(row => visibleWidth(row) <= 40));
+  const narrow = liveAgentView([child], testTheme, 5, true, true, new Map(), completeClock);
+  assert.equal([...clean(narrow.rows.slice(1).join(''))].filter(ch => ch === '中').length, 60, 'narrow terminals still keep every literal character');
+  assert.ok(narrow.rows.every(row => visibleWidth(row) <= 5));
+} finally { rmSync(bodyRoot, { recursive: true, force: true }); }
 
 console.log('Agent views: aggregation, failure, live widgets, restore, dark/light, widths PASS');

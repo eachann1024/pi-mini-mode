@@ -1,5 +1,5 @@
 import { diagramMarkdown, isMarkdownProse, minimalMarkdownTheme } from "./minimal-markdown.ts";
-import { supervisorNoticeBody } from "./transcript-adapter.ts";
+import { extractNoticeBody, supervisorNoticeBody } from "./transcript-adapter.ts";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -57,8 +57,16 @@ export function agentCallRows(calls: AgentCall[], theme: Theme, width: number, e
 
 const plain = (text: string) => text.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "").replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trim();
 
-/** Recover structured final text and raw tool inputs from the child session, never from activity previews. */
-const childSessionCache = new Map<string, { stamp: string; thinking: string; finalOutput: string; inputs: Array<{ name: string; value: string }> }>();
+/** Child gate JSON is for the runtime, not the transcript. */
+export function stripAcceptanceReport(output: string): string {
+  return output
+    .replace(/\n?```acceptance[-_]report\s*\n[\s\S]*?```\s*$/i, "")
+    .replace(/\n?ACCEPTANCE_REPORT\s*:\s*\{[\s\S]*\}\s*$/i, "")
+    .trimEnd();
+}
+
+/** Recover the child's own prose and raw tool inputs from its session, never from activity previews. */
+const childSessionCache = new Map<string, { stamp: string; thinking: string; finalOutput: string; latestText: string; inputs: Array<{ name: string; value: string }> }>();
 const singleLine = (value: string) => plain(value).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ");
 function childSessionData(sessionFile: unknown) {
   if (typeof sessionFile !== "string") return undefined;
@@ -70,6 +78,7 @@ function childSessionData(sessionFile: unknown) {
       const inputs: Array<{ name: string; value: string }> = [];
       let thinking = "";
       let finalOutput = "";
+      let latestText = "";
       for (const line of readFileSync(sessionFile, "utf8").split(/\r?\n/)) {
         try {
           const entry = JSON.parse(line) as { type?: string; thinkingLevel?: string; message?: { role?: string; stopReason?: string; channel?: string; content?: Array<{ type?: string; text?: string; name?: string; input?: Record<string, unknown>; arguments?: Record<string, unknown> } | null> } };
@@ -77,11 +86,15 @@ function childSessionData(sessionFile: unknown) {
           if (entry.message?.role !== "assistant") continue;
           const message = entry.message;
           const content = Array.isArray(message.content) ? message.content : [];
+          const text = content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block!.text).join("\n\n").trim();
           // Pi persists no channel: only a stopped assistant text reply is a final answer.
           finalOutput = entry.type === "message" && message.stopReason === "stop"
             && (message.channel === undefined || message.channel === "final")
             && !content.some(block => block?.type === "toolCall")
-            ? content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block!.text).join("\n\n").trim() : "";
+            ? text : "";
+          // Narration attached to a tool call is still the child's own prose; it
+          // is the only body a running or tool-ended child has.
+          if (entry.type === "message" && text) latestText = text;
           for (const call of content) {
             if (!call) continue;
             if (call.type !== "toolCall" || typeof call.name !== "string") continue;
@@ -92,7 +105,7 @@ function childSessionData(sessionFile: unknown) {
           }
         } catch { /* A concurrently written session can end with a partial line. */ }
       }
-      cached = { stamp, thinking, finalOutput, inputs };
+      cached = { stamp, thinking, finalOutput, latestText, inputs };
       childSessionCache.set(sessionFile, cached);
     }
     return cached;
@@ -154,6 +167,14 @@ export function restyleAgentWidget(lines: string[], theme: Theme, width: number,
   return rows;
 }
 
+/** Expanded heading: full-width selectedBg, keeping inner fg after resets.
+ * theme.bg only wraps the ends; older themes without getBgAnsi lose fill after \x1b[0m. */
+function paintExpandedHeading(theme: Theme, line: string): string {
+  const background = theme.getBgAnsi?.("selectedBg") ?? "";
+  return background
+    ? background + line.replace(/\x1b\[(?:0|49)?m/g, reset => reset + background) + "\x1b[49m"
+    : theme.bg("selectedBg", line);
+}
 function agentSummary(theme: Theme, width: number, running: number, done: number, errors: number, expanded: boolean): string {
   const label = `Sub Agent · running ${running}${done ? ` · done ${done}` : ""}${errors ? ` · failed ${errors}` : ""}${done ? ` · Ctrl+S ${expanded ? "collapse" : "expand"}` : ""}`;
   const summary = truncateToWidth(theme.fg(errors ? "error" : "muted", label), width);
@@ -320,20 +341,14 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
   const rows: string[] = [];
   const text = (value: unknown) => typeof value === "string" ? plain(value).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ") : "";
   const bodyText = (value: unknown) => typeof value === "string"
-    ? plain(value).replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g, " ").trim() : "";
+    ? stripAcceptanceReport(plain(value).replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g, " ")).trim() : "";
   const renderBody = (source: string, available: number) => {
+    const width = Math.max(1, available);
     if (isMarkdownProse(source)) return new Markdown(source, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-      { color: value => theme.fg("muted", value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
-    const rows: string[] = [];
-    for (const sourceLine of source.split(/\r?\n/)) {
-      let line = sourceLine;
-      do {
-        const row = truncateToWidth(line, Math.max(1, available), "");
-        rows.push(theme.fg("muted", row));
-        line = line.slice(row.length);
-      } while (line);
-    }
-    return rows;
+      { color: value => theme.fg("muted", value) }, { transform: diagramMarkdown }).render(width);
+    // Wrap by visible columns. Do not re-slice truncateToWidth: it appends a
+    // reset, so slice(row.length) would drop source characters on every wrap.
+    return wrapTextWithAnsi(source, width).map(row => theme.fg("muted", row));
   };
   if (width > 0) all.forEach((child, index) => {
     const runKey = String(child.runId ?? child.displayId);
@@ -369,36 +384,67 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     const endedAt = terminal ? timestamp(child.endedAt) ?? deadlines.get(`${elapsedKey}:ended`) ?? now : now;
     if (terminal) deadlines.set(`${elapsedKey}:ended`, endedAt);
     const elapsed = formatAgentElapsed(startedAt, endedAt);
-    const heading = truncateToWidth(theme.fg("dim", `${index === all.length - 1 ? "└─" : "├─"} `)
+    const identity = isChildExpanded ? "accent" : color;
+    const heading = truncateToWidth(theme.fg(isChildExpanded ? "accent" : "dim", `${index === all.length - 1 ? "└─" : "├─"} `)
       + theme.fg(failedAgent(child) || notice?.color === "error" ? "error" : notice?.color === "warning" ? "warning" : isRunning && !terminal ? "accent" : "muted", `${glyph} `)
-      + theme.fg("text", theme.bold("SubAgent"))
-      + theme.fg(color, ` • ${suffix ? model.slice(0, -suffix[0].length) : model}`)
-      + (level ? theme.fg("muted", ` ${level}`) : "") + theme.fg(terminal ? "muted" : "success", ` ${elapsed}`) + theme.fg(color, " : "), width, "…");
+      + theme.fg(identity, theme.bold("SubAgent"))
+      + theme.fg(identity, ` • ${suffix ? model.slice(0, -suffix[0].length) : model}`)
+      + (level ? theme.fg("muted", ` ${level}`) : "") + theme.fg(terminal ? "muted" : "success", ` ${elapsed}`) + theme.fg(identity, " : "), width, "…");
     const bodyBudget = Math.max(0, width - visibleWidth(heading));
     const progress = !bodyBudget ? "" : truncateToWidth(body, bodyBudget, "…");
-    const row = heading + theme.fg("muted", progress);
-    const line = row + " ".repeat(Math.max(0, width - visibleWidth(row)));
+    const row = heading + theme.fg(isChildExpanded ? "accent" : "muted", progress);
+    const padded = row + " ".repeat(Math.max(0, width - visibleWidth(row)));
+    const line = isChildExpanded ? paintExpandedHeading(theme, padded) : padded;
     subagentControls?.push({ runId: runKey, y: rows.length, width, line });
     rows.push(line);
     if (isChildExpanded) {
-      // Live activity is literal text, not a final answer or Markdown tool output.
+      let processShown = false;
       if (!terminal) {
-        const details = wrapTextWithAnsi(`当前活动：${text(activity)}`, Math.max(1, width - 3));
-        rows.push(...details.map(line => truncateToWidth(`   ${theme.fg("muted", line)}`, width)));
+        const process: Array<{ name: string; args: string }> = tools.slice(-6).map(tool => ({
+          name: text(tool.tool) || "tool",
+          args: rawToolInput(child.sessionFile, tool.tool, text(tool.args)),
+        }));
+        if (!process.length && child.currentTool) {
+          process.push({ name: text(child.currentTool), args: text(child.currentPath || child.currentToolArgs) });
+        }
+        for (const item of process) {
+          const prefix = `   ${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(item.name))}${item.args ? " " : ""}`;
+          rows.push(truncateToWidth(prefix + (item.args ? theme.fg("muted", item.args) : ""), width, "…"));
+          processShown = true;
+        }
       }
       const messages = Array.isArray(child.noticeMessages) ? child.noticeMessages : [];
       const bodies: string[] = [];
+      let latestProgress = "";
       for (const msg of messages) {
+        const item = msg && typeof msg === "object" ? msg as Record<string, unknown> : undefined;
+        const details = item?.details && typeof item.details === "object" ? item.details as Record<string, unknown> : undefined;
+        if (item?.customType === "subagent_supervisor_request" && details?.reason === "progress_update") {
+          const progress = extractNoticeBody(msg);
+          if (progress) latestProgress = progress;
+          continue;
+        }
         const b = supervisorNoticeBody(msg);
         if (b && !bodies.includes(b)) bodies.push(b);
       }
-      const finalOutput = terminal ? bodyText(childSessionData(child.sessionFile)?.finalOutput ?? child.finalOutput) : "";
+      const session = childSessionData(child.sessionFile);
+      if (!bodies.length && latestProgress) bodies.push(latestProgress);
+      const latestText = bodyText(session?.latestText);
+      if (!terminal && latestText && !bodies.length) bodies.push(latestText);
+      // A stopped answer outranks the running narration; the narration still
+      // covers a child that ended between turns or without a stopped reply.
+      const finalOutput = terminal ? bodyText(session?.finalOutput || latestText || child.finalOutput) : "";
       if (finalOutput && !bodies.includes(finalOutput)) bodies.push(finalOutput);
       const error = bodyText(child.error);
       if (error && !bodies.includes(error)) bodies.push(error);
-      for (const textBody of bodies) {
+      if (!terminal && !processShown && !bodies.length) {
+        rows.push(truncateToWidth(`   ${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(text(state)))}`, width, "…"));
+        processShown = true;
+      }
+      for (const [index, textBody] of bodies.entries()) {
         // Child/supervisor bodies are Markdown prose; tool logs and JSON are
         // not placed in this semantic body channel.
+        if (processShown || index > 0) rows.push("");
         for (const line of renderBody(textBody, Math.max(1, width - 3))) {
           rows.push(truncateToWidth(`   ${line}`, width));
         }
