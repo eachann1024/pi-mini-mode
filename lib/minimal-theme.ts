@@ -14,12 +14,16 @@ function ansiColor(ansi: string): RGB | undefined {
   }
 }
 
-/** User gets the stronger accent surface; process gets its secondary tint. */
+/** User uses the theme's soft surface directly; process keeps its secondary tint. */
 export function minimalSurface(theme: ExtensionContext["ui"]["theme"], text: string, user = false): string {
-  const base = ansiColor(theme.getBgAnsi?.("userMessageBg") ?? "");
+  const background = theme.getBgAnsi?.("userMessageBg") ?? "";
+  if (user) return background
+    ? background + text.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + background) + "\x1b[49m"
+    : theme.bg("userMessageBg", text);
+  const base = ansiColor(background);
   const accent = ansiColor(theme.fg("accent", "")) ?? ansiColor(theme.fg("success", ""));
   if (!base || !accent) return theme.bg("userMessageBg", text);
-  const weight = user ? 0.22 : 0.07;
+  const weight = 0.07;
   const rgb = base.map((value, i) => Math.round(value * (1 - weight) + accent[i] * weight));
   let prefix = `\x1b[48;2;${rgb.join(";")}m`;
   if (theme.getColorMode?.() === "256color") {
