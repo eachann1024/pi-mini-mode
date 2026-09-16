@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
-import { visibleWidth } from '@earendil-works/pi-tui';
-import { initTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
+import { Markdown, visibleWidth } from '@earendil-works/pi-tui';
+import { initTheme, getMarkdownTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
 import { minimalSurface } from '../lib/minimal-theme.ts';
-import { diagramMarkdown, normalizeProseMarkdown } from '../lib/minimal-markdown.ts';
+import { diagramMarkdown, isFencedMarkdown, isMarkdownProse, minimalMarkdownTheme, normalizeProseMarkdown } from '../lib/minimal-markdown.ts';
 const moduleUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
 const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
 register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(stub)}};return n(s,c)}`)}`, import.meta.url);
@@ -85,6 +85,123 @@ for (const name of ['dark', 'light']) {
   const mdOutput = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output 重点区分 **SAPI 网关** 的职责'], running: false }]).render(100).join('\n');
   assert.doesNotMatch(plain(mdOutput), /\*\*/);
   assert.ok(mdOutput.includes(theme.bold('SAPI 网关')), 'Output prose renders Markdown emphasis');
+  // Block and inline structure is decided by the lexer, then rendered for real.
+  const renderMd = (source, width = 100) => new Markdown(source, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
+    { color: value => theme.fg('text', value) }, { transform: (src, available) => diagramMarkdown(src, available) }).render(width);
+  const renderProse = source => plain(renderMd(source).join('\n'));
+  const syntaxColors = source => [...new Set([...renderMd(source).join('\n').matchAll(/\x1b\[(38;[0-9;]+)m/g)].map(match => match[1]))].sort();
+  const structureCases = [
+    '| 列 | 值 |\n| --- | --- |\n| 甲 | 1 |',
+    '标题\n===',
+    '段落\n---',
+    '---',
+    '- 列表项\n- 第二项',
+    '> 引用',
+    '# 标题',
+    '`代码` 与 **粗体**',
+    '*斜体*', '_斜体_', '~~删除~~',
+    '[链接](https://example.com)', '<https://example.com>',
+    '[引用][1]\n\n[1]: https://example.com',
+    '步骤\n\n2. 第二步',
+  ];
+  for (const source of structureCases) {
+    assert.equal(isMarkdownProse(source), true, `${name}: ${JSON.stringify(source)} is Markdown`);
+    assert.doesNotMatch(renderProse(source), /▶/, `${name}: ${JSON.stringify(source)} draws no diagram`);
+  }
+  assert.match(renderProse('| 列 | 值 |\n| --- | --- |\n| 甲 | 1 |'), /甲/, 'tables render their cells');
+  assert.doesNotMatch(renderProse('*斜体* 与 ~~删除~~ 与 `代码`'), /\*斜体\*|~~删除~~|`代码`/, 'inline emphasis, deletion and code spans render');
+  assert.match(renderProse('[链接](https://example.com)'), /链接/, 'inline links render');
+  assert.doesNotMatch(renderProse('<https://example.com>'), /<https/, 'autolinks render');
+  const reference = renderProse('[引用][1]\n\n[1]: https://example.com');
+  assert.match(reference, /引用/);
+  assert.doesNotMatch(reference, /\[引用\]\[1\]|\[1\]:/, 'reference links render');
+  // Every fence closes over any language tag: text/plaintext/unknown are code, never diagrams.
+  const fenceBody = 'flowchart LR\nA-->B';
+  for (const fence of ['```', '~~~']) for (const lang of ['', 'text', 'txt', 'plaintext', 'unknown']) {
+    const source = `${fence}${lang}\n${fenceBody}\n${fence}`;
+    assert.equal(isMarkdownProse(source), true, `${name}: ${fence}${lang} is Markdown`);
+    const rendered = renderProse(source);
+    assert.match(rendered, /flowchart LR/, `${name}: ${fence}${lang} keeps its body`);
+    assert.match(rendered, /A-->B/, `${name}: ${fence}${lang} keeps its body`);
+    assert.doesNotMatch(rendered, /┌|▶/, `${name}: ${fence}${lang} must not become a diagram`);
+    if (lang) assert.match(rendered, new RegExp('```' + lang), `${name}: ${fence}${lang} keeps its tag`);
+  }
+  // A fence beats the "looks like source" exclusion, for either fence style and any tag.
+  for (const source of ['```js\nconst value = 1;\n```', '~~~js\nconst value = 1;\n~~~', '~~~\nconst value = 1;\n~~~']) {
+    assert.equal(isMarkdownProse(source), true, `${name}: ${source} is Markdown`);
+  }
+  // A fence's info string is "language [options]", so options no longer drop highlighting.
+  for (const [tag, code] of [['JS title="a"', 'const value = 1;'], ['typescript filename=x.ts', 'const value: number = 1;'], ['Python', 'def run():\n    return 1']]) {
+    const source = '```' + tag + '\n' + code + '\n```';
+    assert.notDeepEqual(syntaxColors(source), syntaxColors('```text\n' + code + '\n```'), `${name}: ${tag} highlights`);
+    assert.match(renderProse(source), new RegExp(code.split('\n')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${name}: ${tag} keeps its code`);
+  }
+  // A CJK indented tree keeps its guides inside a fence and draws nothing outside one.
+  const tree = '项目结构：\n　　├── src\n　　│   └── index.ts\n　　└── package.json';
+  for (const lang of ['', 'text', 'txt', 'plaintext', 'unknown']) {
+    const rendered = renderProse(`\`\`\`${lang}\n${tree}\n\`\`\``);
+    assert.match(rendered, /├── src/, `${name}: ${lang} tree keeps its guides`);
+    assert.match(rendered, /└── package\.json/, `${name}: ${lang} tree keeps its guides`);
+    assert.doesNotMatch(rendered, /┌|▶/, `${name}: ${lang} tree must not become a diagram`);
+  }
+  assert.equal(isMarkdownProse(tree), false, `${name}: a bare CJK tree stays literal`);
+  assert.equal(diagramMarkdown(tree, 100), tree, `${name}: a bare CJK tree passes through`);
+  const screenshotTree = '现在\n    Agents\n        pi · goose-notes\n        Terminals\n            goose-2fa\n            goose-2fa      ← 插在这里\n\n改完\n混排会话\n    pi · goose-notes\n    goose-2fa\n    新会话               ← 落在最下面';
+  const screenshotFence = '```text\n' + screenshotTree + '\n```';
+  assert.equal(isFencedMarkdown(screenshotFence), true, `${name}: screenshot fence is a single code block`);
+  const screenshotView = minimalOutputComponent(theme, () => [{ question: screenshotFence, process: [] }]);
+  const screenshotRows = plain(screenshotView.render(80).join('\n'));
+  assert.match(screenshotRows, /插在这里/);
+  assert.match(screenshotRows, /落在最下面/);
+  assert.doesNotMatch(screenshotRows, /展开/);
+  assert.deepEqual(screenshotView.promptChoices(), [], `${name}: a fenced user prompt is not sliced mid-block`);
+  // Literal bodies stay literal: JSON, obvious source, money and raw HTML are not prose.
+  for (const source of ['{"a":1,"b":[2,3]}', '[1,2,3]', 'const value = **not bold**;', 'function f() { return `x`; }', 'SELECT * FROM t WHERE a = 1', '价格 $5 与 $10 元', '<div>x</div>', '<span>纯 HTML</span>', '<br>']) {
+    assert.equal(isMarkdownProse(source), false, `${name}: ${source} stays literal`);
+  }
+  for (const source of ['npm install \\\n  --save x', 'C:\\Users\\each\\\nnext', '步骤\n2. 第二步']) {
+    assert.equal(isMarkdownProse(source), false, `${name}: breaks alone do not select Markdown`);
+    assert.equal(diagramMarkdown(source, 100), source, `${name}: literal characters remain intact`);
+  }
+  // Diagram tags are matched on the first language token, whatever its case or options.
+  const diagramBodies = {
+    flowchart: 'flowchart LR\nA --> B',
+    graph: 'graph TD\nA --> B',
+    sequence: 'sequenceDiagram\nAlice->>Bob: Hi',
+    class: 'classDiagram\nclass Animal',
+    state: 'stateDiagram-v2\n[*] --> Still',
+    er: 'erDiagram\nCUSTOMER ||--o{ ORDER : places',
+  };
+  for (const [kind, body] of Object.entries(diagramBodies)) for (const tag of ['mermaid', 'MERMAID', 'mermaid title="图"']) {
+    const source = `\`\`\`${tag}\n${body}\n\`\`\``;
+    assert.equal(isMarkdownProse(source), true, `${name}: ${kind} is Markdown`);
+    const rendered = renderProse(source);
+    assert.doesNotMatch(rendered, /```mermaid/i, `${name}: ${kind}/${tag} becomes a diagram`);
+    assert.match(rendered, /[┌└│─]/, `${name}: ${kind}/${tag} draws`);
+  }
+  for (const body of ['unknown graph', 'pie\n"已完成" : 60\n"未完成" : 40', 'flowchart LR\nA[broken']) {
+    const rendered = renderProse('```mermaid\n' + body + '\n```');
+    assert.match(rendered, /```mermaid/, `${name}: ${body} keeps its source`);
+    assert.match(rendered, new RegExp(body.split('\n')[0]), `${name}: ${body} keeps its source`);
+  }
+  // Four backticks wrap a three-backtick example without turning it into a diagram.
+  const nested = renderProse('````md\n```js\nconst value = 1;\n```\n````');
+  assert.match(nested, /```md/);
+  assert.match(nested, /```js/);
+  assert.match(nested, /const value = 1;/);
+  assert.doesNotMatch(nested, /┌|▶/);
+  // Streaming and unfinished input must render without throwing.
+  for (const source of ['**still streaming', '```js\nconst value = ', '| 列 | 值 |\n| ---', tree]) {
+    assert.doesNotThrow(() => renderMd(source, 40), `${name}: ${source}`);
+  }
+  assert.match(renderProse('**still streaming'), /still streaming/);
+  // Narrow widths reuse the component harness, which truncates every markdown row.
+  for (const source of [...structureCases, `\`\`\`text\n${tree}\n\`\`\``, '~~~\n' + fenceBody + '\n~~~', nested]) {
+    for (const width of [12, 40, 100]) {
+      const rows = minimalOutputComponent(theme, () => [{ question: '', process: [], final: source }]).render(width);
+      assert.ok(rows.every(row => visibleWidth(row) <= width), `${name}/${width}: ${source}`);
+    }
+  }
   const turn = { question: '**User**\n\n> quote', process: ['thinking **plan**\n\n```js\nconst count = 1;\n```'], running: true, final: '# Answer\n\n| Name | Value |\n| --- | --- |\n| First | 42 |\n\n```js\nconst value = 42;\n```\n\n' + diagram };
   const usageTurns = minimalTurnsFromBranch([
     { type: 'message', message: { role: 'user', content: 'first' } },
@@ -156,4 +273,4 @@ for (const mode of ['truecolor', '256color']) {
   assert.notEqual(user.split('text')[0], secondary.split('text')[0]);
   assert.ok(user.includes('\x1b[0m' + user.split('text')[0]), 'inline resets restore background');
 }
-console.log('Markdown: dark/light, streaming, tables, code, Mermaid, narrow widths and accent surfaces PASS');
+console.log('Markdown: dark/light, streaming, block+inline structure, code fences, highlighting, Mermaid kinds, literal bodies, narrow widths and accent surfaces PASS');
