@@ -237,6 +237,36 @@ assert.equal(collectedNotice.messages[0], incrementalChildFailure, 'collected er
 handledChildren.clear();
 assert.match(document.render(160).join('\n'), /执行失败.*Connection error/, 'unowned failures must never be hidden');
 restoreCollected();
+const workflowNotify = {
+  customType: 'subagent-notify',
+  content: 'Background task failed: **workflow**\nWorkflow receipt: /tmp/receipt.json\n\n\x1b[31mRequest timed out.\x1b[0m\n\nWorkflow run: 11111111-1111-4111-8111-111111111111\nChild runs: prepare-image=22222222-2222-4222-8222-222222222222 (failed)',
+};
+assert.equal(supervisorNotice(workflowNotify).summary, 'Request timed out.', 'notify preview is cleaned before it becomes a heading');
+const workflowCompact = compactSupervisorNotice(workflowNotify, supervisorTheme, 160, false).join('\n');
+assert.match(workflowCompact, /执行失败.*workflow.*Request timed out/);
+assert.doesNotMatch(workflowCompact, /11111111|22222222|receipt.json|full notification/i);
+assert.equal(compactSupervisorNotice({ ...workflowNotify, customType: 'unknown-notify' }, supervisorTheme, 160, false), undefined);
+chat.clear();
+chat.addChild(new UserMessageComponent('NOTIFY TURN'));
+const workflowCard = new CustomMessageComponent('NATIVE_WORKFLOW_FAILED', 0, 0);
+workflowCard.message = workflowNotify;
+chat.addChild(workflowCard);
+const handledWorkflow = new Set(['22222222-2222-4222-8222-222222222222']);
+let collectedWorkflow;
+const restoreWorkflow = attachTranscript(tui, receiptView, {
+  supervisor: { theme: supervisorTheme, expanded: () => false, handledRunIds: () => handledWorkflow,
+    onNotices: groups => { collectedWorkflow = [...groups.values()][0]; } },
+});
+assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Request timed out|NATIVE_WORKFLOW_FAILED/);
+assert.equal(collectedWorkflow.notice.runId, '11111111-1111-4111-8111-111111111111');
+assert.ok(collectedWorkflow.notice.runIds.includes('22222222-2222-4222-8222-222222222222'));
+handledWorkflow.clear();
+handledWorkflow.add('11111111-1111-4111-8111-111111111111');
+assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Request timed out|NATIVE_WORKFLOW_FAILED/, 'parent workflow id also hides the native card');
+handledWorkflow.clear();
+assert.match(document.render(160).join('\n'), /执行失败.*workflow.*Request timed out/);
+assert.doesNotMatch(document.render(160).join('\n'), /NATIVE_WORKFLOW_FAILED|full notification/i);
+restoreWorkflow();
 // Route only recognized native custom messages; retain receipts, prompts, and turn position.
 chat.clear();
 chat.addChild(new UserMessageComponent('USER'));
@@ -343,6 +373,14 @@ for (const reason of [undefined, 'need_decision', 'interview_request', 'progress
     assert.doesNotMatch(rows.join('\n'), /REPLY_BODY|REQUEST_ID|RUN_ID|failed|error/);
   }
 }
+const listReply = { ...reply, data: { ...reply.data,
+  message: '已读截图并对照：\n\n- **原生模型**支持 `headeredCols`\n- 单元格 textColor / backgroundColor' } };
+assert.equal(supervisorNoticeBody(listReply), listReply.data.message, 'a reply body is never flattened into preview prose');
+const listExpanded = compactSupervisorNotice(listReply, supervisorTheme, 160, true);
+assert.ok(listExpanded.length > 1);
+assert.ok(listExpanded.every(row => visibleWidth(row) <= 160));
+assert.equal(listExpanded.filter(row => /headeredCols|textColor/.test(row)).length, 2, 'expanded reply keeps one Markdown list item per row');
+assert.equal(compactSupervisorNotice(listReply, supervisorTheme, 160, false).length, 1, 'the list stays out of the collapsed heading');
 for (const childIndex of [-1, 0.5]) assert.equal(supervisorNotice({ ...reply, data: { ...reply.data, childIndex } }).key, undefined);
 for (const extra of [{ nestedRunId: 'nested' }, { nestingPath: [0] }]) {
   assert.equal(supervisorNotice({ ...reply, data: { ...reply.data, ...extra } }).key, undefined);
