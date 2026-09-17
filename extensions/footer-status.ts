@@ -1,7 +1,7 @@
 import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
-import { CONFIG_DIR_NAME, getSettingsListTheme, getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, getSettingsListTheme, getMarkdownTheme, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
-import { diagramMarkdown, isFencedMarkdown, minimalMarkdownTheme } from "../lib/minimal-markdown.ts";
+import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "../lib/minimal-markdown.ts";
 import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
 import { Container, Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, SettingsList, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -71,8 +71,11 @@ const COPY = {
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
   inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
 } as const;
+
+const RECOMMENDED_THEMES = ["cc-dark", "cc-light"] as const;
+type RecommendedTheme = typeof RECOMMENDED_THEMES[number];
 
 export function settingsPath(agentDir = process.env.PI_MINI_MODE_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
   return join(agentDir, SETTINGS_FILE_NAME);
@@ -579,8 +582,8 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
 }
 
 export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text) {
-  const markdown = (text: string, width: number, process = false) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: (value) => theme.fg(process ? "muted" : "text", value) }, { transform: (source, available) => transformText(diagramMarkdown(source, available)) }).render(width);
+  const markdown = (text: string, width: number, process = false) => renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
+    { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(diagramMarkdown(source, available)));
   const surface = (rows: string[], width: number, user: boolean, selected = -1, expanded = false) => {
     const padding = Math.min(2, Math.floor((width - 1) / 2));
     return ["", ...rows, ""].map((row, index) => {
@@ -1083,6 +1086,49 @@ export default function (pi: ExtensionAPI) {
       .catch(() => ctx.ui.notify(COPY.saveFailed, "error"));
     return saveChain;
   };
+  const applyRecommendedHostSettings = async (ctx: ExtensionContext, themeName: RecommendedTheme): Promise<boolean> => {
+    const theme = ctx.ui.getTheme(themeName);
+    if (!theme) {
+      ctx.ui.notify(`找不到主题 ${themeName}；请先确认 Pi 已发现本包主题。`, "error");
+      return false;
+    }
+    try {
+      const manager = SettingsManager.create(ctx.cwd, getAgentDir(), { projectTrusted: ctx.isProjectTrusted?.() ?? false });
+      const initialErrors = manager.drainErrors();
+      if (initialErrors.length) {
+        ctx.ui.notify(`${COPY.themeSaveFailed} Pi 设置读取失败：${initialErrors.map(error => error.error.message).join("；")}`, "error");
+        return false;
+      }
+      const projectSettings = manager.getProjectSettings();
+      const projectOverrides = [
+        typeof projectSettings.theme === "string" ? "主题" : undefined,
+        projectSettings.tuiMode !== undefined ? "TUI 模式" : undefined,
+      ].filter((value): value is string => value !== undefined);
+      manager.setTheme(themeName);
+      manager.setTuiMode("fullscreen");
+      await manager.flush();
+      const errors = manager.drainErrors();
+      if (errors.length) {
+        ctx.ui.notify(`${COPY.themeSaveFailed} Pi 设置可能已部分保存：${errors.map(error => error.error.message).join("；")}`, "error");
+        return false;
+      }
+      const applied = ctx.ui.setTheme(theme);
+      if (!applied.success) {
+        ctx.ui.notify(`${COPY.themeApplyFailed}${applied.error ? ` ${applied.error}` : ""}`, "warning");
+        return false;
+      }
+      mountMinimalOutput(ctx);
+      refresh();
+      ctx.ui.notify(projectOverrides.length
+        ? `${COPY.themeSaved} 项目设置中的${projectOverrides.join("、")}优先级更高。`
+        : COPY.themeSaved, "info");
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`${COPY.themeSaveFailed} ${detail}`, "error");
+      return false;
+    }
+  };
   const openSettings = async (ctx: ExtensionContext) => {
     if (ctx.mode !== "tui") {
       ctx.ui.notify(COPY.tuiRequired, "error");
@@ -1207,9 +1253,46 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  const runOnboarding = async (ctx: ExtensionContext) => {
+    if (ctx.mode !== "tui" || !ctx.hasUI) return;
+    let choice: string | undefined;
+    try {
+      choice = await ctx.ui.select(
+        `Pi Mini Mode ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s\n\n${COPY.onboarding}`,
+        [COPY.keepDefaults, COPY.configureNow, COPY.applyRecommended],
+      );
+    } catch (error) {
+      ctx.ui.notify(`首次配置未完成：${error instanceof Error ? error.message : String(error)}`, "error");
+      return;
+    }
+    if (!choice) return;
+    if (choice === COPY.applyRecommended) {
+      let themeName: string | undefined;
+      try {
+        const available = RECOMMENDED_THEMES.filter(name => ctx.ui.getTheme(name));
+        if (!available.length) {
+          ctx.ui.notify("未发现 cc-dark 或 cc-light 主题；请确认本包主题已加载。", "error");
+          return;
+        }
+        themeName = await ctx.ui.select(COPY.chooseTheme, available);
+      } catch (error) {
+        ctx.ui.notify(`推荐配置未完成：${error instanceof Error ? error.message : String(error)}`, "error");
+        return;
+      }
+      if (!themeName || !RECOMMENDED_THEMES.includes(themeName as RecommendedTheme)) return;
+      if (!await applyRecommendedHostSettings(ctx, themeName as RecommendedTheme)) return;
+    }
+    settings = { ...settings, onboardingCompleted: true };
+    await persistSettings(ctx);
+    if (choice === COPY.configureNow) await openSettings(ctx);
+  };
   pi.registerCommand("pi-mini-mode-settings", {
     description: "Configure Pi Mini Mode settings",
     handler: async (_args, ctx) => openSettings(ctx),
+  });
+  pi.registerCommand("pi-mini-mode-setup", {
+    description: "Set up Pi Mini Mode theme and fullscreen mode",
+    handler: async (_args, ctx) => runOnboarding(ctx),
   });
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
@@ -1242,19 +1325,7 @@ export default function (pi: ExtensionAPI) {
       };
     });
     refresh();
-    if (!loaded.exists && ctx.mode === "tui" && ctx.hasUI) {
-      const choice = await ctx.ui.select(
-        `Pi Mini Mode ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s\n\n${COPY.onboarding}`,
-        [COPY.keepDefaults, COPY.configureNow],
-      );
-      settings = { ...settings, onboardingCompleted: true };
-      try {
-        await persistSettings(ctx);
-      } catch {
-        ctx.ui.notify(`${COPY.saveFailed} (${CONFIG_DIR_NAME})`, "error");
-      }
-      if (choice === COPY.configureNow) await openSettings(ctx);
-    }
+    if (!loaded.exists && ctx.mode === "tui" && ctx.hasUI) await runOnboarding(ctx);
   });
   const syncMinimalBranch = (_event: unknown, ctx: ExtensionContext) => {
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());

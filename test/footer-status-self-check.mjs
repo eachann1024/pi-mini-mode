@@ -11,6 +11,24 @@ const piModule = `
 export const CONFIG_DIR_NAME = ".pi";
 export const getMarkdownTheme = () => Object.fromEntries(["heading", "link", "linkUrl", "code", "codeBlock", "codeBlockBorder", "quote", "quoteBorder", "hr", "listBullet", "bold", "italic", "strikethrough", "underline"].map(key => [key, text => text]));
 export const getAgentDir = () => process.env.PI_MINI_MODE_AGENT_DIR;
+export class SettingsManager {
+  static create() { return new FakeSettingsManager(); }
+}
+class FakeSettingsManager {
+  constructor() { this.settings = { ...globalThis.__piMiniHostSettings }; }
+  drainErrors() {
+    const errors = globalThis.__piMiniHostErrors ?? [];
+    globalThis.__piMiniHostErrors = [];
+    return errors;
+  }
+  getProjectSettings() { return globalThis.__piMiniProjectSettings ?? {}; }
+  setTheme(theme) { this.settings.theme = theme; }
+  setTuiMode(mode) { this.settings.tuiMode = mode; }
+  async flush() {
+    if (globalThis.__piMiniHostFlushError) throw new Error(globalThis.__piMiniHostFlushError);
+    globalThis.__piMiniHostSettings = { ...this.settings };
+  }
+}
 export const getSettingsListTheme = () => ({});
 export class CustomEditor { constructor() {} }
 export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
@@ -750,6 +768,8 @@ const onboardingCtx = {
     setWidget() {},
     setFooter() {},
     notify() {},
+    getTheme(name) { return name === "cc-dark" || name === "cc-light" ? { name } : undefined; },
+    setTheme() { return { success: true }; },
     getEditorComponent() {},
     setEditorComponent() {},
     addAutocompleteProvider() {},
@@ -758,7 +778,7 @@ const onboardingCtx = {
   },
 };
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
-assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置"], "onboarding offers explicit default and configure paths");
+assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置", "应用推荐配置"], "onboarding offers explicit default, configure, and recommended paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
 assert.match(previews[0]?.[0] ?? "", /MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
@@ -772,9 +792,52 @@ onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(
 await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
 assert.equal(customCalls, 1, "Configure now opens the settings list after showing the preview");
 
+globalThis.__piMiniHostSettings = { unrelated: "preserve" };
+globalThis.__piMiniProjectSettings = {};
+const setupDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-setup-"));
+process.env.PI_MINI_MODE_AGENT_DIR = setupDir;
+const setupHandlers = new Map();
+onboardingExtension.default({ events, on(name, handler) { setupHandlers.set(name, handler); }, registerCommand(name, command) { setupHandlers.set(name, command.handler); }, registerShortcut() {} });
+const setupChoices = ["应用推荐配置", "cc-light"];
+const setupNotifications = [];
+const setupCtx = { ...onboardingCtx, cwd: setupDir, ui: { ...onboardingCtx.ui, notify(message, level) { setupNotifications.push({ message, level }); }, async select(title, choices) { previews.push([title, choices]); return setupChoices.shift(); } } };
+await setupHandlers.get("pi-mini-mode-setup")("", setupCtx);
+assert.equal(setupNotifications.at(-1)?.level, "info", "recommended setup reports success");
+assert.deepEqual(globalThis.__piMiniHostSettings, { unrelated: "preserve", theme: "cc-light", tuiMode: "fullscreen" }, "recommended setup preserves unrelated host settings");
+const setupSaved = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(setupDir))).settings;
+assert.equal(setupSaved.onboardingCompleted, true, "recommended setup completes onboarding");
+
+for (const [name, choices, readError, writeError] of [
+  ["cancel-first", [], false, false],
+  ["cancel-theme", ["应用推荐配置"], false, false],
+  ["read-error", ["应用推荐配置", "cc-dark"], true, false],
+  ["write-error", ["应用推荐配置", "cc-dark"], false, true],
+]) {
+  const dir = join(setupDir, name);
+  process.env.PI_MINI_MODE_AGENT_DIR = dir;
+  globalThis.__piMiniHostSettings = { unrelated: "preserve" };
+  globalThis.__piMiniHostErrors = readError ? [{ error: new Error("unreadable settings") }] : [];
+  globalThis.__piMiniHostFlushError = writeError ? "write failed" : undefined;
+  const commands = new Map();
+  const notices = [];
+  onboardingExtension.default({ events, on() {}, registerCommand(id, command) { commands.set(id, command.handler); }, registerShortcut() {} });
+  await commands.get("pi-mini-mode-setup")("", {
+    ...setupCtx,
+    ui: { ...setupCtx.ui, async select() { return choices.shift(); }, notify(message, level) { notices.push({ message, level }); } },
+  });
+  assert.deepEqual(globalThis.__piMiniHostSettings, { unrelated: "preserve" }, `${name}: no host settings changed`);
+  assert.equal((await onboardingExtension.loadSettings(onboardingExtension.settingsPath(dir))).exists, false, `${name}: onboarding not persisted`);
+  if (readError || writeError) assert.equal(notices.at(-1)?.level, "error", `${name}: failure is reported`);
+}
+
 await rm(configDir, { recursive: true, force: true });
 await rm(runtimeDir, { recursive: true, force: true });
 await rm(onboardingDir, { recursive: true, force: true });
 await rm(configureDir, { recursive: true, force: true });
+await rm(setupDir, { recursive: true, force: true });
+delete globalThis.__piMiniHostSettings;
+delete globalThis.__piMiniProjectSettings;
+delete globalThis.__piMiniHostErrors;
+delete globalThis.__piMiniHostFlushError;
 delete process.env.PI_MINI_MODE_AGENT_DIR;
 console.log("footer-status self-check ok");
