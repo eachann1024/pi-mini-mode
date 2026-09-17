@@ -14,7 +14,7 @@
 import { CustomEditor, stripFrontmatter, type ExtensionAPI, type ExtensionContext, type InputEvent, type InputEventResult } from "@earendil-works/pi-coding-agent";
 import {
   allocateImageId, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, matchesKey, stripTerminalSequences, truncateToWidth, visibleWidth,
-  type AutocompleteItem, type AutocompleteProvider, type Component, type EditorComponent, type TuiMouseEvent, type TUI, type OverlayHandle, type OverlayOptions,
+  type AutocompleteItem, type AutocompleteProvider, type EditorComponent, type TuiMouseEvent, type TUI, type OverlayHandle, type OverlayOptions,
 } from "@earendil-works/pi-tui";
 import { filePaths, inputCapabilities, linkRenderedPath, localPath } from "./file-links.ts";
 import { open, readFile } from "node:fs/promises";

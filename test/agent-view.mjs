@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { Container, Text, visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 const themeUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(themeUrl)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: themeUrl };
+    return nextResolve(specifier, context);
+  },
+});
 const { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallRows, agentStatusesByTurn, attachAgentWidgets, restyleAgentWidget, liveAgentRows, readAgentStatuses, currentAgentStatuses, liveAgentView, agentCallDisplay, isAgentTool, RUNNING_FRAMES, runningGlyph } = await import('../lib/agent-view.ts');
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { register } from "node:module";
+import { registerHooks } from "node:module";
 import { setTimeout } from "node:timers/promises";
 
 // Keep real TUI components, but avoid loading the unrelated Pi server runtime.
@@ -14,7 +14,12 @@ export const getSettingsListTheme = () => ({
   hint: (text) => text, description: (text) => text,
 });
 `)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piStub)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@earendil-works/pi-coding-agent") return { shortCircuit: true, url: piStub };
+    return nextResolve(specifier, context);
+  },
+});
 const { default: extension, loadSettings, settingsPath, settingsPreviewLine, DEFAULT_SETTINGS } = await import("../extensions/footer-status.ts");
 
 const dir = await mkdtemp(join(tmpdir(), "pi-mini-mode-pointer-"));
@@ -23,6 +28,7 @@ process.env.LANG = "en_US.UTF-8";
 const commands = new Map();
 extension({ events: { on() { return () => {}; } }, on() {}, registerCommand(name, command) { commands.set(name, command); }, registerEntryRenderer() {}, appendEntry() {} });
 let panel;
+const notices = [];
 const theme = {
   bg(color, text) { assert.equal(color, "selectedBg"); return `\x1b[47m${text}\x1b[49m`; },
   fg(color, text) { return color === "accent" ? `\x1b[32m${text}\x1b[39m` : text; },
@@ -32,7 +38,7 @@ await commands.get("pi-mini-mode-settings").handler("", {
   mode: "tui",
   ui: {
     setWidget() {},
-    notify() {},
+    notify(message, level) { notices.push({ message, level }); },
     async custom(factory) { panel = factory({ requestRender() {} }, theme, {}, () => {}); },
   },
 });
@@ -79,6 +85,7 @@ for (let attempt = 0; attempt < 100; attempt++) {
   await setTimeout(10);
 }
 assert.equal((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"], true, "real keyboard toggle persists");
+assert.equal(notices.filter((notice) => notice.level === "warning").length, 0, "toggling settings does not warn while the overlay is open");
 await rm(dir, { recursive: true, force: true });
 delete process.env.PI_MINI_MODE_AGENT_DIR;
 console.log("settings interaction check ok (real SettingsList / Container)");

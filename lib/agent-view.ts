@@ -1,5 +1,6 @@
 import { diagramMarkdown, isMarkdownProse, minimalMarkdownTheme } from "./minimal-markdown.ts";
 import { extractNoticeBody, supervisorNoticeBody } from "./transcript-adapter.ts";
+import { paintExpandedHeading } from "./minimal-theme.ts";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -167,14 +168,6 @@ export function restyleAgentWidget(lines: string[], theme: Theme, width: number,
   return rows;
 }
 
-/** Expanded heading: full-width selectedBg, keeping inner fg after resets.
- * theme.bg only wraps the ends; older themes without getBgAnsi lose fill after \x1b[0m. */
-function paintExpandedHeading(theme: Theme, line: string): string {
-  const background = theme.getBgAnsi?.("selectedBg") ?? "";
-  return background
-    ? background + line.replace(/\x1b\[(?:0|49)?m/g, reset => reset + background) + "\x1b[49m"
-    : theme.bg("selectedBg", line);
-}
 function agentSummary(theme: Theme, width: number, running: number, done: number, errors: number, expanded: boolean): string {
   const label = `Sub Agent · running ${running}${done ? ` · done ${done}` : ""}${errors ? ` · failed ${errors}` : ""}${done ? ` · Ctrl+S ${expanded ? "collapse" : "expand"}` : ""}`;
   const summary = truncateToWidth(theme.fg(errors ? "error" : "muted", label), width);

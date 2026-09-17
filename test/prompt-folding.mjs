@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,12 @@ export const getSettingsListTheme = () => ({});
 export class CustomEditor { constructor() {} }
 export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 `)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piStub)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: piStub };
+    return nextResolve(specifier, context);
+  },
+});
 const { Container, Text, Markdown, SelectList, TuiAltScreen, ScrollView, visibleWidth, truncateToWidth, setCapabilities } = await import('@earendil-works/pi-tui');
 const { default: extension, minimalOutputComponent } = await import('../extensions/footer-status.ts');
 const { attachTranscript } = await import('../lib/transcript-adapter.ts');
@@ -66,6 +71,26 @@ assert.match(repeated.promptChoices()[0].label, /展开/);
 assert.match(repeated.promptChoices()[1].label, /收起/, 'identical prompts retain independent state');
 repeated.render(40);
 assert.match(repeated.promptChoices()[1].label, /收起/, 'resize preserves expansion');
+
+// The expanded prompt control is that message's heading: shared band, not a second surface.
+const band = '\x1b[48;2;58;58;74m';
+const bandTheme = { fg: (_key, text) => text, bg: (key, text) => key === 'selectedBg' ? band + text + '\x1b[49m' : text, bold: text => text,
+  getBgAnsi: key => key === 'selectedBg' ? band : '' };
+const banded = minimalOutputComponent(bandTheme, () => [{ question, process: [] }]);
+const bandedControl = () => banded.render(80)[banded.promptChoices()[0].y];
+banded.render(80);
+assert.equal(banded.promptChoices().length, 1);
+assert.ok(!bandedControl().includes(band), 'collapsed control keeps the user surface');
+banded.togglePrompt(0, question);
+assert.ok(bandedControl().includes(band), 'expanded control wears the band');
+assert.match(plain(bandedControl()), /▴ 收起 · \/pi-mini-mode-prompts/);
+assert.equal(visibleWidth(bandedControl()), 80, 'the band fills the render width');
+banded.togglePrompt(0, question);
+assert.ok(!bandedControl().includes(band), 'collapsing restores the user surface');
+banded.togglePrompt(0, question);
+for (const width of [1, 3, 5, 12, 40, 120]) {
+  assert.ok(banded.render(width).every(row => visibleWidth(row) <= width), `banded prompt stays bounded at width ${width}`);
+}
 
 // Actual fullscreen terminal input, including a nonzero document prefix and scroll offset.
 const document = new Container();

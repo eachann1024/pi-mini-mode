@@ -14,12 +14,23 @@ function ansiColor(ansi: string): RGB | undefined {
   }
 }
 
-/** User uses the theme's soft surface directly; process keeps its secondary tint. */
-export function minimalSurface(theme: ExtensionContext["ui"]["theme"], text: string, user = false): string {
-  const background = theme.getBgAnsi?.("userMessageBg") ?? "";
-  if (user) return background
+/** Expanded heading: full-width selectedBg, keeping inner fg after resets.
+ * theme.bg only wraps the ends; older themes without getBgAnsi lose fill after \x1b[0m. */
+export function paintExpandedHeading(theme: ExtensionContext["ui"]["theme"], line: string): string {
+  const background = theme.getBgAnsi?.("selectedBg") ?? "";
+  return background
+    ? background + line.replace(/\x1b\[(?:0|49)?m/g, reset => reset + background) + "\x1b[49m"
+    : theme.bg("selectedBg", line);
+}
+
+/** User uses the theme's soft surface directly; process keeps its secondary tint.
+ * A row inside an expanded heading (selected) keeps the band instead: the
+ * blended tint and the user surface both collapse into it. */
+export function minimalSurface(theme: ExtensionContext["ui"]["theme"], text: string, user = false, selected = false): string {
+  const background = theme.getBgAnsi?.(selected ? "selectedBg" : "userMessageBg") ?? "";
+  if (user || selected) return background
     ? background + text.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + background) + "\x1b[49m"
-    : theme.bg("userMessageBg", text);
+    : theme.bg(selected ? "selectedBg" : "userMessageBg", text);
   const base = ansiColor(background);
   const accent = ansiColor(theme.fg("accent", "")) ?? ansiColor(theme.fg("success", ""));
   if (!base || !accent) return theme.bg("userMessageBg", text);

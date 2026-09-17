@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { Markdown, visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme, getMarkdownTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
 import { minimalSurface } from '../lib/minimal-theme.ts';
 import { diagramMarkdown, isFencedMarkdown, isMarkdownProse, minimalMarkdownTheme, normalizeProseMarkdown } from '../lib/minimal-markdown.ts';
 const moduleUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
 const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(stub)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: stub };
+    return nextResolve(specifier, context);
+  },
+});
 const { minimalOutputComponent, minimalTurnsFromBranch } = await import('../extensions/footer-status.ts');
 const plain = text => text.replace(/\x1b\[[0-9;]*m/g, '');
 const diagram = '```mermaid\nflowchart LR\nA[Start] --> B[End]\n```';
