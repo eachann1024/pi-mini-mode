@@ -52,13 +52,13 @@ process.env.LANG = "en_US.UTF-8";
 const source = new URL("../extensions/footer-status.ts", import.meta.url);
 const extension = await import(pathToFileURL(source.pathname).href + `?${Date.now()}`);
 
-assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-minimal-show"], false);
-assert.equal(extension.parseSettings({})["pi-mini-mode-minimal-show"], false, "missing collapsed-replies setting keeps Pi native history");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-minimal-show"], true);
+assert.equal(extension.parseSettings({})["pi-mini-mode-minimal-show"], true, "missing collapsed-replies setting enables minimal output");
 assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": false })["pi-mini-mode-minimal-show"], false);
 assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": true })["pi-mini-mode-minimal-show"], true);
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.label, "极简输出");
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.description, "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。");
-assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "off");
+assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-input-enhancements"], true, "input enhancements default to on");
 assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*消息文件路径，用系统默认应用打开/);
 assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
@@ -452,7 +452,7 @@ assert.deepEqual(settingsChildren[3].items.map((item) => item.label).slice(0, 3)
 const settingsList = settingsChildren[3];
 assert.ok(settingsList.items.every((item) => !item.submenu), "极简输出不再有子菜单");
 assert.ok(settingsList.items.every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
-assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "off", "极简输出总开关仍默认关闭");
+assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出总开关默认打开");
 assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
 colors.length = 0;
 settingsList.theme.label("Focused option", true);
@@ -543,8 +543,10 @@ const testTui = { children: [doc, box(), box(), box(), box([{ getText() {}, rend
 let inputListener;
 const minimalCtx = { ...ctx, mode: "tui", hasUI: false, sessionManager: { getBranch: () => [] }, ui: { ...ctx.ui, onTerminalInput(handler) { inputListener = handler; return () => { inputListener = undefined; }; }, setWidget(_key, factory) { if (factory) assert.deepEqual(factory(testTui, theme).render(100), [], "dock must remain empty"); } } };
 await minimalHandlers.get("session_start")({}, minimalCtx);
-assert.equal(doc.render, originalDocRender, "collapsed replies off keeps Pi's default conversation history");
-assert.equal(inputListener, undefined, "native history does not install collapsed-reply shortcuts");
+assert.notEqual(doc.render, originalDocRender, "minimal output is enabled by default");
+assert.notEqual(inputListener, undefined, "minimal output installs its shortcuts");
+await minimalCommands.get("pi-mini-mode-minimal").handler("off", minimalCtx);
+assert.equal(doc.render, originalDocRender, "turning minimal output off restores native history");
 await minimalCommands.get("pi-mini-mode-minimal").handler("on", minimalCtx);
 assert.deepEqual(inputListener('\x1b[111;7u'), { consume: true });
 assert.equal(doc.render, originalDocRender, 'Ctrl+Option+O restores native transcript');
@@ -740,7 +742,7 @@ const onboardingCtx = {
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
 assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置"], "onboarding offers explicit default and configure paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
-assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和极简输出默认关闭/, "onboarding describes opt-in fields accurately");
+assert.match(previews[0]?.[0] ?? "", /MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");

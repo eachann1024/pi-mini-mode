@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
-  "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-input-enhancements": true,
   "pi-mini-mode-minimal-thinking-show": true,
   "pi-mini-mode-minimal-tools-show": true,
@@ -71,7 +71,7 @@ const COPY = {
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
   inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量、点阵样式和极简输出默认关闭；其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置",
 } as const;
 
 export function settingsPath(agentDir = process.env.PI_MINI_MODE_AGENT_DIR ?? join(homedir(), CONFIG_DIR_NAME, "agent")): string {
@@ -91,6 +91,12 @@ export function parseSettings(value: unknown): MiniLensSettings {
   // 折叠回复的旧细项已合并进极简输出总开关：旧值不再暗中过滤内容，始终按默认全开。
   for (const id of LEGACY_MINIMAL_SETTING_IDS) settings[id] = true;
   return settings;
+}
+
+/** Pi /model and other selectors own Ctrl+S; the editor exposes getText. */
+export function focusedSelectorOwnsKeys(tui?: { getFocusedComponent?(): unknown } | null): boolean {
+  const focused = tui?.getFocusedComponent?.();
+  return !!focused && typeof focused === "object" && typeof (focused as { getText?: unknown }).getText !== "function";
 }
 
 export async function loadSettings(path = settingsPath()): Promise<{ settings: MiniLensSettings; exists: boolean }> {
@@ -858,6 +864,7 @@ export default function (pi: ExtensionAPI) {
   let shortcutTimer: ReturnType<typeof setTimeout> | undefined;
   let waitingTimer: ReturnType<typeof setInterval> | undefined;
   let unsubscribeMinimalInput: (() => void) | undefined;
+  let minimalTui: { getFocusedComponent?(): unknown } | undefined;
   let restoreAgentWidgets: (() => void) | undefined;
   let restoreTranscript: (() => void) | undefined;
   let persistAgentStatuses: (() => void) | undefined;
@@ -902,6 +909,7 @@ export default function (pi: ExtensionAPI) {
     if (settings["pi-mini-mode-minimal-show"] && ctx.mode === "tui") unsubscribeMinimalInput = ctx.ui.onTerminalInput?.((data) => {
       const nativeKey = matchesKey(data, "ctrl+alt+o");
       const subAgentKey = matchesKey(data, "ctrl+s");
+      if (!nativeKey && focusedSelectorOwnsKeys(minimalTui)) return;
       if (!nativeKey && (!restoreTranscript || (!subAgentKey && !matchesKey(data, "ctrl+o")))) return;
       // Input listeners run before Pi filters Kitty release/repeat events.
       if (isKeyRelease(data) || isKeyRepeat(data)) return { consume: true };
@@ -914,6 +922,7 @@ export default function (pi: ExtensionAPI) {
       return { consume: true };
     });
     if (nativeOutput || !settings["pi-mini-mode-minimal-show"] || ctx.mode !== "tui") {
+      minimalTui = undefined;
       lastAttachMode = undefined;
       ctx.ui.setWidget?.("pi-mini-mode-minimal-output", undefined);
       refreshMinimalOutput();
@@ -921,6 +930,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     ctx.ui.setWidget("pi-mini-mode-minimal-output", (tui, theme) => {
+      minimalTui = tui;
       refreshMinimal = () => tui.requestRender();
       // Retain children under their originating user turn, including while idle,
       // after a follow-up user message, and when rebuilding a saved session.
