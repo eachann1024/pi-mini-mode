@@ -18,7 +18,7 @@ pi install npm:@each1024/pi-mini-mode
 
 Run `/reload` in Pi, then open `/pi-mini-mode-settings` to make it yours.
 
-**Pi ≥ 0.84.0.** Input enhancements are on by default; minimal output is opt-in. Minimal mode uses a private **Pi 0.85.x** layout adapter—see [compatibility](#compatibility) before enabling it.
+**Pi ≥ 0.84.0.** Input enhancements and minimal output are on by default. Minimal mode uses a private **Pi 0.85.x** layout adapter—see [compatibility](#compatibility) before enabling it.
 
 <details>
 <summary>Install from GitHub instead</summary>
@@ -97,13 +97,13 @@ This earlier screenshot and recording show footer configuration, not the newer i
 <details>
 <summary><strong>First run & configuration</strong> — defaults, controls, and settings file</summary>
 
-On the first interactive TUI session, Pi Mini Mode shows a preview. Footer metrics are on by default except MCP count; the dot-matrix style and minimal output are off:
+On the first interactive TUI session, Pi Mini Mode shows a preview. Footer metrics are on by default except MCP count; the dot-matrix style is off; minimal output is on:
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
 ```
 
-The first-run picker offers **Keep defaults** and **Configure now**. Keeping defaults saves the default field selection, leaves minimal output off, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Print, JSON, and other non-interactive modes never prompt.
+The first-run picker offers **Keep defaults** and **Configure now**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Print, JSON, and other non-interactive modes never prompt.
 
 Open that settings UI any time with:
 
@@ -131,7 +131,7 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
-  "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-input-enhancements": true,
   "onboardingCompleted": true
 }
@@ -151,7 +151,7 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
 | `pi-mini-mode-context-percent-show` | `true` | Context-use percentage |
 | `pi-mini-mode-speed-show` | `true` | Generation speed at the far right |
 | `pi-mini-mode-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
-| `pi-mini-mode-minimal-show` | `false` | Minimal output; off keeps Pi's default conversation history |
+| `pi-mini-mode-minimal-show` | `true` | Minimal output; off restores Pi's default conversation history |
 | `pi-mini-mode-input-enhancements` | `true` | Image previews, inline skills, and message file links |
 | `onboardingCompleted` | `false` initially | Internal marker that prevents another first-run prompt |
 

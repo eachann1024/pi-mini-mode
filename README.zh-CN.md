@@ -18,7 +18,7 @@ pi install npm:@each1024/pi-mini-mode
 
 在 Pi 中运行 `/reload`，再用 `/pi-mini-mode-settings` 按你的习惯配置。
 
-**需要 Pi ≥ 0.84.0。** 输入增强默认开启，极简输出按需开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
+**需要 Pi ≥ 0.84.0。** 输入增强和极简输出默认开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
 
 <details>
 <summary>也可以从 GitHub 安装</summary>
@@ -97,13 +97,13 @@ pi install git:github.com/eachann1024/pi-mini-mode
 <details>
 <summary><strong>首次使用与配置</strong></summary>
 
-首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。页脚指标除 MCP 数量外默认开启，点阵样式与极简输出默认关闭，例如：
+首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。页脚指标除 MCP 数量外默认开启，点阵样式默认关闭，极简输出默认开启，例如：
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
 ```
 
-首次设置会提供 **Keep defaults（保留默认值）** 和 **Configure now（立即配置）**。保留默认值会保存默认字段选择、保持极简输出关闭，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。Print、JSON 等非交互模式不会显示提示。
+首次设置会提供 **Keep defaults（保留默认值）** 和 **Configure now（立即配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。Print、JSON 等非交互模式不会显示提示。
 
 设置保存在 Pi 的 agent 目录中，通常是 `~/.pi/agent/pi-mini-mode.json`；如果 Pi 使用其他配置目录，则保存在对应目录。文件缺失或格式错误时会安全回退到默认设置。设置示例：
 
@@ -121,7 +121,7 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
-  "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-input-enhancements": true,
   "onboardingCompleted": true
 }
@@ -141,7 +141,7 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
 | `pi-mini-mode-context-percent-show` | `true` | 显示上下文使用百分比 |
 | `pi-mini-mode-speed-show` | `true` | 显示最新生成速度 |
 | `pi-mini-mode-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
-| `pi-mini-mode-minimal-show` | `false` | 极简输出总开关；关闭则使用 Pi 默认历史显示 |
+| `pi-mini-mode-minimal-show` | `true` | 极简输出总开关；关闭则恢复 Pi 默认历史显示 |
 | `pi-mini-mode-input-enhancements` | `true` | 图片预览、行内技能补全与展开、消息文件链接 |
 | `onboardingCompleted` | 初始为 `false` | 防止再次显示首次设置提示的内部标记 |
 
