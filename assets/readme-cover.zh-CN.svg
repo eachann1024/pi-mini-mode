@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Pi Mini Mode — 少一点干扰。 多一点专注。</title>
+  <desc id="desc">图片输入、可折叠对话、子代理详情、明暗主题与实时页脚。</desc>
+  <rect width="1200" height="440" fill="#f8f7f3"/>
+  <g fill="#252923" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="56" y="52" font-size="20" font-weight="600">Pi Mini Mode</text>
+    <text x="1144" y="52" text-anchor="end" font-size="12" letter-spacing="2" fill="#62675e">A QUIETER WAY TO WORK WITH PI</text>
+    <path d="M56 80H1144 M736 120V344 M56 384H1144" fill="none" stroke="#d5d7cb"/>
+    <g font-family="Georgia, Songti SC, STSong, serif" font-size="72" letter-spacing="-2">
+      <text x="56" y="200">少一点干扰。</text>
+      <text x="56" y="288" fill="#3e6148">多一点专注。</text>
+    </g>
+    <text x="56" y="340" font-size="17" fill="#62675e">不止于页脚。让每一轮 Pi 对话更从容。</text>
+    <text x="776" y="136" fill="#3e6148" font-size="12" font-family="monospace">01</text>
+    <text x="816" y="136" font-size="20">输入，更顺手。</text>
+    <text x="816" y="164" font-size="13" fill="#62675e">图片预览 · 紧凑标签 · 行内技能</text>
+    <text x="776" y="224" fill="#3e6148" font-size="12" font-family="monospace">02</text>
+    <text x="816" y="224" font-size="20">过程，更安静。</text>
+    <text x="816" y="252" font-size="13" fill="#62675e">消息折叠 · 工具详情 · 子代理</text>
+    <text x="776" y="312" fill="#3e6148" font-size="12" font-family="monospace">03</text>
+    <text x="816" y="312" font-size="20">状态，更清晰。</text>
+    <text x="816" y="340" font-size="13" fill="#62675e">明暗主题 · 实时页脚</text>
+    <text x="56" y="416" font-size="12" letter-spacing="1" fill="#62675e">PI MINI MODE / 专注，始于细节</text>
+    <text x="1144" y="416" text-anchor="end" font-size="12" fill="#62675e">OPEN SOURCE · MIT</text>
+  </g>
+</svg>

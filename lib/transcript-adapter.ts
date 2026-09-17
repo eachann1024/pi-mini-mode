@@ -123,10 +123,14 @@ export function supervisorNotice(message: unknown) {
       .map(line => line.trim())
       .filter(line => line && !/^Run fan-out:/i.test(line))
       .join(" ");
+    const workflowRunId = content.match(/^Workflow run:\s*([0-9a-f-]{36})\s*$/mi)?.[1];
     const childRunId = content.match(/^Child run:\s*([0-9a-f-]{36})\s*$/mi)?.[1];
+    const runIds = [...new Set([childRunId, workflowRunId].filter((id): id is string => !!id))];
     return {
-      key: childRunId ? JSON.stringify(["incremental-child", childRunId]) : undefined,
-      runId: childRunId,
+      key: childRunId ? JSON.stringify(["incremental-child", childRunId])
+        : workflowRunId ? JSON.stringify(["incremental-child", workflowRunId, header[2]]) : undefined,
+      runId: childRunId || workflowRunId,
+      runIds,
       internal: false,
       alert: failed,
       state: failed ? "执行失败" : "已完成",
@@ -144,7 +148,8 @@ export function supervisorNotice(message: unknown) {
     const status = header[1];
     const failed = status === "failed" || status === "stopped";
     const attention = status === "paused";
-    const workflowRunId = content.match(/^Workflow run:\s*([0-9a-f-]{36})\s*$/mi)?.[1];
+    const workflowRunId = content.match(/^Workflow run:\s*([0-9a-f-]{36})\s*$/mi)?.[1]
+      ?? content.match(/^Workflow receipt:\s*.*?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/mi)?.[1];
     const childRunIds = content.match(/^Child runs:\s*(.+)$/mi)?.[1]
       ?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [];
     const runIds = [...new Set([workflowRunId, ...childRunIds].filter((id): id is string => !!id))];

@@ -1,40 +1,14 @@
-<p align="center">
-  <img src="assets/pi-mini-mode-hero.png" alt="Pi Mini Mode for Pi — Your session. In focus. A compact footer showing model, tokens, cache, cost, context and generation speed." width="100%">
+<p>
+  <img src="assets/readme-cover.en.svg" alt="Pi Mini Mode — Less noise. More focus. Image input, foldable conversations, subagents, themes and a live footer." width="100%">
 </p>
 
-<p align="center">
-  <a href="#install">Install</a> · <a href="#make-it-yours">Settings</a> · <a href="https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763">Watch demo</a> · <a href="README.zh-CN.md">中文</a>
-</p>
+[中文](README.zh-CN.md) · [Install](#install) · [Features](#features) · [Commands](#commands) · [Reference](#reference)
 
-A compact, configurable footer for [Pi](https://pi.dev). Your model, usage, cost estimate, context, and generation speed — at a glance.
+# Pi Mini Mode
 
-## Minimal output
+**Less noise. More focus.**
 
-`/pi-mini-mode-settings` has one **Minimal output** switch, off by default. On collapses the process; off restores Pi's native history. Legacy per-item controls are hidden and no longer filter content. Lens settings are unchanged.
-
-- `/pi-mini-mode-minimal on` shows the user's Markdown on an accent-tinted surface, a background-free process summary, and the final reply without a heading or extra background. No duplicate dock panel.
-- Each turn uses one shared tree showing the latest **ten summary entries**: available thinking, tool calls, streaming tool output, and skill reads. `Ctrl+O` expands the full Markdown process and toggles it closed again; new questions start collapsed; tools without output show an elapsed wait counter, and empty progress events never overwrite existing content; there are no section headings, collapsed counts, or completion labels. Original session messages remain intact.
-- Agent/subagent calls share the same chronological tree as tools and skills; `Ctrl+O` reveals tasks and Markdown output. A returned call does not imply background completion.
-- The pi-subagents `async subagent` / `Async agents` widget uses a background-free status tree, retaining native detail shortcuts and output paths. This adapter is active only in minimal mode, restores on disable, and passes unknown formats through. Grouping design reference: [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions).
-- `/pi-mini-mode-history` browses complete process entries, five at a time.
-- Final Markdown streams as text events arrive; failures and interruptions are indicated.
-- `/reload` remounts the transcript, including history created in native mode. Expanded tree rails continue through paragraphs, blank lines and code blocks.
-- `/pi-mini-mode-minimal off` restores Pi's default conversation history.
-
-The user surface blends the active Pi accent with its user background. Process and answer text have no background. User padding is two terminal columns horizontally and one row vertically. Markdown, highlighted code, tables and Mermaid terminal diagrams work in light/dark themes; incomplete, unsupported or over-wide diagrams retain their source. **Minimal mode uses a private Pi 0.85.x layout adapter**, without patching the Pi installation. Unknown layouts refuse activation and retain native output. Recheck compatibility after Pi upgrades; another extension replacing the transcript may conflict.
-
-Checks: `npm run check && npm test`. Real terminal smoke test: `python3 test/minimal-pty.py` (Python 3, Node, and the installed dependency's bundled Pi CLI). It uses temporary fixtures, tests regular/fullscreen, toggling, ten-entry process and Ctrl+O expand/collapse, restored results, and narrow terminals, without model calls.
-
-## Input enhancements
-
-One **Input enhancements** switch (on by default) adds image-path previews, inline skill completion/expansion, and message file links. Turning it off leaves Pi's native clipboard behavior intact.
-
-- Paste images with native `Ctrl+V` (`Alt+V` on Windows/WSL); forwarded `Cmd+V` key events are also supported when the terminal sends them.
-- Move the editing cursor into an image path, or hover it in fullscreen, to preview it. Requires a terminal image protocol; otherwise a path hint is shown. Esc dismisses it. Reads are limited to 20 MB.
-- Type `/` at the beginning or after whitespace to select a skill at the current cursor. Inline `/skill:name` tokens expand on submission; URL/path slashes keep native behavior.
-- Images appear as underlined `[image1]` labels in the editor and messages. Cmd+click opens the original file with its default application; other file paths remain clickable too. Fullscreen editor hover requests a link pointer and restores it on exit. Quoted paths support spaces.
-
-Link modifiers depend on the terminal: usually Cmd+click on macOS and Ctrl+click on Windows/Linux; Ghostty fullscreen may require Shift+Cmd/Shift+Ctrl. Pi fullscreen also handles direct link clicks. Deleted temporary images cannot be reopened. See [Pi terminal setup](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
+An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview images at the cursor, fold long messages and process details, inspect subagent work, and keep your session’s essential signals in view.
 
 ## Install
 
@@ -42,7 +16,9 @@ Link modifiers depend on the terminal: usually Cmd+click on macOS and Ctrl+click
 pi install npm:@each1024/pi-mini-mode
 ```
 
-Run `/reload` in Pi. Requires **Pi ≥ 0.84.0**.
+Run `/reload` in Pi, then open `/pi-mini-mode-settings` to make it yours.
+
+**Pi ≥ 0.84.0.** Input enhancements are on by default; minimal output is opt-in. Minimal mode uses a private **Pi 0.85.x** layout adapter—see [compatibility](#compatibility) before enabling it.
 
 <details>
 <summary>Install from GitHub instead</summary>
@@ -53,55 +29,81 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 </details>
 
----
+## Features
 
-<table>
-<tr>
-<td width="50%" valign="top">
+### 01 / Input, refined
 
-### Live session metrics
+**Images at your cursor.** Move the editing cursor into an image path or compact label to preview it. Fullscreen also supports editor hover. Press `Esc` to dismiss.
 
-- Model & thinking level
-- Session token totals
-- Cached tokens & hit rate
-- Estimated session cost
-- Context usage & progress
-- Latest generation speed
+**Less path clutter. Same image.** Image paths become underlined `[image1]` labels in the editor and messages, preserving the original path when submitted. Open the original image or another linked file in its default app using your terminal’s link gesture.
 
-</td>
-<td width="50%" valign="top">
+**Skills where you type.** Enter `/` at the start or after whitespace to find a skill and insert `/skill:name` at the cursor. Inline skills expand on submission; URLs and paths keep their normal behavior.
 
-### Make it yours
+Paste images with `Ctrl+V` (`Alt+V` on Windows/WSL). Disabling input enhancements preserves Pi’s native clipboard behavior.
 
-Choose the fields you need. Preview each change instantly, in your Pi theme.
+### 02 / Process, quieter
 
-<a href="assets/pi-mini-mode-settings.jpg"><img src="assets/pi-mini-mode-settings.jpg" alt="Pi Mini Mode settings in Pi's light theme, showing the live preview and field toggles. Click to view at full size." width="100%"></a>
+Enable **Minimal output** in settings, or run `/pi-mini-mode-minimal on`.
 
-[Watch the settings demo](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
+- **Long prompts, folded.** In fullscreen minimal mode, long user messages show the first four rendered rows. Click the fold control to reveal the rest, or select a message with `/pi-mini-mode-prompts`. Complete fenced code blocks stay intact.
+- **Subagents, in plain sight.** Click a subagent row to expand its available activity and message/final output. A dispatch receipt or returned tool call is not a completed background task.
+- **A process tree, not a wall of output.** Thinking, tools and skill reads share one chronological tree. The latest ten summaries stay visible; `Ctrl+O` expands or collapses the full process. New questions start collapsed.
+- **Tool details on demand.** Expand a tool/thinking entry using its fold control or `/pi-mini-mode-tools`. Tool details show saved text, not the original custom renderer or image output.
+- **Room for the answer.** Final Markdown streams without extra headings or backgrounds. Failures and interruptions stay explicit. Folding changes presentation, not stored session messages.
 
-</td>
-</tr>
-</table>
+`/pi-mini-mode-history` opens complete process entries, five at a time. `/pi-mini-mode-minimal off` restores native Pi history.
 
-Customize with `/pi-mini-mode-settings`. Changes take effect immediately.
+### 03 / Session, in focus
 
-**Fits your terminal.** Follows your Pi theme and adapts to narrow widths. Only the footer changes; Pi's built-in tool and thinking views stay intact.
+**Light and dark, considered.** Includes `cc-light` and `cc-dark`, derived from [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions) under MIT. User messages use the theme’s user-message surface; Markdown, highlighted code, tables and supported Mermaid diagrams adapt to the theme. Unsupported, incomplete or over-wide diagrams retain their source.
 
-Bundled themes `cc-light` / `cc-dark` are vendored from [pi-cc-extensions](https://github.com/minuque/pi-cc-extensions) (MIT).
+**The useful signals, in one line.** Model and thinking level, session tokens, cache totals and hit rate, estimated cost, context usage and generation speed. Choose your fields in `/pi-mini-mode-settings`; changes take effect immediately, and the footer adapts to narrow terminals.
 
+<details>
+<summary>See the footer settings and demo</summary>
+
+[![Existing footer settings screenshot](assets/pi-mini-mode-settings.jpg)](assets/pi-mini-mode-settings.jpg)
+
+[Watch the footer settings demo](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
+
+This earlier screenshot and recording show footer configuration, not the newer image, folding or subagent features. Settings previews use sample data.
+
+</details>
+
+## Commands
+
+| Command / shortcut | Purpose |
+| --- | --- |
+| `/pi-mini-mode-settings` | Configure fields, input enhancements and minimal output |
+| `/pi-mini-mode-minimal on` / `off` | Enable minimal output / restore native history |
+| `Ctrl+O` | Expand or collapse the complete process tree |
+| `/pi-mini-mode-prompts` | Select and expand/collapse a user message¹ |
+| `/pi-mini-mode-tools` | Select and expand/collapse saved tool text or thinking¹ |
+| `/pi-mini-mode-history` | Browse full process entries, five at a time |
+| `/reload` | Reload the extension after installation or source changes |
+
+¹ Requires fullscreen minimal output. Subagent rows have their own click-to-expand control; supported third-party widgets retain native detail shortcuts.
+
+## Compatibility
+
+- **Images:** previews require a terminal image protocol; unsupported terminals show a hint. Image reads are limited to **20 MB**, and deleted files cannot be reopened. Link gestures depend on the terminal: usually `Cmd+click` on macOS or `Ctrl+click` on Windows/Linux; Ghostty fullscreen may require `Shift+Cmd` / `Shift+Ctrl`. Pi fullscreen also supports direct link clicks. See [Pi terminal setup](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
+- **Minimal output:** uses a private Pi 0.85.x layout adapter without patching Pi’s installation. Unknown layouts refuse activation and keep native output. Recheck after Pi upgrades; other transcript-replacing extensions can conflict.
+- **Subagents:** the pi-subagents widget adapter runs only in minimal mode, restores on disable, and passes unknown formats through. Available details depend on the integration’s status/output data; this is not a complete subagent transcript viewer.
+- **History:** `/reload` remounts the transcript, including history created in native mode. Empty progress events do not erase existing content; tools without output show elapsed waiting time. Legacy per-item minimal controls no longer filter content.
+- **Metrics:** costs are estimates, not provider invoices. See the calculation details below.
 
 ## Reference
 
 <details>
 <summary><strong>First run & configuration</strong> — defaults, controls, and settings file</summary>
 
-On the first interactive TUI session, Pi Mini Mode shows a preview with every field enabled by default:
+On the first interactive TUI session, Pi Mini Mode shows a preview. Footer metrics are on by default except MCP count; the dot-matrix style and minimal output are off:
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
 ```
 
-The first-run picker offers **Keep defaults** and **Configure now**. Keeping defaults persists footer fields as enabled, leaves collapsed replies off, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Print, JSON, and other non-interactive modes never prompt.
+The first-run picker offers **Keep defaults** and **Configure now**. Keeping defaults saves the default field selection, leaves minimal output off, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Print, JSON, and other non-interactive modes never prompt.
 
 Open that settings UI any time with:
 
@@ -123,11 +125,14 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
   "pi-mini-mode-session-tokens-show": true,
   "pi-mini-mode-cache-tokens-show": true,
   "pi-mini-mode-cost-show": true,
+  "pi-mini-mode-mcp-show": false,
   "pi-mini-mode-context-show": true,
   "pi-mini-mode-context-dots-show": false,
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
+  "pi-mini-mode-minimal-show": false,
+  "pi-mini-mode-input-enhancements": true,
   "onboardingCompleted": true
 }
 ```
@@ -175,20 +180,32 @@ The price is the same finalized active-branch usage and configured per-million-t
 Install only the local copy while developing; installing npm and local copies together double-registers the extension:
 
 ```bash
-pi remove npm:@each1024/pi-mini-mode && pi install /path/to/pi-rolling-process
+pi remove npm:@each1024/pi-mini-mode && pi install /path/to/pi-mini-mode
 npm run check
 npm test
 ```
 
-After source changes, run `/reload` in an already-open Pi session. `npm run check` runs TypeScript checking and `npm test` runs the footer, settings, and publishing self-checks.
+After source changes, run `/reload` in an already-open Pi session. `npm run check` runs TypeScript checking and `npm test` runs the project self-checks.
+
+For a real terminal smoke test, run `python3 test/minimal-pty.py`. It needs Python 3, Node, and the installed dependency’s bundled Pi CLI. Temporary fixtures cover regular/fullscreen output, toggling, process expansion, restored results, and narrow terminals without model calls.
 
 </details>
 
-## Publishing
+<details>
+<summary><strong>Publishing</strong></summary>
 
 Pushes to `main` automatically publish to npm after `npm ci`, `npm run check`, and `npm test`; the workflow also supports manual dispatch on `main`. Each release uses the higher of the local version baseline and npm's latest stable version plus one patch. Versions change only in the runner, with no version commits or tags; raise the baseline in `package.json` and the lockfile for a major/minor release. Already-published commits are skipped. Actions concurrency can replace pending pushes, so not every push (or every commit within a push) is guaranteed a separate package release.
 
-One-time setup: publish the initial `@each1024/pi-mini-mode@1.3.1` package using an authenticated maintainer account, then configure its npm **Trusted Publisher** for GitHub owner `eachann1024`, repository `pi-mini-mode`, workflow `publish.yml` (no environment), allowing direct `npm publish`. Subsequent releases use OIDC and provenance, without an npm token.
+Releases require the package’s npm Trusted Publisher to be configured for this GitHub repository and `publish.yml`. Subsequent publishing uses OIDC and provenance without an npm token.
+
+</details>
+
+<details>
+<summary><strong>Collaboration guidance</strong></summary>
+
+The main session owns requirement alignment, risk research, the complete solution, task scheduling, key decisions, integration, and the final summary. Before implementation, it should investigate the key risks, boundaries, acceptance criteria, and solution. Once authorized, use subagents aggressively and parallelize independent work to save time, while respecting relevance, risk, budget, concurrency, and single-writer constraints. Use the `low` model by default for most tasks and subagents; upgrade only for complex reasoning, key decisions, or risk reviews when necessary.
+
+</details>
 
 ---
 
