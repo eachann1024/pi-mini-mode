@@ -233,10 +233,43 @@ const restoreCollected = attachTranscript(tui, receiptView, {
 });
 assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Connection error/);
 assert.equal(collectedNotice.notice.runId, [...handledChildren][0]);
+assert.ok(collectedNotice.notice.runIds.includes('cf5f2c47-399c-4520-a883-5c0c3f8375b9'));
 assert.equal(collectedNotice.messages[0], incrementalChildFailure, 'collected errors retain full original details');
+handledChildren.clear();
+handledChildren.add('cf5f2c47-399c-4520-a883-5c0c3f8375b9');
+assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Connection error/, 'owned workflow id also hides an incremental child card');
 handledChildren.clear();
 assert.match(document.render(160).join('\n'), /执行失败.*Connection error/, 'unowned failures must never be hidden');
 restoreCollected();
+const spawnFail = {
+  customType: 'subagent-incremental-child-notify',
+  content: "Workflow child failed: **scout-text-blocks**\nWorkflow run: 01fb2369-60b1-4adb-9dc8-6167673f8975\nError: Unknown subagent model 'fast' in the active Pi model registry.\nStatus: workflow still running",
+};
+assert.equal(supervisorNotice(spawnFail).runId, '01fb2369-60b1-4adb-9dc8-6167673f8975');
+assert.deepEqual(supervisorNotice(spawnFail).runIds, ['01fb2369-60b1-4adb-9dc8-6167673f8975']);
+assert.match(compactSupervisorNotice(spawnFail, supervisorTheme, 160, false).join('\n'), /执行失败.*scout-text-blocks.*Unknown subagent model/);
+chat.clear();
+chat.addChild(new UserMessageComponent('SPAWN FAIL TURN'));
+const spawnCard = new CustomMessageComponent('NATIVE_SPAWN_FAIL', 0, 0);
+spawnCard.message = spawnFail;
+chat.addChild(spawnCard);
+const handledSpawn = new Set(['01fb2369-60b1-4adb-9dc8-6167673f8975']);
+let collectedSpawn;
+const restoreSpawn = attachTranscript(tui, receiptView, {
+  supervisor: { theme: supervisorTheme, expanded: () => false, handledRunIds: () => handledSpawn,
+    onNotices: groups => { collectedSpawn = [...groups.values()][0]; } },
+});
+assert.doesNotMatch(document.render(160).join('\n'), /执行失败|Unknown subagent model|NATIVE_SPAWN_FAIL/);
+assert.equal(collectedSpawn.notice.runId, [...handledSpawn][0]);
+handledSpawn.clear();
+assert.match(document.render(160).join('\n'), /执行失败.*scout-text-blocks.*Unknown subagent model/, 'unowned spawn failures stay visible');
+restoreSpawn();
+const receiptOnly = {
+  customType: 'subagent-notify',
+  content: 'Background task failed: **workflow**\nWorkflow receipt: /tmp/async-subagent-runs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/workflow-receipt.json\n\nRequest timed out.',
+};
+assert.equal(supervisorNotice(receiptOnly).runId, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+assert.ok(supervisorNotice(receiptOnly).runIds.includes('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
 const workflowNotify = {
   customType: 'subagent-notify',
   content: 'Background task failed: **workflow**\nWorkflow receipt: /tmp/receipt.json\n\n\x1b[31mRequest timed out.\x1b[0m\n\nWorkflow run: 11111111-1111-4111-8111-111111111111\nChild runs: prepare-image=22222222-2222-4222-8222-222222222222 (failed)',

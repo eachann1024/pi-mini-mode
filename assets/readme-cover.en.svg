@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Pi Mini Mode — Less noise. More focus.</title>
+  <desc id="desc">Image input, foldable conversations, subagent detail, light and dark themes, and a live footer.</desc>
+  <rect width="1200" height="440" fill="#f8f7f3"/>
+  <g fill="#252923" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="56" y="52" font-size="20" font-weight="600">Pi Mini Mode</text>
+    <text x="1144" y="52" text-anchor="end" font-size="12" letter-spacing="2" fill="#62675e">A QUIETER WAY TO WORK WITH PI</text>
+    <path d="M56 80H1144 M736 120V344 M56 384H1144" fill="none" stroke="#d5d7cb"/>
+    <g font-family="Georgia, Songti SC, STSong, serif" font-size="72" letter-spacing="-2">
+      <text x="56" y="200">Less noise.</text>
+      <text x="56" y="288" fill="#3e6148">More focus.</text>
+    </g>
+    <text x="56" y="340" font-size="17" fill="#62675e">Beyond the footer. A calmer way to work with Pi.</text>
+    <text x="776" y="136" fill="#3e6148" font-size="12" font-family="monospace">01</text>
+    <text x="816" y="136" font-size="20">Input, refined.</text>
+    <text x="816" y="164" font-size="13" fill="#62675e">Image previews · Compact labels · Skills</text>
+    <text x="776" y="224" fill="#3e6148" font-size="12" font-family="monospace">02</text>
+    <text x="816" y="224" font-size="20">Process, quieter.</text>
+    <text x="816" y="252" font-size="13" fill="#62675e">Folded prompts · Tool detail · Subagents</text>
+    <text x="776" y="312" fill="#3e6148" font-size="12" font-family="monospace">03</text>
+    <text x="816" y="312" font-size="20">Session, in focus.</text>
+    <text x="816" y="340" font-size="13" fill="#62675e">Light &amp; dark themes · Live metrics</text>
+    <text x="56" y="416" font-size="12" letter-spacing="1" fill="#62675e">PI MINI MODE / FOCUS IS IN THE DETAILS</text>
+    <text x="1144" y="416" text-anchor="end" font-size="12" fill="#62675e">OPEN SOURCE · MIT</text>
+  </g>
+</svg>

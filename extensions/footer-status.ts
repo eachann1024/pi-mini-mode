@@ -949,9 +949,13 @@ export default function (pi: ExtensionAPI) {
         handledRunIds.clear();
         return minimalTurns.map((turn, index) => {
           const turnAgents = assigned.get(index) ?? [];
-          for (const status of turnAgents) if (status.runId) handledRunIds.add(String(status.runId));
+          for (const status of turnAgents) {
+            if (status.runId) handledRunIds.add(String(status.runId));
+            if (status.parentWorkflowRunId) handledRunIds.add(String(status.parentWorkflowRunId));
+          }
           const withNotices = agentChildren(turnAgents).map(sub => {
             if (sub.runId) handledRunIds.add(String(sub.runId));
+            if (sub.parentWorkflowRunId) handledRunIds.add(String(sub.parentWorkflowRunId));
             const n = supervisorNotices.get(String(sub.runId));
             return n ? { ...sub, notice: n.notice, noticeMessages: n.messages } : sub;
           });
