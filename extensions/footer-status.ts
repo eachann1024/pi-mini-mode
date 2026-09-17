@@ -930,7 +930,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     ctx.ui.setWidget("pi-mini-mode-minimal-output", (tui, theme) => {
-      minimalTui = tui;
+      minimalTui = tui as unknown as { getFocusedComponent?(): unknown };
       refreshMinimal = () => tui.requestRender();
       // Retain children under their originating user turn, including while idle,
       // after a follow-up user message, and when rebuilding a saved session.
