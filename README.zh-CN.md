@@ -16,7 +16,7 @@
 pi install npm:@each1024/pi-mini-mode
 ```
 
-在 Pi 中运行 `/reload`，再用 `/pi-mini-mode-settings` 按你的习惯配置。
+在 Pi 中运行 `/reload`。首次进入交互式 TUI 时，选择 **应用推荐配置**，再选择 `cc-dark` 或 `cc-light`；它会通过 Pi 官方设置 API 保存主题与全局 `tuiMode=fullscreen`，重启 Pi 后全屏模式才会生效。项目设置和命令行参数可能覆盖全局设置。之后可用 `/pi-mini-mode-setup` 重试，或用 `/pi-mini-mode-settings` 只配置 Pi Mini Mode。
 
 **需要 Pi ≥ 0.84.0。** 输入增强和极简输出默认开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
 
@@ -75,6 +75,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 | 命令／快捷键 | 用途 |
 | --- | --- |
 | `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
+| `/pi-mini-mode-setup` | 选择内置主题并保存全局全屏模式；之后需重启 Pi |
 | `/pi-mini-mode-minimal on` / `off` | 开启极简输出／恢复原生历史 |
 | `Ctrl+O` | 展开／收起完整过程树 |
 | `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
@@ -104,7 +105,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
 ```
 
-首次设置会提供 **Keep defaults（保留默认值）** 和 **Configure now（立即配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。Print、JSON 等非交互模式不会显示提示。
+首次设置会提供 **Keep defaults（保留默认值）**、**Configure now（立即配置）** 和 **Apply recommended setup（应用推荐配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。应用推荐配置会让你选择内置的 `cc-dark` 或 `cc-light` 主题，通过 Pi 官方设置 API 保存该主题和全局 `tuiMode=fullscreen`，立即应用主题，并提示重启 Pi（全屏渲染器在启动时决定）。项目设置和命令行参数可能覆盖全局设置。按 Esc／取消不会完成首次设置，可稍后用 `/pi-mini-mode-setup` 重试。Print、JSON 等非交互模式不会显示提示。
 
 设置保存在 Pi 的 agent 目录中，通常是 `~/.pi/agent/pi-mini-mode.json`；如果 Pi 使用其他配置目录，则保存在对应目录。文件缺失或格式错误时会安全回退到默认设置。设置示例：
 
