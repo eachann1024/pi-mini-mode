@@ -77,6 +77,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 | `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
 | `/pi-mini-mode-minimal on` / `off` | 开启极简输出／恢复原生历史 |
 | `Ctrl+O` | 展开／收起完整过程树 |
+| `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
 | `/pi-mini-mode-prompts` | 选择并展开／收起用户消息¹ |
 | `/pi-mini-mode-tools` | 选择并展开／收起保存的工具文本或思考¹ |
 | `/pi-mini-mode-history` | 浏览完整过程记录，每次五条 |

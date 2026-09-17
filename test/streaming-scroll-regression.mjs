@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { register } from "node:module";
+import { registerHooks } from "node:module";
 
 // Load the extension's real minimal-output factory without Pi's optional server peer.
 const piUrl = `data:text/javascript,${encodeURIComponent(`
@@ -7,7 +7,12 @@ export const CONFIG_DIR_NAME = ".pi";
 export const getMarkdownTheme = () => Object.fromEntries(["heading", "link", "linkUrl", "code", "codeBlock", "codeBlockBorder", "quote", "quoteBorder", "hr", "listBullet", "bold", "italic", "strikethrough", "underline"].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
 `)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piUrl)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@earendil-works/pi-coding-agent") return { shortCircuit: true, url: piUrl };
+    return nextResolve(specifier, context);
+  },
+});
 const { Container, ScrollView, TuiMainScreen } = await import("@earendil-works/pi-tui");
 const { minimalOutputComponent } = await import("../extensions/footer-status.ts");
 const { attachTranscript } = await import("../lib/transcript-adapter.ts");

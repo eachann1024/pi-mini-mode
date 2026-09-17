@@ -77,6 +77,7 @@ This earlier screenshot and recording show footer configuration, not the newer i
 | `/pi-mini-mode-settings` | Configure fields, input enhancements and minimal output |
 | `/pi-mini-mode-minimal on` / `off` | Enable minimal output / restore native history |
 | `Ctrl+O` | Expand or collapse the complete process tree |
+| `Ctrl+S` | Expand or collapse completed subagent rows; yields to Pi `/model`, `/thinking`, and other selectors |
 | `/pi-mini-mode-prompts` | Select and expand/collapse a user message¹ |
 | `/pi-mini-mode-tools` | Select and expand/collapse saved tool text or thinking¹ |
 | `/pi-mini-mode-history` | Browse full process entries, five at a time |

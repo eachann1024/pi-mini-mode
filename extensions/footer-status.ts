@@ -2,7 +2,7 @@ import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChild
 import { CONFIG_DIR_NAME, getSettingsListTheme, getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
 import { diagramMarkdown, isFencedMarkdown, minimalMarkdownTheme } from "../lib/minimal-markdown.ts";
-import { minimalSurface } from "../lib/minimal-theme.ts";
+import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
 import { Container, Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, SettingsList, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type { InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
@@ -581,11 +581,11 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
 export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text) {
   const markdown = (text: string, width: number, process = false) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
     { color: (value) => theme.fg(process ? "muted" : "text", value) }, { transform: (source, available) => transformText(diagramMarkdown(source, available)) }).render(width);
-  const surface = (rows: string[], width: number, user: boolean) => {
+  const surface = (rows: string[], width: number, user: boolean, selected = -1, expanded = false) => {
     const padding = Math.min(2, Math.floor((width - 1) / 2));
-    return ["", ...rows, ""].map((row) => {
+    return ["", ...rows, ""].map((row, index) => {
       const line = truncateToWidth(" ".repeat(padding) + row, width, "");
-      return minimalSurface(theme, line + " ".repeat(Math.max(0, width - visibleWidth(line))), user);
+      return minimalSurface(theme, line + " ".repeat(Math.max(0, width - visibleWidth(line))), user, expanded && index === selected);
     });
   };
   let agentExpiry = Infinity;
@@ -709,6 +709,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       for (const id of expandedThinking) if (!thinkingIds.has(id)) expandedThinking.delete(id);
       const inner = Math.max(1, width - 2 * Math.min(2, Math.floor((width - 1) / 2)));
       const lines: string[] = [];
+      // An open heading wears the same full-width selectedBg band as an expanded SubAgent row.
+      const bandHeading = (row: string, open: boolean) => open
+        ? paintExpandedHeading(theme, row + " ".repeat(Math.max(0, width - visibleWidth(row)))) : row;
       for (const [index, turn] of turns.entries()) {
         if (index > 0) lines.push("");
         if (expandedPrompts.has(index) && expandedPrompts.get(index) !== turn.question) expandedPrompts.delete(index);
@@ -720,14 +723,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         // Loop wakeups are system-generated user messages. Collapse them even when
         // their short prompt would otherwise fit the normal four-row allowance.
         const userRows = expanded || keepFence ? [...questionRows] : loopSummary ? markdown(loopSummary, inner) : questionRows.slice(0, 4);
+        let controlIndex = -1;
         if (!keepFence && (loopSummary || questionRows.length > 4)) {
           const label = expanded ? "▴ 收起" : loopSummary ? "▾ 展开" : `▾ 展开 (${questionRows.length} 行)`;
           const control = truncateToWidth(label, inner, "");
           promptControls.push({ index, question: turn.question, y: lines.length + 1 + userRows.length,
             x: 0, width, label });
           userRows.push(theme.fg("accent", control) + theme.fg("muted", truncateToWidth(" · /pi-mini-mode-prompts", Math.max(0, inner - visibleWidth(control)), "")));
+          // The expanded control is this message's heading, so it keeps the band in place of the user surface.
+          controlIndex = userRows.length;
         }
-        lines.push(...surface(userRows, width, true));
+        lines.push(...surface(userRows, width, true, controlIndex, expanded));
         const entries = turn.process.flatMap((entry, processIndex) => {
           if (entry.startsWith("call ")) {
             const call = turn.agentCalls?.find(call => call.id === entry.slice(5));
@@ -801,7 +807,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const bodyWidth = Math.max(0, width - visibleWidth(prefix));
               const overflow = Math.max(0, visibleWidth(renderedBody) - bodyWidth);
               const offset = overflow ? Math.max(0, Math.floor((Date.now() - (turn.startedAt ?? Date.now())) / THINKING_SCROLL_INTERVAL_MS) % (overflow + 9) - 4) : 0;
-              lines.push(truncateToWidth(prefix + (bodyWidth ? sliceByColumn(renderedBody, Math.min(overflow, offset), bodyWidth, true) : ""), width, ""));
+              lines.push(bandHeading(truncateToWidth(prefix + (bodyWidth ? sliceByColumn(renderedBody, Math.min(overflow, offset), bodyWidth, true) : ""), width, ""), open));
             } else if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
               const indent = visibleWidth(prefix);
@@ -810,7 +816,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg("muted", body)), width, controlId ? "" : "…"));
+              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg("muted", body)), width, controlId ? "" : "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
@@ -871,6 +877,7 @@ export default function (pi: ExtensionAPI) {
   let promptView: ReturnType<typeof minimalOutputComponent> | undefined;
   let lastAttachMode: string | undefined;
   let remountQueued = false;
+  let settingsOverlayOpen = false;
   const agentDeadlines = new Map<string, number>();
   let minimalTurns: MinimalTurn[] = [];
   let activeMinimalTurn: MinimalTurn | undefined;
@@ -1022,7 +1029,8 @@ export default function (pi: ExtensionAPI) {
       if (!restoreTranscript) {
         restoreAgentWidgets?.();
         restoreAgentWidgets = undefined;
-        ctx.ui.notify(tui.mode === "regular"
+        // Settings overlay replaces the transcript; remount after it closes instead of warning.
+        if (!settingsOverlayOpen) ctx.ui.notify(tui.mode === "regular"
           ? "Minimal output needs the fullscreen renderer. Quit and restart Pi — /reload does not switch TUI mode. Or set TUI mode to fullscreen in /settings."
           : "Pi transcript layout not recognized; minimal mode disabled, native output preserved.", "warning");
       }
@@ -1080,7 +1088,9 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.notify(COPY.tuiRequired, "error");
       return;
     }
-    await ctx.ui.custom((tui, theme, _keybindings, done) => {
+    settingsOverlayOpen = true;
+    try {
+      await ctx.ui.custom((tui, theme, _keybindings, done) => {
       const container = new Container();
       const preview = new Text(settingsPreviewLine(theme, settings), 1, 1);
       const title = new Text(theme.fg("accent", theme.bold(COPY.title)), 1, 1);
@@ -1095,7 +1105,6 @@ export default function (pi: ExtensionAPI) {
         items = settingsItems(settings);
         cleanupInputEnhancements?.refresh();
         preview.setText(settingsPreviewLine(theme, settings));
-        mountMinimalOutput(ctx);
         void persistSettings(ctx);
         refresh();
         refreshMinimalOutput();
@@ -1134,6 +1143,10 @@ export default function (pi: ExtensionAPI) {
         },
       };
     });
+    } finally {
+      settingsOverlayOpen = false;
+      mountMinimalOutput(ctx);
+    }
   };
 
   pi.registerCommand("pi-mini-mode-minimal", {

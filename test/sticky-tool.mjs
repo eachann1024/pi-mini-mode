@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import Module, { register } from 'node:module';
+import Module, { registerHooks } from 'node:module';
 import { setTimeout as wait } from 'node:timers/promises';
 import { stripVTControlCharacters as plain } from 'node:util';
 const stub = `data:text/javascript,${encodeURIComponent(`
@@ -7,7 +7,12 @@ export const CONFIG_DIR_NAME = '.pi';
 export const getMarkdownTheme = () => Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
 `)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(stub)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: stub };
+    return nextResolve(specifier, context);
+  },
+});
 const { Container, Text, TuiAltScreen, ScrollView, VStack, HStack, visibleWidth, setCapabilities } = await import('@earendil-works/pi-tui');
 const { getLayoutNode } = await import('@earendil-works/pi-tui/dist/layout-node.js');
 const { minimalOutputComponent } = await import('../extensions/footer-status.ts');

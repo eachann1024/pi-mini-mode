@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +12,12 @@ export const getSettingsListTheme = () => ({});
 export class CustomEditor { constructor() {} }
 export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 `)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(stub)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: stub };
+    return nextResolve(specifier, context);
+  },
+});
 const { Container, Text, TuiAltScreen, ScrollView, VStack, SelectList, visibleWidth, setCapabilities } = await import('@earendil-works/pi-tui');
 const { default: extension, minimalOutputComponent } = await import('../extensions/footer-status.ts');
 const { attachTranscript } = await import('../lib/transcript-adapter.ts');
@@ -93,6 +98,35 @@ assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH
 const placeholder = minimalOutputComponent(theme, () => [{ question: 'q', process: [], running: true, awaitingResponse: true }]);
 placeholder.render(80);
 assert.equal(placeholder.toolChoices().length, 0, 'empty Thinking placeholder is not expandable');
+
+// Every open process heading reuses the expanded SubAgent band, including the sticky copy.
+const band = '\x1b[48;2;58;58;74m';
+const bandTheme = { fg: (_key, text) => text, bg: (key, text) => key === 'selectedBg' ? band + text + '\x1b[49m' : text, bold: text => text,
+  getBgAnsi: key => key === 'selectedBg' ? band : '' };
+const bandTurn = { question: 'q', process: ['call call-a', `thinking ${thought}`], running: true, thinking: 1, startedAt: Date.now(),
+  agentCalls: [{ id: 'call-a', name: 'bash', task: 'band-命令 中文👩‍💻', state: 'done', output: 'BAND_RESULT' }] };
+const bandView = minimalOutputComponent(bandTheme, () => [bandTurn]);
+const rowOf = text => bandView.render(80).findIndex(row => plain(row).includes(text));
+assert.ok(bandView.render(80).every(row => !row.includes(band)), 'collapsed headings carry no band');
+bandView.toggleTool('call-a');
+const openToolRow = bandView.render(80)[rowOf('bash')];
+assert.ok(openToolRow.includes(band), 'expanded tool heading wears the selectedBg band');
+assert.equal(visibleWidth(openToolRow), 80, 'the band fills the render width');
+assert.equal(bandView.pinnedTool().line, openToolRow, 'the sticky heading is the same banded row');
+for (const width of [1, 3, 5, 12, 40, 100]) {
+  assert.ok(bandView.render(width).every(row => visibleWidth(row) <= width), `banded row stays bounded at width ${width}`);
+}
+bandView.toggleTool('call-a');
+const thinkingChoice = () => bandView.toolChoices().find(choice => choice.id.startsWith('thinking:'));
+bandView.handleMouse(event(thinkingChoice()));
+const openThinkingRow = bandView.render(80)[thinkingChoice().y];
+assert.ok(openThinkingRow.includes(band), 'expanded Thinking heading wears the band');
+assert.match(plain(openThinkingRow), /▾ [\u2800-\u28ff] Thinking 0:00/, 'the running Thinking heading keeps its arrow, glyph and timer');
+assert.equal(visibleWidth(openThinkingRow), 80, 'the Thinking band fills the render width');
+bandView.handleMouse(event(thinkingChoice()));
+assert.ok(bandView.render(80).every(row => !row.includes(band)), 'collapsing removes both bands');
+bandTurn.process = ['skill untouched'];
+assert.ok(bandView.render(80).every(row => !row.includes(band)), 'a Skill row is never banded');
 
 // Running SubAgents expand one-line tools; only structured finals enter completed details.
 const child = { agent: 'worker', status: 'running', currentTool: 'bash', currentToolArgs: 'npm test', recentOutput: [] };

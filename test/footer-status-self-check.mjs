@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { register } from "node:module";
+import { registerHooks } from "node:module";
 
 const piModule = `
 export const CONFIG_DIR_NAME = ".pi";
@@ -44,7 +44,13 @@ export class SettingsList {
 `;
 const piUrl = `data:text/javascript,${encodeURIComponent(piModule)}`;
 const tuiUrl = `data:text/javascript,${encodeURIComponent(tuiModule)}`;
-register(`data:text/javascript,${encodeURIComponent(`export async function resolve(s,c,n){if(s==='@earendil-works/pi-coding-agent')return {shortCircuit:true,url:${JSON.stringify(piUrl)}};if(s==='@earendil-works/pi-tui')return {shortCircuit:true,url:${JSON.stringify(tuiUrl)}};return n(s,c)}`)}`, import.meta.url);
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@earendil-works/pi-coding-agent") return { shortCircuit: true, url: piUrl };
+    if (specifier === "@earendil-works/pi-tui") return { shortCircuit: true, url: tuiUrl };
+    return nextResolve(specifier, context);
+  },
+});
 
 const configDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-test-"));
 process.env.PI_MINI_MODE_AGENT_DIR = configDir;
@@ -52,6 +58,9 @@ process.env.LANG = "en_US.UTF-8";
 const source = new URL("../extensions/footer-status.ts", import.meta.url);
 const extension = await import(pathToFileURL(source.pathname).href + `?${Date.now()}`);
 
+assert.equal(extension.focusedSelectorOwnsKeys(), false);
+assert.equal(extension.focusedSelectorOwnsKeys({ getFocusedComponent: () => ({ getText() { return ""; } }) }), false);
+assert.equal(extension.focusedSelectorOwnsKeys({ getFocusedComponent: () => ({ handleInput() {} }) }), true);
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-minimal-show"], true);
 assert.equal(extension.parseSettings({})["pi-mini-mode-minimal-show"], true, "missing collapsed-replies setting enables minimal output");
 assert.equal(extension.parseSettings({ "pi-mini-mode-minimal-show": false })["pi-mini-mode-minimal-show"], false);
@@ -434,12 +443,14 @@ assert.doesNotMatch(idlePlanFooter.render(140)[0], /PLAN/, "idle footer omits PL
 
 ctx.model = { provider: "openai", id: "gpt-5", contextWindow: 200_000 };
 let settingsPanel;
+const settingsNotices = [];
 const settingsCtx = {
   ...ctx,
   mode: "tui",
   ui: {
     setWidget() {},
     ...ctx.ui,
+    notify(message, level) { settingsNotices.push({ message, level }); },
     async custom(factory) {
       settingsPanel = factory({ requestRender() {} }, theme, {}, () => {});
     },
@@ -454,6 +465,9 @@ assert.ok(settingsList.items.every((item) => !item.submenu), "极简输出不再
 assert.ok(settingsList.items.every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
 assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出总开关默认打开");
 assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
+settingsList.setValue("pi-mini-mode-minimal-show", "off");
+settingsList.setValue("pi-mini-mode-minimal-show", "on");
+assert.equal(settingsNotices.filter((notice) => notice.level === "warning").length, 0, "settings overlay does not warn when toggling options");
 colors.length = 0;
 settingsList.theme.label("Focused option", true);
 settingsList.theme.value("off", true);
@@ -566,6 +580,10 @@ assert.deepEqual(testTui.children[3].render(100), [], 'native subagent dock is s
 const collapsedAgentRows = testTui.children[3].render(100).length;
 assert.deepEqual(inputListener("\x13"), { consume: true });
 assert.equal(testTui.children[3].render(100).length, collapsedAgentRows, 'Ctrl+S keeps each child on one row');
+testTui.getFocusedComponent = () => ({ handleInput() {} });
+assert.equal(inputListener("\x13"), undefined, "Ctrl+S yields to a focused selector such as /model");
+assert.equal(inputListener("\x0f"), undefined, "Ctrl+O yields to a focused selector");
+delete testTui.getFocusedComponent;
 assert.deepEqual(testTui.children[3].render(100), []);
 const withoutAnimation = rows => rows.map(row => row.replace(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g, '●'));
 assert.deepEqual(withoutAnimation(doc.render(100)), withoutAnimation(processBeforeSubToggle), 'Ctrl+S leaves the main process unchanged apart from animation');

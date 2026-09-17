@@ -66,7 +66,7 @@ let redraws = 0;
 tui.requestRender = () => redraws++;
 const restoreNotices = attachTranscript(tui, {
   invalidate() {},
-  render(width, notices) {
+  render(_width, notices) {
     return ['FIRST', ...(notices.get(0) ?? []), 'SECOND', ...(notices.get(1) ?? [])];
   },
 }, {
