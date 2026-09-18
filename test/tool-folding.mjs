@@ -52,17 +52,17 @@ for (const width of [1, 2, 4, 5, 8, 20, 40, 100]) {
 view.render(80);
 let control = view.toolChoices()[0];
 view.handleMouse(event(control, { type: 'move', button: 'none' }));
-assert.match(view.render(80)[control.y], /▸ bash/);
+assert.match(view.render(80)[control.y], /▶ bash/);
 assert.match(view.render(40)[view.toolChoices()[0].y], /● bash/, 'resize clears hover');
 const errorHover = minimalOutputComponent(theme, () => [{ question: 'q', process: ['call err'], agentCalls: [{ id: 'err', name: 'bash', task: 'fail', state: 'error' }] }]);
 errorHover.render(80);
 const errorControl = errorHover.toolChoices()[0];
-assert.match(errorHover.render(80)[errorControl.y], /× bash/);
+assert.match(errorHover.render(80)[errorControl.y], /✕ bash/);
 errorHover.handleMouse(event(errorControl, { type: 'move', button: 'none' }));
-assert.match(errorHover.render(80)[errorControl.y], /▸ bash/, 'error hover shows the arrow');
-assert.doesNotMatch(errorHover.render(80)[errorControl.y], /×/, 'error hover hides ×');
+assert.match(errorHover.render(80)[errorControl.y], /▶ bash/, 'error hover shows the arrow');
+assert.doesNotMatch(errorHover.render(80)[errorControl.y], /×/, 'error hover hides ✕');
 errorHover.handleMouse(event(errorControl));
-assert.match(errorHover.render(80).join('\n'), /▾ × bash/, 'expanded error still shows ×');
+assert.match(errorHover.render(80).join('\n'), /▼ ✕ bash/, 'expanded error still shows ✕');
 view.render(80);
 control = view.toolChoices()[0];
 for (const changes of [{ shift: true }, { ctrl: true }, { alt: true }, { button: 'right' }, { x: 7 }, { type: 'drag' }, { type: 'wheel' }]) {
@@ -114,6 +114,11 @@ bandView.toggleTool('call-a');
 const openToolRow = bandView.render(80)[rowOf('bash')];
 assert.ok(openToolRow.includes(band), 'expanded tool heading wears the selectedBg band');
 assert.equal(visibleWidth(openToolRow), 80, 'the band fills the render width');
+const accentTheme = { ...bandTheme, fg: (key, text) => key === 'accent' ? `ACCENT(${text})` : text };
+const accentView = minimalOutputComponent(accentTheme, () => [bandTurn]);
+assert.doesNotMatch(accentView.render(80)[0] ?? '', /ACCENT\(bash\)/);
+accentView.toggleTool('call-a');
+assert.match(accentView.render(80).join('\n'), /ACCENT\(.*bash/, 'expanded tool name uses accent');
 assert.equal(bandView.pinnedTool().line, openToolRow, 'the sticky heading is the same banded row');
 for (const width of [1, 3, 5, 12, 40, 100]) {
   assert.ok(bandView.render(width).every(row => visibleWidth(row) <= width), `banded row stays bounded at width ${width}`);
@@ -123,7 +128,7 @@ const thinkingChoice = () => bandView.toolChoices().find(choice => choice.id.sta
 bandView.handleMouse(event(thinkingChoice()));
 const openThinkingRow = bandView.render(80)[thinkingChoice().y];
 assert.ok(openThinkingRow.includes(band), 'expanded Thinking heading wears the band');
-assert.match(plain(openThinkingRow), /▾ [\u2800-\u28ff] Thinking 0:00/, 'the running Thinking heading keeps its arrow, glyph and timer');
+assert.match(plain(openThinkingRow), /▼ [\u2800-\u28ff] Thinking 0:00/, 'the running Thinking heading keeps its arrow, glyph and timer');
 assert.equal(visibleWidth(openThinkingRow), 80, 'the Thinking band fills the render width');
 bandView.handleMouse(event(thinkingChoice()));
 assert.ok(bandView.render(80).every(row => !row.includes(band)), 'collapsing removes both bands');
@@ -205,25 +210,25 @@ const content = () => document.render(80).map(plain).join('\n');
 try {
   await paint(); scroll.scrollTo(0); await paint();
   mouse(35, 3, row('first')); await paint();
-  assert.match(content(), /▸ bash/, 'real hover');
+  assert.match(content(), /▶ bash/, 'real hover');
   mouse(35, 4, 22); await paint();
-  assert.doesNotMatch(content(), /▸ bash/, 'transcript to dock clears hover');
+  assert.doesNotMatch(content(), /▶ bash/, 'transcript to dock clears hover');
   for (const [index, widgetDock] of widgetDocks.entries()) {
     assert.deepEqual(widgetDock.render(80).map(plain).map(s => s.trim()), [`VISIBLE_WIDGET_${index}`]);
     mouse(35, 3, row('first')); await paint();
-    assert.match(content(), /▸ bash/);
+    assert.match(content(), /▶ bash/);
     mouse(35, 4, 20 + index); await paint();
-    assert.doesNotMatch(content(), /▸ bash/, `combined adapters clear hover in dock ${[3, 5][index]}`);
+    assert.doesNotMatch(content(), /▶ bash/, `combined adapters clear hover in dock ${[3, 5][index]}`);
     click(4, 20 + index); await paint();
     assert.equal(widgetClicks[index], 1, 'visible widget handler receives remapped coordinates');
   }
   assert.equal(hiddenClicks, 0, 'hidden native widget handlers never receive events');
   mouse(35, 3, row('first')); await paint();
   mouse(35, 3, 0); await paint();
-  assert.doesNotMatch(content(), /▸ bash/, 'header clears hover');
+  assert.doesNotMatch(content(), /▶ bash/, 'header clears hover');
   mouse(35, 3, row('first')); await paint();
   mouse(65, 6, row('first')); await paint();
-  assert.doesNotMatch(content(), /▸ bash/, 'wheel clears hover and still scrolls');
+  assert.doesNotMatch(content(), /▶ bash/, 'wheel clears hover and still scrolls');
   assert.ok(scroll.scrollTop > 0);
   click(3, row('first')); await paint();
   assert.match(content(), /FIRST_RESULT/);
@@ -251,11 +256,11 @@ try {
   assert.doesNotMatch(content(), /FIRST_RESULT/);
   mouse(35, 3, row('first')); await paint();
   scroll.scrollBy(1); await paint();
-  assert.doesNotMatch(content(), /▸ bash/, 'programmatic/keyboard-equivalent scroll clears hover');
+  assert.doesNotMatch(content(), /▶ bash/, 'programmatic/keyboard-equivalent scroll clears hover');
   scroll.scrollTo(0); await paint();
   mouse(35, 3, row('first')); await paint();
   turns[0].question = 'short'; await paint();
-  assert.doesNotMatch(content(), /▸ bash/, 'content reflow clears hover');
+  assert.doesNotMatch(content(), /▶ bash/, 'content reflow clears hover');
   turns[0].question = JSON.parse(original)[0].question;
   assert.equal(JSON.stringify(turns), original, 'no mutation of saved outputs');
 } finally { restore(); restoreWidgets(); tui.stop(); }
@@ -272,8 +277,8 @@ for (const state of ['running', 'error', 'done']) {
   calls[0].output = state === 'done' ? '' : 'diagnostic\nDETAIL_END\x1b[2J\x07';
   view.toggleTool('first');
   const rows = view.render(80).join('\n');
-  if (state === 'error') assert.match(rows, /▾ × bash/);
-  if (state === 'running') assert.match(rows, /▾ [\u2800-\u28ff] bash/);
+  if (state === 'error') assert.match(rows, /▼ ✕ bash/);
+  if (state === 'running') assert.match(rows, /▼ [\u2800-\u28ff] bash/);
   assert.doesNotMatch(rows, /\x1b\[2J|\x07/, 'terminal controls stripped from saved output');
   if (state === 'done') assert.match(rows, /无文本结果/);
   view.toggleTool('first');
@@ -319,13 +324,13 @@ try {
   const hoverMountedTool = async () => {
     const y = document.render(80).findIndex(line => plain(line).includes('bash keyboard-command'));
     mouse(35, 3, y - scroll.scrollTop); await paint();
-    assert.match(content(), /▸ bash/);
+    assert.match(content(), /▶ bash/);
   };
   const checkMountedDocks = async () => {
     for (const index of [0, 1]) {
       await hoverMountedTool();
       mouse(35, 4, 20 + index); await paint();
-      assert.doesNotMatch(content(), /▸ bash/, `extension mounting preserves dock ${[3, 5][index]} hover cleanup`);
+      assert.doesNotMatch(content(), /▶ bash/, `extension mounting preserves dock ${[3, 5][index]} hover cleanup`);
       const previous = widgetClicks[index];
       click(4, 20 + index); await paint();
       assert.equal(widgetClicks[index], previous + 1);

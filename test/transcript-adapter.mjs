@@ -5,6 +5,24 @@ initTheme('dark', false);
 const { attachTranscript, compactSupervisorNotice, supervisorNotice, supervisorNoticeBody } = await import('../lib/transcript-adapter.ts');
 const { CustomEntryComponent } = await import('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/custom-entry.js');
 
+// Standalone failures retain their identity and error, including multiline directory metadata.
+{
+  const id = '4aea1aa4-0d9d-44ec-afa6-873b7e2ada15';
+  const content = `Background task failed: **scout**\nscout:\n400: unsupported thinking level\nRetention-managed async directory:\n/tmp/async-subagent-runs/${id}\nSession file:\n/tmp/session.jsonl`;
+  const message = { customType: 'subagent-notify', content };
+  const notice = supervisorNotice(message);
+  assert.equal(notice.runId, id);
+  assert.equal(notice.summary, '400: unsupported thinking level');
+  assert.equal(notice.state, '执行失败');
+  assert.ok(supervisorNoticeBody(message).includes('/tmp/session.jsonl'));
+  assert.equal(supervisorNotice({ ...message, content: content.replace('directory:\n', 'directory: ') }).runId, id);
+  assert.equal(supervisorNotice({ ...message, content: content.split('\nRetention-managed')[0] }).runId, undefined);
+  assert.equal(supervisorNotice({ ...message, content: content.replace(id, 'not-a-uuid') }).runId, undefined);
+  const completed = `Background task completed: **workflow**\nWorkflow completed\nChild runs: format=${id} (failed)`;
+  assert.equal(supervisorNotice({ ...message, content: completed }).state, '执行失败');
+  assert.equal(supervisorNotice({ ...message, content: completed.replace('(failed)', '(completed)') }).state, '已完成');
+}
+
 // Real Pi TUI container and ScrollView objects, not an imitation of their render path.
 const document = new Container();
 const header = new Container();

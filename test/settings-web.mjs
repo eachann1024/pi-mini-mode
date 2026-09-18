@@ -18,6 +18,10 @@ try {
   assert.match(html, /button.draggable=true/);
   assert.match(html, /Drag items in the preview to reorder/);
   assert.match(html, /拖拽预览中的字段可调整顺序/);
+  assert.match(html, /id="features"/);
+  assert.match(html, /feature-body/);
+  assert.match(html, /极简输出/);
+  assert.match(html, /Status bar metrics/);
 
   assert.equal((await fetch(endpoint)).status, 403);
   assert.equal((await fetch(endpoint, { headers: { ...headers, Origin: 'https://example.com' } })).status, 403);
@@ -31,4 +35,19 @@ try {
   assert.deepEqual(await (await fetch(endpoint, { headers })).json(), settings);
   assert.equal((await fetch(endpoint, { method: 'PUT', headers, body: ' '.repeat(17000) })).status, 413);
 } finally { web.close(); }
+
+// Idle expiry, touch renewal, and reopen with a fresh token.
+const idle = await startSettingsWeb(() => settings, async () => {}, { idleTimeoutMs: 150 });
+assert.equal(idle.closed, false);
+await new Promise(resolve => setTimeout(resolve, 100));
+idle.touch();
+await new Promise(resolve => setTimeout(resolve, 100));
+assert.equal(idle.closed, false, 'touch keeps the lease alive');
+await new Promise(resolve => setTimeout(resolve, 200));
+assert.equal(idle.closed, true, 'idle server closes itself');
+const reopened = await startSettingsWeb(() => settings, async () => {}, { idleTimeoutMs: 5000 });
+assert.notEqual(reopened.url, idle.url, 'reopen yields a fresh token');
+assert.equal(reopened.closed, false);
+reopened.close();
+assert.equal(reopened.closed, true, 'close is idempotent');
 console.log('settings web checks passed');

@@ -480,7 +480,8 @@ const stacked = liveAgentView([{
   }],
 }], testTheme, 80, true, true, new Map(), completeClock);
 const stackedDetails = stacked.rows.slice(1);
-assert.match(clean(stackedDetails[0]), /^ {3}● read /);
+assert.match(clean(stackedDetails[0]), /^│ {2}● read /);
+assert.ok(stackedDetails.every(row => row.startsWith(testTheme.fg('accent', '│'))), 'expanded SubAgent rail stays highlighted through process, blank and body rows');
 assert.match(clean(stackedDetails[0]), /…\s*$/, 'tool process stays on one truncated line');
 assert.doesNotMatch(clean(stackedDetails[0]), /原生模型|headeredCols|textColor/);
 assert.doesNotMatch(clean(stackedDetails.join('\n')), /当前活动/);
@@ -504,7 +505,7 @@ const compacted = liveAgentView([{
 }], testTheme, 80, true, true, new Map(), completeClock);
 const compactedDetails = compacted.rows.slice(1);
 assert.match(clean(compacted.rows[0]), /代理间沟通已收纳/);
-assert.match(clean(compactedDetails[0]), /^ {3}● read .*…$/, 'tool process stays one truncated line above the prose');
+assert.match(clean(compactedDetails[0]), /^│ {2}● read .*…$/, 'tool process stays one truncated line above the prose');
 assert.ok(compacted.rows.every(row => visibleWidth(row) <= 80));
 assert.doesNotMatch(clean(compactedDetails.join('\n')), /当前活动|碎片/);
 assert.ok(compactedDetails.some(row => row.includes(testTheme.bold('原生模型'))), 'expanded reply keeps Markdown emphasis');
@@ -548,7 +549,7 @@ try {
     steps: [{ agent: 'worker', sessionFile, recentOutput: ['LOG_ONLY', 'PROCESS_ONLY', 'FINAL_FIRST'] }] };
   const write = entries => writeFileSync(sessionFile, entries.map(value => JSON.stringify(value)).join('\n') + '\n{partial');
   const render = (statuses, expanded = true, ids) => liveAgentView(statuses, testTheme, 120, expanded, false, new Map(), 2000, ids);
-  const body = statuses => clean(render(statuses).rows.slice(1).join('\n'));
+  const body = statuses => clean(render(statuses).rows.slice(1).join('\n')).replace(/^│  /gm, '');
   write([process, oldFinal, process]);
   assert.equal(body([status]).trim(), 'PROCESS_ONLY', 'the newest narration replaces the earlier stopped answer');
   assert.doesNotMatch(body([status]), /OLD_FINAL/);

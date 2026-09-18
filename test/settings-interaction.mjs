@@ -25,61 +25,56 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
-const { default: extension, loadSettings, settingsPath, settingsPreviewLine, DEFAULT_SETTINGS } = await import("../extensions/footer-status.ts");
+const { default: extension, loadSettings, settingsPath, settingsPreviewLine, DEFAULT_SETTINGS, FOOTER_FIELDS } = await import("../extensions/footer-status.ts");
 
 const dir = await mkdtemp(join(tmpdir(), "pi-mini-mode-pointer-"));
 process.env.PI_MINI_MODE_AGENT_DIR = dir;
 process.env.LANG = "en_US.UTF-8";
 const commands = new Map();
-extension({ events: { on() { return () => {}; } }, on() {}, registerCommand(name, command) { commands.set(name, command); }, registerEntryRenderer() {}, appendEntry() {} });
-let panel;
+const handlers = new Map();
+let openedUrl = "";
+extension({
+  events: { on() { return () => {}; } },
+  on(name, handler) { handlers.set(name, handler); },
+  registerCommand(name, command) { commands.set(name, command); },
+  registerEntryRenderer() {},
+  appendEntry() {},
+  exec: async (_command, args) => { openedUrl = args[0]; return { code: 0 }; },
+});
 const notices = [];
 const theme = {
   bg(color, text) { assert.equal(color, "selectedBg"); return `\x1b[47m${text}\x1b[49m`; },
   fg(color, text) { return color === "accent" ? `\x1b[32m${text}\x1b[39m` : text; },
   bold(text) { return `\x1b[1m${text}\x1b[22m`; },
 };
-await commands.get("pi-mini-mode-settings").handler("", {
+const ctx = {
   mode: "tui",
   ui: {
     setWidget() {},
     notify(message, level) { notices.push({ message, level }); },
-    async custom(factory) { panel = factory({ requestRender() {} }, theme, {}, () => {}); },
   },
-});
-const plain = (line) => line.replace(/\x1b\[[0-9;]*m/g, "");
-assert.match(plain(panel.render(100).join("\n")), /显示模型/);
-assert.match(plain(panel.render(100).join("\n")), /极简输出.*on/);
-assert.match(plain(panel.render(100).join("\n")), /输入增强.*on/);
-assert.doesNotMatch(plain(panel.render(100).join("\n")), /显示工具调用|显示过程输出|显示技能|Agent token 用量|Ctrl\+O 提示/, "极简输出的旧细项不再展示");
-for (const width of [140, 80, 40]) {
-  let lines = panel.render(width);
-  const row = lines.findIndex((line) => plain(line).includes("显示思考等级"));
-  assert.ok(row >= 0);
-  const beforeHover = plain(lines[row]).replace(/^[→ ]+/, "");
-  const result = panel.handleMouse({ type: "move", button: "none", x: 4, y: row, screenX: 4, screenY: row, width, height: lines.length });
-  assert.equal(result?.handled, true, "panel routes hover through header and preview to settings");
-  lines = panel.render(width);
-  assert.match(lines[row], /\x1b\[47m\x1b\[32m.*显示思考等级/, "hovered option has background and green text");
-  const previewLines = lines.slice(0, row - 2).join("\n");
-  if (width >= 80) assert.match(previewLines, /\x1b\[47m\x1b\[32m\x1b\[1mhigh/, "hover highlights the corresponding preview field");
-  assert.equal(plain(lines[row]).replace(/^[→ ]+/, ""), beforeHover, "hover does not toggle the value");
-  assert.equal(lines.filter((line) => line.includes("\x1b[32m") && plain(line).includes("显示")).length, 1, "exactly one option is highlighted");
-  panel.handleInput("\x1b[B");
-  lines = panel.render(width);
-  assert.match(lines[row + 1], /\x1b\[32m.*显示会话总 token/, "keyboard follows footer field order");
-  if (width >= 140) assert.match(lines.slice(0, row - 2).join("\n"), /\x1b\[32m\x1b\[1mTotal/, "keyboard updates preview highlight");
-  assert.ok(lines.every((line) => visibleWidth(line) <= width), "panel stays within terminal width");
-}
-panel.handleInput("mcp");
-let lines = panel.render(140);
-assert.ok(lines.some((line) => /显示已启用 MCP 服务器.*off/.test(plain(line))), "search finds MCP toggle defaulting to off");
-panel.handleInput("\r");
-lines = panel.render(140);
-assert.ok(lines.some((line) => /显示已启用 MCP 服务器.*on/.test(plain(line))), "Enter enables MCP count");
-assert.match(lines.join("\n"), /\x1b\[47m\x1b\[32m\x1b\[1m◇ MCP 3/, "selected MCP toggle highlights its example field");
+};
+await commands.get("pi-mini-mode-settings").handler("", ctx);
+assert.match(openedUrl, /^https?:\/\//, "settings command opens the local HTML page");
+const settingsUrl = new URL(openedUrl);
+const settingsHeaders = { Authorization: `Bearer ${settingsUrl.hash.slice(1)}`, "Content-Type": "application/json" };
+const settingsEndpoint = `${settingsUrl.origin}/settings`;
+assert.equal((await fetch(settingsUrl.origin)).status, 200, "settings entry serves the local page");
+const served = await (await fetch(settingsEndpoint, { headers: settingsHeaders })).json();
+assert.deepEqual(served.order, FOOTER_FIELDS, "settings page serves the footer field order");
+const items = new Map(served.items.map((item) => [item.id, item]));
+assert.equal(items.get("pi-mini-mode-model-show")?.label, "显示模型");
+assert.equal(items.get("pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出默认打开");
+assert.equal(items.get("pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强默认打开");
+assert.ok([...items.values()].every((item) => !/显示工具调用|显示过程输出|显示技能|Agent token 用量|Ctrl\+O 提示/.test(item.label ?? "")), "极简输出的旧细项不再展示");
+assert.equal(items.get("pi-mini-mode-mcp-show")?.currentValue, "off", "MCP toggle defaults to off");
+
+const enabled = { ...served.settings, "pi-mini-mode-mcp-show": true };
+assert.equal((await fetch(settingsEndpoint, { method: "PUT", headers: settingsHeaders, body: JSON.stringify(enabled) })).status, 200, "settings page saves accepted changes");
+
 for (const width of [140, 80, 40, 20]) {
-  assert.ok(panel.render(width).every((line) => visibleWidth(line) <= width), `MCP settings stay within ${width} columns`);
+  const preview = settingsPreviewLine(theme, { ...DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": true }, width, "pi-mini-mode-mcp-show");
+  assert.ok(visibleWidth(preview) <= width, `MCP settings stay within ${width} columns`);
 }
 for (let width = 0; width <= 140; width++) {
   const preview = settingsPreviewLine(theme, { ...DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": true }, width, "pi-mini-mode-mcp-show");
@@ -89,8 +84,9 @@ for (let attempt = 0; attempt < 100; attempt++) {
   if ((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"]) break;
   await setTimeout(10);
 }
-assert.equal((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"], true, "real keyboard toggle persists");
-assert.equal(notices.filter((notice) => notice.level === "warning").length, 0, "toggling settings does not warn while the overlay is open");
+assert.equal((await loadSettings(settingsPath(dir))).settings["pi-mini-mode-mcp-show"], true, "real settings toggle persists");
+assert.equal(notices.filter((notice) => notice.level === "warning").length, 0, "toggling settings does not warn");
+handlers.get("session_shutdown")?.({}, ctx);
 await rm(dir, { recursive: true, force: true });
 delete process.env.PI_MINI_MODE_AGENT_DIR;
-console.log("settings interaction check ok (real SettingsList / Container)");
+console.log("settings interaction check ok");
