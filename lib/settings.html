@@ -4,7 +4,7 @@
 <title>Pi Mini Mode 设置</title>
 <style>
 :root{color-scheme:light dark;--background:light-dark(#f4f3ef,#141614);--foreground:light-dark(#1f241f,#eceee8);--surface:light-dark(#fffcf7,#1d211d);--muted:light-dark(#667066,#a8b0a4);--border:light-dark(#e2ddd4,#3a4038);--accent:light-dark(#2f5a3e,#b7d4b0);--destructive:light-dark(#a52c26,#ffafa5);--ring:var(--accent);--text-sm:.875rem;--text-base:1rem;--text-lg:2.75rem;--radius:8px}
-*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}.notice{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:20px 0 0;padding:14px 16px;background:var(--surface);border:1px solid var(--accent);border-left-width:4px;border-radius:var(--radius)}.notice strong{font-size:var(--text-sm)}.notice p{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6;max-width:640px}.notice code{display:block;margin:0 0 8px;padding:8px 10px;background:var(--background);border:1px solid var(--border);border-radius:var(--radius);font:var(--text-sm)/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-width:520px;color:var(--foreground)}#preview{margin-top:12px}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
 </style>
 <main>
 <header>
@@ -15,11 +15,13 @@
     <button type="button" id="reset" disabled></button>
   </nav>
 </header>
-<p class="hint" id="dragHint"></p>
+<div class="notice" id="notice" hidden>
+  <div><strong id="noticeTitle"></strong><p id="noticeBody"></p></div>
+  <div><code id="noticePrompt"></code><button type="button" id="copyPrompt"></button></div>
+</div>
 <div role="status" aria-live="polite"><span id="status"></span><button id="retry" hidden></button></div>
-<section><h2 id="previewHeading"></h2><div id="preview" role="group" tabindex="0"></div></section>
 <section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
-<section><h2 id="fieldsHeading"></h2><div class="grid" id="fields"></div></section>
+<section><h2 id="fieldsHeading"></h2><p class="hint" id="dragHint"></p><div id="preview" role="group" tabindex="0"></div><div class="grid" id="fields"></div></section>
 <section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
 </main>
 <script>
@@ -30,9 +32,8 @@ const I18N={
   documentTitle:{zh:'Pi Mini Mode 设置',en:'Pi Mini Mode Settings'},
   tagline:{zh:'极简状态栏配置',en:'Minimal status bar setup'},
   dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存',en:'Drag items in the preview to reorder · Auto-saves on drop'},
-  previewHeading:{zh:'效果预览',en:'Preview'},
   featuresHeading:{zh:'功能说明',en:'Features'},
-  fieldsHeading:{zh:'状态栏字段',en:'Status Bar Items'},
+  fieldsHeading:{zh:'状态栏字段与预览',en:'Status bar items & preview'},
   optionsHeading:{zh:'状态栏样式',en:'Status bar style'},
   on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},
   featureList:{
@@ -59,6 +60,12 @@ const I18N={
   saved:{zh:'已保存',en:'Saved'},
   saveFailed:{zh:'保存失败',en:'Failed to save'},
   reconnect:{zh:'连接已断开，请从终端重新打开',en:'Disconnected. Please reopen from the terminal.'},
+  noticeTitle:{zh:'极简输出需要全屏渲染器',en:'Minimal transcript needs the fullscreen renderer'},
+  noticeBody:{zh:'极简输出已保存，但当前 Pi 运行在普通 TUI 模式，暂不生效。复制下面的提示词发给 Pi，让它帮你把 TUI 模式改为 fullscreen；重启 Pi 后生效（/reload 不会切换渲染器）。',en:'Minimal transcript is saved but inactive: Pi is running in regular TUI mode. Copy the prompt below into Pi to set TUI mode to fullscreen; it takes effect after restarting Pi (/reload does not switch the renderer).'},
+  noticePrompt:{zh:'把 Pi 全局设置中的 tuiMode 改为 fullscreen，然后告诉我怎么重启生效',en:'Set tuiMode to fullscreen in Pi global settings, then tell me how to restart for it to take effect'},
+  copyPrompt:{zh:'复制提示词',en:'Copy prompt'},
+  copied:{zh:'已复制',en:'Copied'},
+  copyFailed:{zh:'复制失败，请手动选中',en:'Copy failed — select manually'},
   emptyPreview:{zh:'（未启用任何字段）',en:'(No items enabled)'},
   fields:{
     'project-branch':{zh:'项目与分支',en:'Project & Branch'},
@@ -81,7 +88,7 @@ const I18N={
 };
 const FIELD_KEY={minimal:'pi-mini-mode-minimal-show','input-enhancements':'pi-mini-mode-input-enhancements','context-dots':'pi-mini-mode-context-dots-show','speed-unit':'pi-mini-mode-speed-unit-show'};
 let lang=localStorage.piMiniModeLang||(navigator.language.startsWith('zh')?'zh':'en');
-let data,state,order,dragged,saving=false,dirty=false,timer;
+let data,state,order,dragged,saving=false,dirty=false,timer,copyTimer;
 const key=id=>'pi-mini-mode-'+id+'-show';
 const t=(id,fallback='')=>(I18N[id]?.[lang]??fallback);
 const fieldLabel=id=>I18N.fields[id]?.[lang]||id;
@@ -90,7 +97,7 @@ function status(text,error=false){$('status').textContent=text;$('status').class
 function applyLang(){
   document.documentElement.lang=lang==='zh'?'zh-CN':'en';
   document.title=t('documentTitle');
-  for(const id of ['title','tagline','dragHint','previewHeading','featuresHeading','fieldsHeading','optionsHeading']) $(id).textContent=t(id);
+  for(const id of ['title','tagline','featuresHeading','fieldsHeading','optionsHeading','dragHint']) $(id).textContent=t(id);
   $('reset').textContent=t('reset');$('retry').textContent=t('retry');
   $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
   $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
@@ -122,7 +129,7 @@ function preview(){
   if(!visible.length)panel.textContent=t('emptyPreview');
   panel.scrollLeft=scroll;
 }
-function change(){dirty=true;state.footerOrder=[...order];preview();status(t('unsaved'));clearTimeout(timer);timer=setTimeout(save,250)}
+function change(){dirty=true;state.footerOrder=[...order];preview();renderNotice();status(t('unsaved'));clearTimeout(timer);timer=setTimeout(save,250)}
 async function save(){
   if(saving)return;saving=true;$('retry').hidden=true;
   try{while(dirty){dirty=false;const body=structuredClone(state);status(t('saving'));await request('PUT',body)}status(t('saved'))}
@@ -163,11 +170,33 @@ function checkbox(id,settingId){
 function move(from,to){if(from===to||from<0||to<0||to>=order.length)return;const [id]=order.splice(from,1);order.splice(to,0,id);preview();change()}
 function render(){
   applyLang();
+  renderNotice();
   $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))));
   $('features').replaceChildren(...t('featureList').map(feature));
   $('options').replaceChildren(...['context-dots','speed-unit'].map(id=>checkbox(id,FIELD_KEY[id])));
   preview();
 }
+function renderNotice(){
+  // Minimal output needs the fullscreen renderer; only a known regular mode warrants the prompt.
+  const show=!!data&&data.tuiMode==='regular'&&!!state['pi-mini-mode-minimal-show'];
+  $('notice').hidden=!show;
+  if(!show)return;
+  $('noticeTitle').textContent=t('noticeTitle');
+  $('noticeBody').textContent=t('noticeBody');
+  $('noticePrompt').textContent=t('noticePrompt');
+  $('copyPrompt').textContent=t('copyPrompt');
+}
+$('copyPrompt').onclick=async()=>{
+  const button=$('copyPrompt');
+  try{await navigator.clipboard.writeText(t('noticePrompt'));button.textContent=t('copied')}
+  catch{
+    const range=document.createRange();range.selectNodeContents($('noticePrompt'));
+    const selection=getSelection();selection?.removeAllRanges();selection?.addRange(range);
+    button.textContent=t('copyFailed');
+  }
+  clearTimeout(copyTimer);
+  copyTimer=setTimeout(()=>button.textContent=t('copyPrompt'),1600);
+};
 function setLang(next){lang=next;localStorage.piMiniModeLang=lang;render()}
 $('lang-zh').onclick=()=>setLang('zh');
 $('lang-en').onclick=()=>setLang('en');

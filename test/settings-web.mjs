@@ -22,6 +22,11 @@ try {
   assert.match(html, /feature-body/);
   assert.match(html, /极简输出/);
   assert.match(html, /Status bar metrics/);
+  assert.ok(html.indexOf('id="featuresHeading"') < html.indexOf('id="fieldsHeading"'), 'features come first');
+  assert.ok(!html.includes('previewHeading'), 'preview is grouped with the status bar fields');
+  assert.match(html, /id="notice"/);
+  assert.match(html, /id="copyPrompt"/);
+  assert.match(html, /把 Pi 全局设置中的 tuiMode 改为 fullscreen/);
 
   assert.equal((await fetch(endpoint)).status, 403);
   assert.equal((await fetch(endpoint, { headers: { ...headers, Origin: 'https://example.com' } })).status, 403);
