@@ -62,6 +62,7 @@ const settingsEndpoint = `${settingsUrl.origin}/settings`;
 assert.equal((await fetch(settingsUrl.origin)).status, 200, "settings entry serves the local page");
 const served = await (await fetch(settingsEndpoint, { headers: settingsHeaders })).json();
 assert.deepEqual(served.order, FOOTER_FIELDS, "settings page serves the footer field order");
+assert.ok("tuiMode" in served, "settings page serves the TUI mode for the fullscreen notice");
 const items = new Map(served.items.map((item) => [item.id, item]));
 assert.equal(items.get("pi-mini-mode-model-show")?.label, "显示模型");
 assert.equal(items.get("pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出默认打开");

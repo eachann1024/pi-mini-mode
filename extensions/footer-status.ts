@@ -1193,6 +1193,8 @@ export default function (pi: ExtensionAPI) {
         const server = await startSettingsWeb(() => ({
           settings, defaults: DEFAULT_SETTINGS, order: FOOTER_FIELDS,
           items: settingsItems(settings).filter(item => !isCollapsedReplyChildSetting(item.id)),
+          // "regular" means minimal output is saved but cannot mount; the page offers a Pi prompt.
+          tuiMode: lastAttachMode ?? null,
         }), async value => {
           if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Invalid settings");
           const input = value as Record<string, unknown>;
