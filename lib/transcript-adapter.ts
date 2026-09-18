@@ -146,19 +146,22 @@ export function supervisorNotice(message: unknown) {
     const header = content?.match(/^(?:Background task|Detached foreground task) (completed|failed|paused|stopped):\s+\*\*([^\*\n]+)\*\*/m);
     if (!content || !header) return;
     const status = header[1];
-    const failed = status === "failed" || status === "stopped";
+    const failed = status === "failed" || status === "stopped"
+      || /^- key=\S+ run=[0-9a-f-]{36} status=failed\s*$/mi.test(content)
+      || /^Child runs:.*\(failed\)/mi.test(content);
     const attention = status === "paused";
     const workflowRunId = content.match(/^Workflow run:\s*([0-9a-f-]{36})\s*$/mi)?.[1]
       ?? content.match(/^Workflow receipt:\s*.*?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/mi)?.[1];
     const childRunIds = content.match(/^Child runs:\s*(.+)$/mi)?.[1]
       ?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) ?? [];
-    const runIds = [...new Set([workflowRunId, ...childRunIds].filter((id): id is string => !!id))];
-    const runId = workflowRunId || childRunIds[0];
+    const directoryRunId = content.match(/^Retention-managed async directory:[ \t]*(?:\r?\n)?[^\r\n]*\/async-subagent-runs\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?[ \t]*\r?$/mi)?.[1];
+    const runIds = [...new Set([workflowRunId, directoryRunId, ...childRunIds].filter((id): id is string => !!id))];
+    const runId = workflowRunId || directoryRunId || childRunIds[0];
     const metadata = /^(?:Workflow (?:receipt|run):|Child runs:|Session(?: file| share error)?:|Retention-managed|Reconciled detached|Parallel handoff:|Watchdog blockers:)/i;
     let preview = "";
     for (const line of content.split("\n").slice(1)) {
       const text = line.trim();
-      if (!text || text.startsWith("Workflow receipt:")) continue;
+      if (!text || text === `${header[2]}:` || text.startsWith("Workflow receipt:")) continue;
       if (metadata.test(text)) break;
       preview = text;
       break;
@@ -171,7 +174,8 @@ export function supervisorNotice(message: unknown) {
       alert: failed || attention,
       state: failed ? "执行失败" : attention ? "需要关注" : "已完成",
       color: failed ? "error" as const : attention ? "warning" as const : "muted" as const,
-      summary: clean(preview) || (failed ? "子任务失败" : attention ? "等待回复" : "子任务已完成"),
+      summary: failed && status === "completed" ? "工作流包含失败子任务"
+        : clean(preview) || (failed ? "子任务失败" : attention ? "等待回复" : "子任务已完成"),
       label: clean(header[2]),
       showLabel: true,
       body: content,

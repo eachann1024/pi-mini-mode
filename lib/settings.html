@@ -4,7 +4,7 @@
 <title>Pi Mini Mode 设置</title>
 <style>
 :root{color-scheme:light dark;--background:light-dark(#f4f3ef,#141614);--foreground:light-dark(#1f241f,#eceee8);--surface:light-dark(#fffcf7,#1d211d);--muted:light-dark(#667066,#a8b0a4);--border:light-dark(#e2ddd4,#3a4038);--accent:light-dark(#2f5a3e,#b7d4b0);--destructive:light-dark(#a52c26,#ffafa5);--ring:var(--accent);--text-sm:.875rem;--text-base:1rem;--text-lg:2.75rem;--radius:8px}
-*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
 </style>
 <main>
 <header>
@@ -18,6 +18,7 @@
 <p class="hint" id="dragHint"></p>
 <div role="status" aria-live="polite"><span id="status"></span><button id="retry" hidden></button></div>
 <section><h2 id="previewHeading"></h2><div id="preview" role="group" tabindex="0"></div></section>
+<section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
 <section><h2 id="fieldsHeading"></h2><div class="grid" id="fields"></div></section>
 <section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
 </main>
@@ -30,8 +31,24 @@ const I18N={
   tagline:{zh:'极简状态栏配置',en:'Minimal status bar setup'},
   dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存',en:'Drag items in the preview to reorder · Auto-saves on drop'},
   previewHeading:{zh:'效果预览',en:'Preview'},
+  featuresHeading:{zh:'功能说明',en:'Features'},
   fieldsHeading:{zh:'状态栏字段',en:'Status Bar Items'},
-  optionsHeading:{zh:'常规偏好',en:'Preferences'},
+  optionsHeading:{zh:'状态栏样式',en:'Status bar style'},
+  on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},
+  featureList:{
+    zh:[
+      {id:'status',title:'状态栏指标',body:'一行看清会话状态，随终端宽度自动取舍，不换行。',points:['模型与思考等级，会话与缓存 Token、缓存命中率、费用估算','上下文用量进度条与百分比','生成速度 tok/s，从第一个输出 token 起算，不含等待首字'],hint:'勾选需要的字段，拖拽预览中的条目即可排序。'},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'把对话收成结论：思考、工具与技能汇成一棵按时间排序的可折叠过程树。',points:['长用户消息默认保留前四行，点击折叠控件展开全文','子代理行可展开活动记录与最终输出','Ctrl+O 展开或收起完整过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记'],hint:'/pi-mini-mode-minimal on|off · /pi-mini-mode-prompts · /pi-mini-mode-history'},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['光标移入图片路径即可预览，全屏编辑器也支持悬停','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能，并在光标处插入','点击图片标签或消息中的文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
+      {id:'themes',title:'明暗主题',body:'内置 cc-dark 与 cc-light 两套主题，Markdown、代码高亮、表格与 Mermaid 图表一并适配明暗。',points:['用户消息使用主题的用户背景色，与正文清晰区分','不支持、不完整或过宽的图表保留源文本'],hint:'/pi-mini-mode-setup 重新选择主题与全局全屏模式'}
+    ],
+    en:[
+      {id:'status',title:'Status bar metrics',body:'The whole session state on one line, trimmed to fit narrow terminals instead of wrapping.',points:['Model and thinking level, session and cache tokens, cache hit rate, cost estimate','Context usage bar with percentage','Speed in tok/s, measured from the first output token, excluding time to first token'],hint:'Enable the items you need, then drag entries in the preview to reorder.'},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'Turns the conversation into conclusions: thinking, tools and skills collapse into one chronological, foldable tree.',points:['Long user messages keep four lines; click the fold control to expand','Subagent rows expand to activity and final output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked'],hint:'/pi-mini-mode-minimal on|off · /pi-mini-mode-prompts · /pi-mini-mode-history'},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Preview an image as soon as the cursor enters its path; hovering works in fullscreen','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert one at the cursor','Click image labels or file paths in messages to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
+      {id:'themes',title:'Light and dark themes',body:'Built-in cc-dark and cc-light adapt Markdown, code highlighting, tables and Mermaid diagrams to the color scheme.',points:['User messages use the theme user background to stand apart from the body','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'/pi-mini-mode-setup to pick a theme and global fullscreen mode again'}
+    ]
+  },
   reset:{zh:'恢复默认',en:'Reset defaults'},
   retry:{zh:'重试',en:'Retry'},
   confirmReset:{zh:'恢复默认排序与显示设置？',en:'Reset layout and visibility to defaults?'},
@@ -73,7 +90,7 @@ function status(text,error=false){$('status').textContent=text;$('status').class
 function applyLang(){
   document.documentElement.lang=lang==='zh'?'zh-CN':'en';
   document.title=t('documentTitle');
-  for(const id of ['title','tagline','dragHint','previewHeading','fieldsHeading','optionsHeading']) $(id).textContent=t(id);
+  for(const id of ['title','tagline','dragHint','previewHeading','featuresHeading','fieldsHeading','optionsHeading']) $(id).textContent=t(id);
   $('reset').textContent=t('reset');$('retry').textContent=t('retry');
   $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
   $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
@@ -112,10 +129,34 @@ async function save(){
   catch(error){dirty=true;status(t('saveFailed')+'：'+error.message,true);$('retry').hidden=false}
   finally{saving=false}
 }
-function checkbox(id,settingId){
-  const label=document.createElement('label'),input=document.createElement('input');
+function box(settingId,onToggle){
+  const input=document.createElement('input');
   input.type='checkbox';input.checked=!!state[settingId];input.id=settingId;
-  input.onchange=()=>{state[settingId]=input.checked;if(input.checked&&(id==='project-branch'||id==='branch')){const other=key(id==='branch'?'project-branch':'branch');state[other]=false;const peer=$(other);if(peer)peer.checked=false}change()};
+  input.onchange=()=>{state[settingId]=input.checked;onToggle?.(input.checked)};
+  return input;
+}
+function feature(item){
+  const card=document.createElement('article');card.className='feature';
+  const head=document.createElement('div');head.className='feature-head';
+  const title=document.createElement('h3');title.textContent=item.title;head.append(title);
+  if(item.setting){
+    const label=document.createElement('label');label.className='switch';label.htmlFor=item.setting;
+    const text=document.createElement('span');text.textContent=state[item.setting]?t('on'):t('off');
+    label.append(box(item.setting,checked=>{text.textContent=checked?t('on'):t('off');change()}),text);
+    head.append(label);
+  }
+  const body=document.createElement('p');body.className='feature-body';body.textContent=item.body;
+  const points=document.createElement('ul');points.className='feature-points';
+  points.append(...item.points.map(point=>{const li=document.createElement('li');li.textContent=point;return li}));
+  const hint=document.createElement('p');hint.className='feature-hint';hint.textContent=item.hint;
+  card.append(head,body,points,hint);
+  return card;
+}
+function checkbox(id,settingId){
+  const label=document.createElement('label'),input=box(settingId,()=>{
+    if(state[settingId]&&(id==='project-branch'||id==='branch')){const other=key(id==='branch'?'project-branch':'branch');state[other]=false;const peer=$(other);if(peer)peer.checked=false}
+    change();
+  });
   label.append(input,document.createTextNode(fieldLabel(id)));
   return label;
 }
@@ -123,7 +164,8 @@ function move(from,to){if(from===to||from<0||to<0||to>=order.length)return;const
 function render(){
   applyLang();
   $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))));
-  $('options').replaceChildren(...['minimal','input-enhancements','context-dots','speed-unit'].map(id=>checkbox(id,FIELD_KEY[id])));
+  $('features').replaceChildren(...t('featureList').map(feature));
+  $('options').replaceChildren(...['context-dots','speed-unit'].map(id=>checkbox(id,FIELD_KEY[id])));
   preview();
 }
 function setLang(next){lang=next;localStorage.piMiniModeLang=lang;render()}

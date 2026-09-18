@@ -51,7 +51,7 @@ const click = (x, y) => { mouse(0, x, y); mouse(0, x, y, true); };
 const screen = () => tui.previousScreen.map(plain);
 const docRows = () => document.render(scroll.getContentWidth(terminal.columns)).map(plain);
 const toolY = id => view.toolChoices().find(c => c.id === id).y + 2;
-const pinned = id => assert.match(screen()[0], new RegExp(`▾ bash ${id}-command`));
+const pinned = id => assert.match(screen()[0], new RegExp(`▼ bash ${id}-command`));
 try {
   await paint(); scroll.scrollToEnd(); await paint();
   assert.equal(scroll.isFollowingEnd, true);
@@ -59,7 +59,7 @@ try {
   click(3, toolY('first') - openingTop); await paint();
   assert.equal(scroll.scrollTop, openingTop, 'opening at follow-end keeps the clicked viewport');
   assert.equal(scroll.isFollowingEnd, false, 'opening disables follow-end before content grows');
-  assert.doesNotMatch(screen()[0], /▾ bash/, 'no premature sticky row');
+  assert.doesNotMatch(screen()[0], /▼ bash/, 'no premature sticky row');
   assert.match(docRows().join('\n'), /first_69/, 'full detail expanded inline');
   scroll.scrollTo(toolY('first') + 1); await paint(); pinned('first');
   assert.match(screen()[1], /first_0/, 'sticky row never overwrites the first detail');
@@ -75,13 +75,13 @@ try {
   scroll.scrollTo(toolY('first')); await paint();
   assert.match(screen()[1], /first_0/, 'at original heading there is no duplicate');
   scroll.scrollTo(0); await paint();
-  assert.doesNotMatch(screen()[0], /▾ bash/);
+  assert.doesNotMatch(screen()[0], /▼ bash/);
   scroll.scrollTo(toolY('first') + 5); await paint(); pinned('first');
   scroll.scrollTo(toolY('second') - 3); await paint();
   const switchTop = scroll.scrollTop;
   click(3, toolY('second') - switchTop + 1); await paint();
   assert.equal(scroll.scrollTop, switchTop, 'switching expanded tools does not jump');
-  assert.doesNotMatch(screen()[0], /▾ bash/, 'new heading stays inline until scrolled past');
+  assert.doesNotMatch(screen()[0], /▼ bash/, 'new heading stays inline until scrolled past');
   assert.equal(view.toolChoices().filter(c => c.expanded).length, 2);
   scroll.scrollTo(toolY('second') + 1); await paint(); pinned('second');
   for (const width of [20, 8, 4, 80]) {
@@ -89,7 +89,7 @@ try {
     const headerHeight = header.render(scroll.getContentWidth(width)).length;
     scroll.scrollTo(view.pinnedTool().y + headerHeight + 1); await paint();
     assert.ok(screen().every(row => visibleWidth(row) <= width));
-    assert.match(screen()[0], /▾/);
+    assert.match(screen()[0], /▼/);
   }
   for (const rows of [45, 18, 32, 24]) {
     terminal.rows = rows; await paint(); pinned('second');

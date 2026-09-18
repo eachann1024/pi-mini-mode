@@ -60,7 +60,7 @@ export function attachStickyTool(tui: unknown, document: Component, view: Sticky
       }
       // At the original heading, use its document row rather than duplicating it.
       shown = transcript.scrollTop > target.y ? target : undefined;
-      return shown ? [truncateToWidth(width < 5 ? "▾" : shown.line, width, "")] : [];
+      return shown ? [truncateToWidth(width < 5 ? "▼" : shown.line, width, "")] : [];
     },
     handleMouse(event) {
       if (!shown) return;

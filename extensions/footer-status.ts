@@ -366,7 +366,8 @@ export function statusLine(
     }
     return truncateToWidth([planTag, ...settings.footerOrder.map(id => {
       const key = `pi-mini-mode-${id}-show` as keyof MiniLensSettings;
-      return settings[key] && values[id] ? field(key, id === "model" || id === "context-percent" ? "accent" : "muted", values[id]) : "";
+      const color = id === "speed" ? speedColor(speed) : id === "model" || id === "context-percent" ? "accent" : "muted";
+      return settings[key] && values[id] ? field(key, color, values[id]) : "";
     })].filter(Boolean).join("  "), width, "…");
   }
   const right = renderRight(theme, settings, percentText, speed, highlighted);
@@ -450,16 +451,23 @@ export function settingsItems(settings: MiniLensSettings): SettingItem[] {
 }
 
 interface ActiveGeneration {
-  startedAt: number;
+  firstTokenAt?: number;
   output: number;
   lastSampleAt: number;
 }
 
-function outputSpeed(output: unknown, startedAt: number, endedAt = Date.now()): number | undefined {
+/** Hide sub-100ms bursts (batched usage) and 1-token completions; they are not a decode rate. */
+export const DECODE_SPEED_MIN_ELAPSED_MS = 100;
+export const DECODE_SPEED_MIN_OUTPUT = 2;
+
+/** Decode TPS: provider `usage.output` / seconds after the first output token (excludes TTFT). */
+export function outputSpeed(output: unknown, firstTokenAt: number | undefined, endedAt = Date.now()): number | undefined {
   const tokenCount = finiteNumber(output);
-  const elapsedMs = endedAt - startedAt;
-  if (tokenCount === undefined || tokenCount <= 0 || elapsedMs <= 0) return undefined;
-  return tokenCount / (elapsedMs / 1_000);
+  if (firstTokenAt === undefined || tokenCount === undefined || tokenCount < DECODE_SPEED_MIN_OUTPUT) return undefined;
+  const elapsedMs = endedAt - firstTokenAt;
+  if (elapsedMs < DECODE_SPEED_MIN_ELAPSED_MS) return undefined;
+  const rate = tokenCount / (elapsedMs / 1_000);
+  return Number.isFinite(rate) ? rate : undefined;
 }
 
 export interface MinimalTurn {
@@ -926,6 +934,7 @@ export default function (pi: ExtensionAPI) {
   let remountQueued = false;
   let settingsWeb: Awaited<ReturnType<typeof import("../lib/settings-web.ts").startSettingsWeb>> | undefined;
   let settingsWebOpening: Promise<void> | undefined;
+  let settingsWebGeneration = 0;
   const agentDeadlines = new Map<string, number>();
   let minimalTurns: MinimalTurn[] = [];
   let activeMinimalTurn: MinimalTurn | undefined;
@@ -1115,7 +1124,7 @@ export default function (pi: ExtensionAPI) {
   };
   const refreshStreamingSpeed = () => {
     if (!activeGeneration) return;
-    const nextSpeed = outputSpeed(activeGeneration.output, activeGeneration.startedAt);
+    const nextSpeed = outputSpeed(activeGeneration.output, activeGeneration.firstTokenAt);
     if (nextSpeed !== undefined) speed = nextSpeed;
     refresh();
   };
@@ -1175,11 +1184,13 @@ export default function (pi: ExtensionAPI) {
     }
   };
   const openSettings = async (ctx: ExtensionContext) => {
+    const generation = settingsWebGeneration;
     if (ctx.mode !== "tui") { ctx.ui.notify(COPY.tuiRequired, "error"); return; }
     try {
-      settingsWebOpening ??= (async () => {
+      if (settingsWeb && !settingsWeb.closed) settingsWeb.touch();
+      else settingsWebOpening ??= (async () => {
         const { startSettingsWeb } = await import("../lib/settings-web.ts");
-        settingsWeb = await startSettingsWeb(() => ({
+        const server = await startSettingsWeb(() => ({
           settings, defaults: DEFAULT_SETTINGS, order: FOOTER_FIELDS,
           items: settingsItems(settings).filter(item => !isCollapsedReplyChildSetting(item.id)),
         }), async value => {
@@ -1198,10 +1209,13 @@ export default function (pi: ExtensionAPI) {
           refresh();
           mountMinimalOutput(ctx);
           refreshMinimalOutput();
-        });
-      })();
+        }, { onClose: () => { if (settingsWeb === server) settingsWeb = undefined; } });
+        if (generation !== settingsWebGeneration) { server.close(); return; }
+        settingsWeb = server;
+      })().finally(() => { if (generation === settingsWebGeneration) settingsWebOpening = undefined; });
       await settingsWebOpening;
-      const url = settingsWeb!.url;
+      if (generation !== settingsWebGeneration || !settingsWeb || settingsWeb.closed) return;
+      const url = settingsWeb.url;
       const result = process.platform === "darwin" ? await pi.exec("open", [url])
         : process.platform === "win32" ? await pi.exec("rundll32.exe", ["url.dll,FileProtocolHandler", url])
         : await pi.exec("xdg-open", [url]);
@@ -1245,9 +1259,69 @@ export default function (pi: ExtensionAPI) {
     await persistSettings(ctx);
     if (choice === COPY.configureNow) await openSettings(ctx);
   };
+  pi.registerCommand("pi-mini-mode-minimal", {
+    description: "Toggle minimal output (off keeps Pi's default conversation history)",
+    handler: async (args, ctx) => {
+      const normalized = args.trim().toLowerCase();
+      if (ctx.mode !== "tui") {
+        ctx.ui.notify(COPY.minimalRequired, "error");
+        return;
+      }
+      if (normalized && normalized !== "on" && normalized !== "off") {
+        ctx.ui.notify(COPY.minimalUsage, "warning");
+        return;
+      }
+      settings = {
+        ...settings,
+        "pi-mini-mode-minimal-show": normalized === "on" ? true : normalized === "off" ? false : !settings["pi-mini-mode-minimal-show"],
+        onboardingCompleted: true,
+      };
+      if (settings["pi-mini-mode-minimal-show"]) nativeOutput = false;
+      mountMinimalOutput(ctx);
+      await persistSettings(ctx);
+      if (settings["pi-mini-mode-minimal-show"] && !restoreTranscript) return;
+      ctx.ui.notify(`${COPY.minimalState}${settings["pi-mini-mode-minimal-show"] ? "on" : "off"}`, "info");
+    },
+  });
+  pi.registerCommand("pi-mini-mode-prompts", {
+    description: "Expand or collapse a user prompt in fullscreen minimal output",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
+        if (ctx.hasUI) ctx.ui.notify("Prompt folding requires fullscreen minimal output.", "info");
+        return;
+      }
+      const view = promptView;
+      const choices = view.promptChoices();
+      if (!choices.length) { ctx.ui.notify("No user prompts exceed four lines at this width.", "info"); return; }
+      const labels = choices.map(choice => `${choice.index + 1}. ${choice.label} · ${preview(choice.question)}`);
+      const selected = await ctx.ui.select("User prompts · Enter to toggle · Esc to cancel", labels);
+      const choice = choices[labels.indexOf(selected ?? "")];
+      if (choice && promptView === view) { view.togglePrompt(choice.index, choice.question); refreshMinimalOutput(); }
+    },
+  });
+  pi.registerCommand("pi-mini-mode-tools", {
+    description: "Expand or collapse a tool's saved text or thinking in fullscreen minimal output",
+    handler: async (_args, ctx) => {
+      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
+        if (ctx.hasUI) ctx.ui.notify("Tool folding requires fullscreen minimal output.", "info");
+        return;
+      }
+      const view = promptView;
+      const choices = view.toolChoices();
+      if (!choices.length) { ctx.ui.notify("No visible tool calls. Ctrl+O shows older calls.", "info"); return; }
+      const labels = choices.map((choice, index) => `${index + 1}. ${choice.expanded ? "收起" : "展开"} · ${preview(choice.title)}`);
+      const selected = await ctx.ui.select("Tool results · Enter to toggle · Esc to cancel", labels);
+      const choice = choices[labels.indexOf(selected ?? "")];
+      if (choice && promptView === view) { view.toggleTool(choice.id); refreshMinimalOutput(); }
+    },
+  });
   pi.registerCommand("pi-mini-mode-settings", {
-    description: "在浏览器打开 HTML 设置", 
+    description: "Open HTML settings in the browser",
     handler: async (_args, ctx) => openSettings(ctx),
+  });
+  pi.registerCommand("pi-mini-mode-setup", {
+    description: "Set up Pi Mini Mode theme and fullscreen mode",
+    handler: async (_args, ctx) => runOnboarding(ctx),
   });
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
@@ -1348,8 +1422,9 @@ export default function (pi: ExtensionAPI) {
     pendingMinimalFinal = "";
     // Keep the last completed speed visible until this response produces tokens.
     // Tool-call-only assistant messages therefore cannot erase a useful rate.
-    const startedAt = Date.now();
-    activeGeneration = { startedAt, output: 0, lastSampleAt: startedAt };
+    // Decode clock starts on the first output token, not message_start (TTFT).
+    const sampledAt = Date.now();
+    activeGeneration = { output: 0, lastSampleAt: sampledAt };
     startSpeedTimer();
   });
   pi.on("message_update", (event) => {
@@ -1377,10 +1452,16 @@ export default function (pi: ExtensionAPI) {
     const usage = partial?.usage;
     const output = finiteNumber(usage?.output);
     const timestamp = Date.now();
-    if (activeGeneration && output !== undefined && output >= activeGeneration.output && timestamp >= activeGeneration.lastSampleAt) {
-      activeGeneration.output = output;
-      activeGeneration.lastSampleAt = timestamp;
-      refreshStreamingSpeed();
+    const hasOutputContent = Array.isArray(partial?.content) && partial.content.length > 0;
+    if (activeGeneration && timestamp >= activeGeneration.lastSampleAt) {
+      if (activeGeneration.firstTokenAt === undefined && (hasOutputContent || (output !== undefined && output > 0))) {
+        activeGeneration.firstTokenAt = timestamp;
+      }
+      if (output !== undefined && output >= activeGeneration.output) {
+        activeGeneration.output = output;
+        activeGeneration.lastSampleAt = timestamp;
+        refreshStreamingSpeed();
+      }
     }
   });
   pi.on("message_end", (event) => {
@@ -1392,7 +1473,7 @@ export default function (pi: ExtensionAPI) {
         activeMinimalTurn.pendingUsage = undefined;
       }
       if (activeGeneration) {
-        const finalSpeed = outputSpeed((event.message.usage as UsageLike | undefined)?.output, activeGeneration.startedAt);
+        const finalSpeed = outputSpeed((event.message.usage as UsageLike | undefined)?.output, activeGeneration.firstTokenAt);
         if (finalSpeed !== undefined) speed = finalSpeed;
         activeGeneration = undefined;
         stopSpeedTimer();
@@ -1458,7 +1539,8 @@ export default function (pi: ExtensionAPI) {
     toolStarts.delete(event.toolCallId);
     const nestedUsage = (event.result as { usage?: UsageLike } | undefined)?.usage;
     if (activeMinimalTurn) activeMinimalTurn.usage = addUsage(activeMinimalTurn.usage ?? EMPTY_USAGE, nestedUsage);
-    if (startedAt !== undefined) {
+    // Nested tool LLM completions must not overwrite a measured main-turn decode rate.
+    if (startedAt !== undefined && speed === undefined) {
       const nestedSpeed = outputSpeed(nestedUsage?.output, startedAt);
       if (nestedSpeed !== undefined) speed = nestedSpeed;
     }
@@ -1495,6 +1577,8 @@ export default function (pi: ExtensionAPI) {
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    // In-flight startup checks this generation before installing its server.
+    settingsWebGeneration++;
     settingsWeb?.close();
     settingsWeb = undefined;
     settingsWebOpening = undefined;

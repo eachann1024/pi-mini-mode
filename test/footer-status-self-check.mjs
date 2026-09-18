@@ -376,22 +376,40 @@ assert.match(lines[0], /50%$/, "percentage remains rightmost while generation sp
 const middleBar = lines[0].match(/[█░]+/)?.[0] ?? "";
 assert.ok(middleBar.includes("█") && middleBar.includes("░"), "an intermediate percentage has filled and empty progress cells");
 
+assert.equal(extension.outputSpeed(70, 2_000, 4_000), 35, "decode TPS is output tokens / seconds after the first output token");
+assert.equal(extension.outputSpeed(70, undefined, 4_000), undefined, "speed is hidden until the first output token");
+assert.equal(extension.outputSpeed(1, 2_000, 4_000), undefined, "single-token bursts are not a measurable decode rate");
+assert.equal(extension.outputSpeed(13, 1_000, 1_010), undefined, "sub-100ms samples are hidden instead of inflated tok/s");
+assert.equal(extension.DECODE_SPEED_MIN_ELAPSED_MS, 100);
+assert.equal(extension.DECODE_SPEED_MIN_OUTPUT, 2);
+
 const originalNow = Date.now;
 let now = 1_000;
 Date.now = () => now;
-handlers.get("message_start")({ message: { role: "assistant" } }, ctx);
-handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 10, input: 75_000, cacheRead: 25_000 } } } }, ctx);
-now = 2_000;
-handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 50, input: 75_000, cacheRead: 25_000 } } } }, ctx);
-now = 3_000;
-handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 70, input: 75_000, cacheRead: 25_000 } } } }, ctx);
-now = 3_500;
-handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 60 } } } }, ctx);
-now = 2_500;
-handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 100 } } } }, ctx);
-now = 3_000;
+now = 5_000;
+handlers.get("tool_execution_start")({ toolCallId: "orphan" }, ctx);
+now = 7_000;
+handlers.get("tool_execution_end")({ toolCallId: "orphan", result: { usage: { output: 80 } } }, ctx);
 lines = footer.render(140);
-assert.match(lines[0], /35\.0 tok\/s$/, "streaming speed uses all generated tokens divided by elapsed response time and ignores regressing samples");
+assert.match(lines[0], /40\.0 tok\/s$/, "nested LLM usage can set speed when no main generation exists");
+now = 8_000;
+handlers.get("message_start")({ message: { role: "assistant" } }, ctx);
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 0 } } } }, ctx);
+lines = footer.render(140);
+assert.match(lines[0], /40\.0 tok\/s$/, "TTFT wait before the first output token keeps the previous rate");
+now = 9_000;
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 10, input: 75_000, cacheRead: 25_000 } } } }, ctx);
+now = 10_000;
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 50, input: 75_000, cacheRead: 25_000 } } } }, ctx);
+now = 11_000;
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 70, input: 75_000, cacheRead: 25_000 } } } }, ctx);
+now = 11_500;
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 60 } } } }, ctx);
+now = 10_500;
+handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 100 } } } }, ctx);
+now = 11_000;
+lines = footer.render(140);
+assert.match(lines[0], /35\.0 tok\/s$/, "streaming speed uses output tokens divided by time after the first output token and ignores regressing samples");
 assert.ok(colorTexts.some(([color, text]) => color === "success" && text === "35.0 tok/s"), "live speed uses semantic threshold colors");
 assert.equal(extension.speedColor(30), "success", "fast threshold is success");
 assert.equal(extension.speedColor(10), "warning", "medium threshold is warning");
@@ -399,16 +417,16 @@ assert.equal(extension.speedColor(9.9), "error", "slow speed is error");
 assert.equal(extension.speedColor(undefined), "muted", "missing speed is muted");
 handlers.get("message_end")({ message: { role: "assistant", usage: { output: 70, input: 75_000, cacheRead: 25_000 } } }, ctx);
 lines = footer.render(140);
-assert.match(lines[0], /35\.0 tok\/s$/, "final usage retains the completed response rate");
+assert.match(lines[0], /35\.0 tok\/s$/, "final usage retains the completed decode rate");
 handlers.get("message_start")({ message: { role: "assistant" } }, ctx);
 lines = footer.render(140);
 assert.match(lines[0], /35\.0 tok\/s$/, "a tool-call-only or waiting assistant message does not erase the completed rate");
-now = 5_000;
+now = 12_000;
 handlers.get("tool_execution_start")({ toolCallId: "child" }, ctx);
-now = 7_000;
+now = 14_000;
 handlers.get("tool_execution_end")({ toolCallId: "child", result: { usage: { output: 80 } } }, ctx);
 lines = footer.render(140);
-assert.match(lines[0], /40\.0 tok\/s$/, "nested tool or child-agent usage uses its tool execution duration");
+assert.match(lines[0], /35\.0 tok\/s$/, "nested tool LLM usage does not overwrite a measured main-turn decode rate");
 branch = [...branch, { type: "message", message: { role: "toolResult", usage: { input: 50_000, output: 80, cacheRead: 10_000, cacheWrite: 0, totalTokens: 60_080, cost: { total: 0.01 } } } }];
 const totals = extension.sessionUsage(ctx);
 assert.deepEqual(totals, { totalTokens: 175_080, input: 125_000, output: 10_080, cacheRead: 35_000, cacheWrite: 5_000, cost: 0.02234 }, "session totals aggregate finalized assistant and nested tool usage exactly once");
@@ -448,6 +466,13 @@ const withoutSpeedUnit = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-speed-un
 const noUnitLine = extension.statusLine(ctx, theme, 140, sampleTotals, withoutSpeedUnit, 40);
 assert.match(noUnitLine, /40\.0$/, "speed-unit setting shows only the numeric speed when disabled");
 assert.doesNotMatch(noUnitLine, /tok\/s/, "speed-unit setting removes tok/s from the footer");
+const orderedColorTexts = [];
+const orderedTheme = { bg(_color, text) { return text; }, fg(color, text) { orderedColorTexts.push([color, text]); return text; }, bold(text) { return text; } };
+const ordered = { ...extension.DEFAULT_SETTINGS, footerOrder: [...extension.FOOTER_FIELDS] };
+extension.statusLine(ctx, orderedTheme, 140, sampleTotals, ordered, 40);
+assert.ok(orderedColorTexts.some(([color, text]) => color === "success" && text === "40.0 tok/s"), "custom footer order still colors speed by threshold");
+extension.statusLine(ctx, orderedTheme, 140, sampleTotals, ordered, 9.9);
+assert.ok(orderedColorTexts.some(([color, text]) => color === "error" && text === "9.9 tok/s"), "custom footer order colors slow speed as error");
 const hiddenEverything = extension.parseSettings(Object.fromEntries(Object.keys(extension.DEFAULT_SETTINGS).map((id) => [id, false])));
 assert.equal(extension.statusLine(ctx, theme, 140, sampleTotals, hiddenEverything, 40), "", "all footer fields can be disabled");
 assert.equal(extension.isPlannotatorPlanningStatus(undefined), false);
@@ -794,7 +819,7 @@ const onboardingCtx = {
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
 assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置", "应用推荐配置"], "onboarding offers explicit default, configure, and recommended paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
-assert.match(previews[0]?.[0] ?? "", /MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启/, "onboarding describes defaults accurately");
+assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和仅显示分支默认关闭；项目名称和分支默认开启，与仅显示分支互斥。/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
@@ -802,9 +827,16 @@ assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboa
 const configureDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-configure-"));
 process.env.PI_MINI_MODE_AGENT_DIR = configureDir;
 const configureHandlers = new Map();
-onboardingExtension.default({ events, on(name, handler) { configureHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
+let configureOpenedUrl = "";
+onboardingExtension.default({
+  events,
+  on(name, handler) { configureHandlers.set(name, handler); },
+  registerCommand() {},
+  registerShortcut() {},
+  exec: async (_command, args) => { configureOpenedUrl = args[0]; return { code: 0 }; },
+});
 await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
-assert.equal(customCalls, 1, "Configure now opens the settings list after showing the preview");
+assert.match(configureOpenedUrl, /^https?:\/\//, "Configure now opens HTML settings after showing the preview");
 
 globalThis.__piMiniHostSettings = { unrelated: "preserve" };
 globalThis.__piMiniProjectSettings = {};

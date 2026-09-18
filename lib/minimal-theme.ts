@@ -27,10 +27,11 @@ export function paintExpandedHeading(theme: ExtensionContext["ui"]["theme"], lin
  * A row inside an expanded heading (selected) keeps the band instead: the
  * blended tint and the user surface both collapse into it. */
 export function minimalSurface(theme: ExtensionContext["ui"]["theme"], text: string, user = false, selected = false): string {
-  const background = theme.getBgAnsi?.(selected ? "selectedBg" : "userMessageBg") ?? "";
-  if (user || selected) return background
+  if (selected) return paintExpandedHeading(theme, text);
+  const background = theme.getBgAnsi?.("userMessageBg") ?? "";
+  if (user) return background
     ? background + text.replace(/\x1b\[(?:0|49)?m/g, (reset) => reset + background) + "\x1b[49m"
-    : theme.bg(selected ? "selectedBg" : "userMessageBg", text);
+    : theme.bg("userMessageBg", text);
   const base = ansiColor(background);
   const accent = ansiColor(theme.fg("accent", "")) ?? ansiColor(theme.fg("success", ""));
   if (!base || !accent) return theme.bg("userMessageBg", text);

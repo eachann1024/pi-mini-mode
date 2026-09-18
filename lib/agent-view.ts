@@ -390,6 +390,7 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     subagentControls?.push({ runId: runKey, y: rows.length, width, line });
     rows.push(line);
     if (isChildExpanded) {
+      const rail = theme.fg("accent", "│") + "  ";
       let processShown = false;
       if (!terminal) {
         const process: Array<{ name: string; args: string }> = tools.slice(-6).map(tool => ({
@@ -400,7 +401,7 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
           process.push({ name: text(child.currentTool), args: text(child.currentPath || child.currentToolArgs) });
         }
         for (const item of process) {
-          const prefix = `   ${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(item.name))}${item.args ? " " : ""}`;
+          const prefix = `${rail}${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(item.name))}${item.args ? " " : ""}`;
           rows.push(truncateToWidth(prefix + (item.args ? theme.fg("muted", item.args) : ""), width, "…"));
           processShown = true;
         }
@@ -430,15 +431,15 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
       const error = bodyText(child.error);
       if (error && !bodies.includes(error)) bodies.push(error);
       if (!terminal && !processShown && !bodies.length) {
-        rows.push(truncateToWidth(`   ${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(text(state)))}`, width, "…"));
+        rows.push(truncateToWidth(`${rail}${theme.fg("muted", "●")} ${theme.fg("text", theme.bold(text(state)))}`, width, "…"));
         processShown = true;
       }
       for (const [index, textBody] of bodies.entries()) {
         // Child/supervisor bodies are Markdown prose; tool logs and JSON are
         // not placed in this semantic body channel.
-        if (processShown || index > 0) rows.push("");
+        if (processShown || index > 0) rows.push(truncateToWidth(rail, width, ""));
         for (const line of renderBody(textBody, Math.max(1, width - 3))) {
-          rows.push(truncateToWidth(`   ${line}`, width));
+          rows.push(truncateToWidth(`${rail}${line}`, width));
         }
       }
     }
