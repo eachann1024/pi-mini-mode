@@ -7,6 +7,8 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { stripVTControlCharacters as plain } from 'node:util';
 const stub = `data:text/javascript,${encodeURIComponent(`
 export const CONFIG_DIR_NAME = '.pi';
+ export const getAgentDir = () => '.pi';
+ export const SettingsManager = { create: () => ({ drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {}, async flush() {} }) };
 export const getMarkdownTheme = () => Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
 export class CustomEditor { constructor() {} }
