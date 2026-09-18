@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pi Mini Mode 设置</title>
+<style>
+:root{color-scheme:light dark;--background:light-dark(#f4f3ef,#141614);--foreground:light-dark(#1f241f,#eceee8);--surface:light-dark(#fffcf7,#1d211d);--muted:light-dark(#667066,#a8b0a4);--border:light-dark(#e2ddd4,#3a4038);--accent:light-dark(#2f5a3e,#b7d4b0);--destructive:light-dark(#a52c26,#ffafa5);--ring:var(--accent);--text-sm:.875rem;--text-base:1rem;--text-lg:2.75rem;--radius:8px}
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
+</style>
+<main>
+<header>
+  <div><h1 id="title"></h1><p class="tagline" id="tagline"></p></div>
+  <nav>
+    <button type="button" id="lang-zh" aria-pressed="false">中文</button>
+    <button type="button" id="lang-en" aria-pressed="false">EN</button>
+    <button type="button" id="reset" disabled></button>
+  </nav>
+</header>
+<p class="hint" id="dragHint"></p>
+<div role="status" aria-live="polite"><span id="status"></span><button id="retry" hidden></button></div>
+<section><h2 id="previewHeading"></h2><div id="preview" role="group" tabindex="0"></div></section>
+<section><h2 id="fieldsHeading"></h2><div class="grid" id="fields"></div></section>
+<section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id),token=location.hash.slice(1);
+history.replaceState(null,'',location.pathname);
+const I18N={
+  title:{zh:'Pi Mini Mode',en:'Pi Mini Mode'},
+  documentTitle:{zh:'Pi Mini Mode 设置',en:'Pi Mini Mode Settings'},
+  tagline:{zh:'极简状态栏配置',en:'Minimal status bar setup'},
+  dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存',en:'Drag items in the preview to reorder · Auto-saves on drop'},
+  previewHeading:{zh:'效果预览',en:'Preview'},
+  fieldsHeading:{zh:'状态栏字段',en:'Status Bar Items'},
+  optionsHeading:{zh:'常规偏好',en:'Preferences'},
+  reset:{zh:'恢复默认',en:'Reset defaults'},
+  retry:{zh:'重试',en:'Retry'},
+  confirmReset:{zh:'恢复默认排序与显示设置？',en:'Reset layout and visibility to defaults?'},
+  connecting:{zh:'正在同步…',en:'Connecting…'},
+  connected:{zh:'已同步',en:'In sync'},
+  unsaved:{zh:'未保存修改',en:'Unsaved changes'},
+  saving:{zh:'正在保存…',en:'Saving…'},
+  saved:{zh:'已保存',en:'Saved'},
+  saveFailed:{zh:'保存失败',en:'Failed to save'},
+  reconnect:{zh:'连接已断开，请从终端重新打开',en:'Disconnected. Please reopen from the terminal.'},
+  emptyPreview:{zh:'（未启用任何字段）',en:'(No items enabled)'},
+  fields:{
+    'project-branch':{zh:'项目与分支',en:'Project & Branch'},
+    model:{zh:'模型名称',en:'Model'},
+    thinking:{zh:'思考等级',en:'Thinking Level'},
+    branch:{zh:'仅分支',en:'Branch Only'},
+    'session-tokens':{zh:'会话 Token',en:'Session Tokens'},
+    'cache-tokens':{zh:'缓存 Token',en:'Cache Tokens'},
+    ch:{zh:'缓存命中率',en:'Cache Hit Rate'},
+    cost:{zh:'累计费用',en:'Cost'},
+    mcp:{zh:'MCP 服务数',en:'MCP Count'},
+    context:{zh:'上下文进度条',en:'Context Bar'},
+    'context-percent':{zh:'上下文百分比',en:'Context %'},
+    speed:{zh:'生成速度',en:'Speed'},
+    'context-dots':{zh:'点阵进度条',en:'Dot-matrix bar'},
+    'speed-unit':{zh:'速度附带单位',en:'Speed unit (tok/s)'},
+    minimal:{zh:'极简对话输出',en:'Minimal transcript'},
+    'input-enhancements':{zh:'输入体验增强',en:'Input enhancements'}
+  }
+};
+const FIELD_KEY={minimal:'pi-mini-mode-minimal-show','input-enhancements':'pi-mini-mode-input-enhancements','context-dots':'pi-mini-mode-context-dots-show','speed-unit':'pi-mini-mode-speed-unit-show'};
+let lang=localStorage.piMiniModeLang||(navigator.language.startsWith('zh')?'zh':'en');
+let data,state,order,dragged,saving=false,dirty=false,timer;
+const key=id=>'pi-mini-mode-'+id+'-show';
+const t=(id,fallback='')=>(I18N[id]?.[lang]??fallback);
+const fieldLabel=id=>I18N.fields[id]?.[lang]||id;
+const examples={'project-branch':'pi-mini-mode(main)',model:'deepseek-v4-flash',thinking:'high',branch:'main','session-tokens':'Total 45K','cache-tokens':'Cached 25K',ch:'CH 40.0%',cost:'$0.012',mcp:'◇ MCP 3',context:'500/1.0M','context-percent':'1%',speed:'120 tok/s'};
+function status(text,error=false){$('status').textContent=text;$('status').className=error?'error':''}
+function applyLang(){
+  document.documentElement.lang=lang==='zh'?'zh-CN':'en';
+  document.title=t('documentTitle');
+  for(const id of ['title','tagline','dragHint','previewHeading','fieldsHeading','optionsHeading']) $(id).textContent=t(id);
+  $('reset').textContent=t('reset');$('retry').textContent=t('retry');
+  $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
+  $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
+  $('preview').setAttribute('aria-label',t('dragHint'));
+}
+async function request(method,body){
+  const response=await fetch('/settings',{method,headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  if(!response.ok)throw Error(await response.text()||t('saveFailed'));
+  return response.json();
+}
+function preview(){
+  const panel=$('preview'),scroll=panel.scrollLeft;
+  panel.replaceChildren();
+  const visible=order.filter(id=>state[key(id)]);
+  const values={...examples,speed:state['pi-mini-mode-speed-unit-show']?'120 tok/s':'120'};
+  for(const id of visible){
+    const button=document.createElement('button');
+    button.id='preview-'+id;button.type='button';button.textContent=values[id];button.draggable=true;
+    if(id==='context'){const bar=document.createElement('span');bar.className='progress';bar.setAttribute('aria-hidden','true');bar.textContent=state['pi-mini-mode-context-dots-show']?'⣿'+'⣀'.repeat(300):'█'+'░'.repeat(300);button.append(bar)}
+    button.setAttribute('aria-label',fieldLabel(id)+' · '+t('dragHint'));
+    button.ondragstart=event=>{dragged=id;event.dataTransfer.setData('text/plain',id);event.dataTransfer.effectAllowed='move';button.classList.add('dragging')};
+    button.ondragend=()=>{dragged=undefined;button.classList.remove('dragging');document.querySelectorAll('.over').forEach(el=>el.classList.remove('over'))};
+    button.ondragover=event=>{if(dragged){event.preventDefault();button.classList.add('over')}};
+    button.ondragleave=()=>button.classList.remove('over');
+    button.ondrop=event=>{event.preventDefault();const source=dragged;dragged=undefined;if(source){move(order.indexOf(source),order.indexOf(id));$('preview-'+source)?.focus()}};
+    button.onkeydown=event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();const target=visible[visible.indexOf(id)+(event.key==='ArrowLeft'?-1:1)];if(target){move(order.indexOf(id),order.indexOf(target));$('preview-'+id)?.focus()}};
+    panel.append(button);
+  }
+  if(!visible.length)panel.textContent=t('emptyPreview');
+  panel.scrollLeft=scroll;
+}
+function change(){dirty=true;state.footerOrder=[...order];preview();status(t('unsaved'));clearTimeout(timer);timer=setTimeout(save,250)}
+async function save(){
+  if(saving)return;saving=true;$('retry').hidden=true;
+  try{while(dirty){dirty=false;const body=structuredClone(state);status(t('saving'));await request('PUT',body)}status(t('saved'))}
+  catch(error){dirty=true;status(t('saveFailed')+'：'+error.message,true);$('retry').hidden=false}
+  finally{saving=false}
+}
+function checkbox(id,settingId){
+  const label=document.createElement('label'),input=document.createElement('input');
+  input.type='checkbox';input.checked=!!state[settingId];input.id=settingId;
+  input.onchange=()=>{state[settingId]=input.checked;if(input.checked&&(id==='project-branch'||id==='branch')){const other=key(id==='branch'?'project-branch':'branch');state[other]=false;const peer=$(other);if(peer)peer.checked=false}change()};
+  label.append(input,document.createTextNode(fieldLabel(id)));
+  return label;
+}
+function move(from,to){if(from===to||from<0||to<0||to>=order.length)return;const [id]=order.splice(from,1);order.splice(to,0,id);preview();change()}
+function render(){
+  applyLang();
+  $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))));
+  $('options').replaceChildren(...['minimal','input-enhancements','context-dots','speed-unit'].map(id=>checkbox(id,FIELD_KEY[id])));
+  preview();
+}
+function setLang(next){lang=next;localStorage.piMiniModeLang=lang;render()}
+$('lang-zh').onclick=()=>setLang('zh');
+$('lang-en').onclick=()=>setLang('en');
+$('retry').onclick=save;
+$('reset').onclick=()=>{if(!confirm(t('confirmReset')))return;state={...data.defaults};order=[...data.order];render();change()};
+window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue=''}});
+applyLang();status(t('connecting'));
+request('GET').then(value=>{data=value;state={...data.settings};order=[...(state.footerOrder||data.order)];render();$('reset').disabled=false;status(t('connected'))}).catch(()=>status(t('reconnect'),true));
+</script>
+</html>
