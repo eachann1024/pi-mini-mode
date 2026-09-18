@@ -9,10 +9,15 @@ import { setTimeout } from "node:timers/promises";
 // Keep real TUI components, but avoid loading the unrelated Pi server runtime.
 const piStub = `data:text/javascript,${encodeURIComponent(`
 export const CONFIG_DIR_NAME = ".pi";
+export const getAgentDir = () => ".pi";
 export const getMarkdownTheme = () => Object.fromEntries(["heading", "link", "linkUrl", "code", "codeBlock", "codeBlockBorder", "quote", "quoteBorder", "hr", "listBullet", "bold", "italic", "strikethrough", "underline"].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({
   hint: (text) => text, description: (text) => text,
 });
+export const SettingsManager = { create: () => ({
+  drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {},
+  async flush() {},
+}) };
 `)}`;
 registerHooks({
   resolve(specifier, context, nextResolve) {
