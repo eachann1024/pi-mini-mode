@@ -43,7 +43,7 @@ export function filePaths(text: string) {
   const pattern = /(["'`])([^\r\n]*?)\1|[^\s"'`<>()[\]{}，。；！？]+/g;
   for (const match of text.matchAll(pattern)) {
     const path = (match[2] ?? match[0]).replace(/[.,;:!?]+$/, "");
-    if (!path || /[\x00-\x1f\x7f]/.test(path) || /^[a-z][\w+.-]*:\/\//i.test(path)) continue;
+    if (!path || /^[\\/]+$/.test(path) || /[\x00-\x1f\x7f]/.test(path) || /^[a-z][\w+.-]*:\/\//i.test(path)) continue;
     if (!/^(?:\/|~\/|\.{1,2}\/|[a-z]:[\\/])|[\\/]|\.[a-z\d]{1,12}$/i.test(path)) continue;
     const start = match.index + (match[1] ? 1 : 0);
     const end = start + path.length;
