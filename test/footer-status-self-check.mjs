@@ -140,7 +140,7 @@ assert.ok(connectedOutput.length > 1, "non-final output still wraps");
 assert.ok(connectedOutput.slice(1).every(row => row.startsWith("│")), "wrapped output keeps the tree rail");
 for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   const theme = { ...minimalTheme, fg: (token, text) => token === "accent" ? `${accent}${text}\x1b[39m` : text };
-  for (const [state, glyph] of [["running", "⠋"], ["done", "●"], ["error", "×"]]) {
+  for (const [state, glyph] of [["running", "⠋"], ["done", "●"], ["error", "✕"]]) {
     const turn = { question: "status", process: ["call status"], agentCalls: [{ id: "status", name: "bash", task: "check", state }] };
     const view = extension.minimalOutputComponent(theme, () => [turn]);
     const rendered = view.render(100).join("\n");
@@ -316,6 +316,7 @@ let branch = [{
   },
 }];
 const ctx = {
+  cwd: "/work/pi-mini-mode",
   mode: "print",
   hasUI: false,
   model: { provider: "deepseek", id: "deepseek-v4-flash", contextWindow: 1_000_000 },
@@ -333,7 +334,26 @@ assert.ok(footerFactory, "session_start installs the global footer");
 const colors = [];
 const colorTexts = [];
 const theme = { bg(_color, text) { return text; }, fg(color, text) { colors.push(color); colorTexts.push([color, text]); return text; }, bold(text) { return text; } };
-const footer = footerFactory({ requestRender() { renders++; } }, theme, { getExtensionStatuses() { return new Map(); } });
+let gitBranch = "main";
+let branchChanged;
+let branchDisposed = false;
+const footer = footerFactory({ requestRender() { renders++; } }, theme, {
+  getExtensionStatuses() { return new Map(); },
+  getGitBranch() { return gitBranch; },
+  onBranchChange(callback) { branchChanged = callback; return () => { branchDisposed = true; }; },
+});
+assert.match(footer.render(140)[0], /pi-mini-mode\(main\)/);
+gitBranch = "feature/footer";
+const beforeBranchChange = renders;
+branchChanged();
+assert.equal(renders, beforeBranchChange + 1);
+assert.match(footer.render(140)[0], /pi-mini-mode\(feature\/footer\)/);
+gitBranch = "a".repeat(200);
+for (let width = 0; width <= 140; width++) assert.ok(footer.render(width)[0].length <= width);
+gitBranch = null;
+assert.doesNotMatch(footer.render(140)[0], /pi-mini-mode\(/);
+footer.dispose();
+assert.equal(branchDisposed, true);
 
 let lines = footer.render(100);
 assert.equal(lines.length, 1, "footer always renders one line");
@@ -460,8 +480,9 @@ const idlePlanFooter = footerFactory({ requestRender() { renders++; } }, theme, 
 assert.doesNotMatch(idlePlanFooter.render(140)[0], /PLAN/, "idle footer omits PLAN");
 
 ctx.model = { provider: "openai", id: "gpt-5", contextWindow: 200_000 };
-let settingsPanel;
 const settingsNotices = [];
+let openedSettingsUrl = "";
+pi.exec = async (_command, args) => { openedSettingsUrl = args[0]; return { code: 0 }; };
 const settingsCtx = {
   ...ctx,
   mode: "tui",
@@ -469,32 +490,29 @@ const settingsCtx = {
     setWidget() {},
     ...ctx.ui,
     notify(message, level) { settingsNotices.push({ message, level }); },
-    async custom(factory) {
-      settingsPanel = factory({ requestRender() {} }, theme, {}, () => {});
-    },
   },
 };
 await commands.get("pi-mini-mode-settings").handler("", settingsCtx);
-const settingsChildren = settingsPanel.render(100);
-const settingsPreview = settingsChildren[2];
-assert.deepEqual(settingsChildren[3].items.map((item) => item.label).slice(0, 3), ["极简输出", "输入增强", "────────────"]);
-const settingsList = settingsChildren[3];
-assert.ok(settingsList.items.every((item) => !item.submenu), "极简输出不再有子菜单");
-assert.ok(settingsList.items.every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
-assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出总开关默认打开");
-assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
-settingsList.setValue("pi-mini-mode-minimal-show", "off");
-settingsList.setValue("pi-mini-mode-minimal-show", "on");
-assert.equal(settingsNotices.filter((notice) => notice.level === "warning").length, 0, "settings overlay does not warn when toggling options");
-colors.length = 0;
-settingsList.theme.label("Focused option", true);
-settingsList.theme.value("off", true);
-assert.deepEqual(colors, ["accent", "accent"], "focused label and value use theme accent even when off");
-colors.length = 0;
-settingsList.theme.label("Normal option", false);
-assert.deepEqual(colors, ["text"], "unfocused labels are not highlighted");
-assert.match(settingsPreview.text, /deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "settings preview uses fixed example data instead of the current session");
-assert.doesNotMatch(settingsPreview.text, /25\.0%|50K\/100K|gpt-5/, "settings preview never reads live session values");
+const settingsUrl = new URL(openedSettingsUrl);
+const settingsHeaders = { Authorization: `Bearer ${settingsUrl.hash.slice(1)}`, "Content-Type": "application/json" };
+const settingsEndpoint = `${settingsUrl.origin}/settings`;
+assert.equal((await fetch(settingsUrl.origin)).status, 200, "settings entry serves the local page");
+const settingsSnapshot = async () => (await fetch(settingsEndpoint, { headers: settingsHeaders })).json();
+const updateSettings = async (patch) => {
+  const next = { ...(await settingsSnapshot()).settings, ...patch };
+  assert.equal((await fetch(settingsEndpoint, { method: "PUT", headers: settingsHeaders, body: JSON.stringify(next) })).status, 200, "settings page saves accepted changes");
+  return next;
+};
+const servedSettings = await settingsSnapshot();
+assert.deepEqual(servedSettings.order, extension.FOOTER_FIELDS, "settings page serves the footer field order");
+const settingsItems = new Map(servedSettings.items.map((item) => [item.id, item]));
+assert.ok([...settingsItems.values()].every((item) => !item.submenu), "极简输出不再有子菜单");
+assert.ok([...settingsItems.values()].every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
+assert.equal(settingsItems.get("pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出总开关默认打开");
+assert.equal(settingsItems.get("pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
+await updateSettings({ "pi-mini-mode-minimal-show": false });
+await updateSettings({ "pi-mini-mode-minimal-show": true });
+assert.equal(settingsNotices.filter((notice) => notice.level === "warning").length, 0, "saving options from the settings page does not warn");
 // 输入增强直接接线到 lib/input-enhancements.ts：设置变更即时生效，无需重装。
 const skillDir = join(runtimeDir, "demo-skill");
 const skillPath = join(skillDir, "SKILL.md");
@@ -510,13 +528,12 @@ assert.deepEqual(await inputHandler({ text: skillPrompt, source: "interactive" }
 }, "行内 /skill:demo 展开为原生技能包装");
 assert.equal(await inputHandler({ text: "/skill:demo 任务", source: "interactive" }, settingsCtx), undefined, "行首技能交给核心，不重复展开");
 assert.equal(await inputHandler({ text: skillPrompt, source: "print" }, settingsCtx), undefined, "非交互输入不处理");
-settingsList.setValue("pi-mini-mode-input-enhancements", "off");
+await updateSettings({ "pi-mini-mode-input-enhancements": false });
 assert.equal(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), undefined, "关闭输入增强后保留 Pi 原生输入");
-settingsList.setValue("pi-mini-mode-input-enhancements", "on");
+await updateSettings({ "pi-mini-mode-input-enhancements": true });
 assert.ok(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), "重新打开后立即生效，无需重装");
-assert.equal(settingsList.items.find((item) => item.id === "pi-mini-mode-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
-settingsList.setValue("pi-mini-mode-mcp-show", "on");
-assert.match(settingsPreview.text, /◇ MCP 3/, "MCP toggle updates example preview immediately");
+assert.equal(settingsItems.get("pi-mini-mode-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
+await updateSettings({ "pi-mini-mode-mcp-show": true });
 assert.match(footer.render(140)[0], /◇ MCP 3/, "startup broadcast survives session_start and counts enabled, not connected servers or tools");
 let beforeMcpRefresh = renders;
 events.emit(mcpStatusEvent, { version: 1, servers: [{ name: "offline", disabled: false, status: "not-connected" }] });
@@ -532,18 +549,15 @@ for (const payload of [null, undefined, false, "bad", [], {}, { version: 2, serv
 }
 events.emit(mcpStatusEvent, { version: 1, servers: [] });
 assert.match(footer.render(140)[0], /◇ MCP 0/, "shutdown/empty snapshot clears previous count");
-settingsList.setValue("pi-mini-mode-mcp-show", "off");
+await updateSettings({ "pi-mini-mode-mcp-show": false });
 assert.doesNotMatch(footer.render(140)[0], /MCP/, "MCP toggle off immediately hides live count");
 events.emit(mcpStatusEvent, startupSnapshot);
-settingsList.setValue("pi-mini-mode-mcp-show", "on");
+await updateSettings({ "pi-mini-mode-mcp-show": true });
 assert.match(footer.render(140)[0], /◇ MCP 3/, "events received while hidden remain available when enabled");
-settingsList.setValue("pi-mini-mode-cache-tokens-show", "off");
-assert.doesNotMatch(settingsPreview.text, /Cached 25K/, "changing the cache-token setting updates the preview immediately");
-settingsList.setValue("pi-mini-mode-ch-show", "off");
-assert.doesNotMatch(settingsPreview.text, /CH 40\.0%/, "changing the cache-rate setting updates the preview immediately");
-settingsList.setValue("pi-mini-mode-speed-unit-show", "off");
-assert.match(settingsPreview.text, /120$/, "changing the unit setting updates the preview immediately");
-assert.doesNotMatch(settingsPreview.text, /tok\/s/, "disabled speed unit is absent from the updated preview");
+const savedBeforeUpdates = await updateSettings({ "pi-mini-mode-cache-tokens-show": false });
+assert.equal(savedBeforeUpdates["pi-mini-mode-cache-tokens-show"], false, "settings page keeps the requested value");
+await updateSettings({ "pi-mini-mode-ch-show": false });
+await updateSettings({ "pi-mini-mode-speed-unit-show": false });
 
 for (const width of [40, 20, 8, 3]) {
   lines = footer.render(width);

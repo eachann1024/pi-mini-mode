@@ -1,15 +1,15 @@
 import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
-import { CONFIG_DIR_NAME, getAgentDir, getSettingsListTheme, getMarkdownTheme, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, getMarkdownTheme, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "../lib/minimal-markdown.ts";
 import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
-import { Container, Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, SettingsList, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type { InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
 import { linkMessageFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import attachFooterTidy from "../lib/footer-tidy.ts";
 import attachTitlePlain from "../lib/title-plain.ts";
 
@@ -18,6 +18,8 @@ export const SETTINGS_FILE_NAME = "pi-mini-mode.json";
 export interface MiniLensSettings {
   "pi-mini-mode-model-show": boolean;
   "pi-mini-mode-thinking-show": boolean;
+  "pi-mini-mode-project-branch-show": boolean;
+  "pi-mini-mode-branch-show": boolean;
   "pi-mini-mode-ch-show": boolean;
   "pi-mini-mode-session-tokens-show": boolean;
   "pi-mini-mode-cache-tokens-show": boolean;
@@ -37,11 +39,14 @@ export interface MiniLensSettings {
   "pi-mini-mode-agent-usage-show": boolean;
   "pi-mini-mode-agent-shortcut-show": boolean;
   onboardingCompleted: boolean;
+  footerOrder?: string[];
 }
 
 export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-model-show": true,
   "pi-mini-mode-thinking-show": true,
+  "pi-mini-mode-project-branch-show": true,
+  "pi-mini-mode-branch-show": false,
   "pi-mini-mode-ch-show": true,
   "pi-mini-mode-session-tokens-show": true,
   "pi-mini-mode-cache-tokens-show": true,
@@ -63,7 +68,8 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   onboardingCompleted: false,
 };
 
-const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<keyof MiniLensSettings>;
+const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<Exclude<keyof MiniLensSettings, "footerOrder">>;
+export const FOOTER_FIELDS = ["project-branch", "model", "thinking", "branch", "session-tokens", "cache-tokens", "ch", "cost", "mcp", "context", "context-percent", "speed"] as const;
 
 const COPY = {
   title: "Pi Mini Mode 设置", preview: "预览（示例数据）", lens: "设置", minimal: "极简输出",
@@ -71,7 +77,7 @@ const COPY = {
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
   inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量和点阵样式默认关闭；极简输出、输入增强及其余项默认开启。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量、点阵样式和仅显示分支默认关闭；项目名称和分支默认开启，与仅显示分支互斥。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
 } as const;
 
 const RECOMMENDED_THEMES = ["cc-dark", "cc-light"] as const;
@@ -91,6 +97,12 @@ export function parseSettings(value: unknown): MiniLensSettings {
   for (const id of SETTING_IDS) {
     if (isBoolean(candidate[id])) settings[id] = candidate[id];
   }
+  if (Array.isArray(candidate.footerOrder)) {
+    settings.footerOrder = [...new Set(candidate.footerOrder.filter((id): id is typeof FOOTER_FIELDS[number] =>
+      typeof id === "string" && (FOOTER_FIELDS as readonly string[]).includes(id)))];
+    for (const id of FOOTER_FIELDS) if (!settings.footerOrder.includes(id)) settings.footerOrder.push(id);
+  }
+  if (settings["pi-mini-mode-branch-show"]) settings["pi-mini-mode-project-branch-show"] = false;
   // 折叠回复的旧细项已合并进极简输出总开关：旧值不再暗中过滤内容，始终按默认全开。
   for (const id of LEGACY_MINIMAL_SETTING_IDS) settings[id] = true;
   return settings;
@@ -251,6 +263,11 @@ function plannotatorPlanTag(statuses: ReadonlyMap<string, string> | undefined): 
   return isPlannotatorPlanningStatus(text) ? planCapsule() : "";
 }
 
+function progressBar(percent: number, dots: boolean, width: number): string {
+  const filled = Math.round(width * Math.max(0, Math.min(100, percent)) / 100);
+  return (dots ? "⣿" : "█").repeat(filled) + (dots ? "⣀" : "░").repeat(width - filled);
+}
+
 function renderRight(
   theme: ExtensionContext["ui"]["theme"],
   settings: MiniLensSettings,
@@ -270,6 +287,7 @@ function renderRight(
 }
 
 const SETTINGS_PREVIEW_CONTEXT = {
+  cwd: "/work/pi-mini-mode",
   model: { id: "deepseek-v4-flash" },
   thinkingLevel: "high",
   getContextUsage: () => ({ tokens: 500, contextWindow: 1_000_000, percent: 1 }),
@@ -290,7 +308,7 @@ export function settingsPreviewLine(
   width = 140,
   highlighted?: keyof MiniLensSettings,
 ): string {
-  return statusLine(SETTINGS_PREVIEW_CONTEXT, theme, width, SETTINGS_PREVIEW_USAGE, settings, 120, highlighted, 3);
+  return statusLine(SETTINGS_PREVIEW_CONTEXT, theme, width, SETTINGS_PREVIEW_USAGE, settings, 120, highlighted, 3, undefined, "main");
 }
 
 export function statusLine(
@@ -303,6 +321,7 @@ export function statusLine(
   highlighted?: keyof MiniLensSettings,
   mcpCount?: number,
   statuses?: ReadonlyMap<string, string>,
+  gitBranch?: string | null,
 ): string {
   if (highlighted === "pi-mini-mode-context-dots-show") highlighted = "pi-mini-mode-context-show";
   const field = (id: keyof MiniLensSettings, color: Parameters<typeof theme.fg>[0], text: string) =>
@@ -324,7 +343,32 @@ export function statusLine(
   const showContext = settings["pi-mini-mode-context-show"] && Boolean(tokenText);
   const mcpText = settings["pi-mini-mode-mcp-show"] && mcpCount !== undefined ? `◇ MCP ${mcpCount}` : "";
   const planTag = plannotatorPlanTag(statuses);
+  const branchOnly = settings["pi-mini-mode-branch-show"];
+  const branchSetting = branchOnly ? "pi-mini-mode-branch-show" : "pi-mini-mode-project-branch-show";
+  const branchText = gitBranch && settings[branchSetting]
+    ? stripVTControlCharacters(branchOnly ? gitBranch : `${basename(ctx.cwd)}(${gitBranch})`).replace(/[\x00-\x1f\x7f-\x9f]/g, "") : "";
 
+  if (settings.footerOrder) {
+    const values: Record<string, string> = {
+      "project-branch": !branchOnly ? branchText : "", branch: branchOnly ? branchText : "",
+      model, thinking,
+      "session-tokens": usageTotals.totalTokens > 0 ? `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}` : "",
+      "cache-tokens": cachedTokens > 0 ? `${COPY.cachedLabel} ${formatTokens(cachedTokens)}` : "",
+      ch: hitText, cost: price, mcp: mcpText,
+      context: tokenText,
+      "context-percent": percentText, speed: speed === undefined ? "" : formatSpeed(speed, settings["pi-mini-mode-speed-unit-show"]),
+    };
+    const visible = settings.footerOrder.filter(id => settings[`pi-mini-mode-${id}-show` as keyof MiniLensSettings] && values[id]);
+    const usedWidth = visibleWidth([planTag, ...visible.map(id => values[id])].filter(Boolean).join("  "));
+    const barWidth = Math.max(0, width - usedWidth - 1);
+    if (visible.includes("context") && percent !== undefined && barWidth > 0) {
+      values.context += ` ${progressBar(percent, settings["pi-mini-mode-context-dots-show"], barWidth)}`;
+    }
+    return truncateToWidth([planTag, ...settings.footerOrder.map(id => {
+      const key = `pi-mini-mode-${id}-show` as keyof MiniLensSettings;
+      return settings[key] && values[id] ? field(key, id === "model" || id === "context-percent" ? "accent" : "muted", values[id]) : "";
+    })].filter(Boolean).join("  "), width, "…");
+  }
   const right = renderRight(theme, settings, percentText, speed, highlighted);
   const rightWidth = visibleWidth(right);
   if (right && width <= rightWidth) {
@@ -336,8 +380,10 @@ export function statusLine(
 
   const leftParts = [
     planTag,
+    !branchOnly && branchText && field(branchSetting, "muted", branchText),
     settings["pi-mini-mode-model-show"] && model && field("pi-mini-mode-model-show", "accent", model),
     settings["pi-mini-mode-thinking-show"] && thinking && field("pi-mini-mode-thinking-show", "muted", thinking),
+    branchOnly && branchText && field(branchSetting, "muted", branchText),
     settings["pi-mini-mode-session-tokens-show"] && usageTotals.totalTokens > 0 && field("pi-mini-mode-session-tokens-show", "text", `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`),
     settings["pi-mini-mode-cache-tokens-show"] && cachedTokens > 0 && field("pi-mini-mode-cache-tokens-show", "text", `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`),
     settings["pi-mini-mode-ch-show"] && hitText && field("pi-mini-mode-ch-show", "text", hitText),
@@ -346,8 +392,10 @@ export function statusLine(
   ].filter((part): part is string => Boolean(part));
   const unstyledLeft = [
     planTag && stripVTControlCharacters(planTag),
+    !branchOnly && branchText,
     settings["pi-mini-mode-model-show"] && model,
     settings["pi-mini-mode-thinking-show"] && thinking,
+    branchOnly && branchText,
     settings["pi-mini-mode-session-tokens-show"] && usageTotals.totalTokens > 0 && `${COPY.totalLabel} ${formatTokens(usageTotals.totalTokens)}`,
     settings["pi-mini-mode-cache-tokens-show"] && cachedTokens > 0 && `${COPY.cachedLabel} ${formatTokens(cachedTokens)}`,
     settings["pi-mini-mode-ch-show"] && hitText,
@@ -383,20 +431,15 @@ const LEGACY_MINIMAL_SETTING_IDS = [
   "pi-mini-mode-minimal-skills-show", "pi-mini-mode-agent-usage-show", "pi-mini-mode-agent-shortcut-show",
 ] as const satisfies ReadonlyArray<keyof MiniLensSettings>;
 
-/** 模式总开关：设置列表顶部只展示这两项，旧细分项不再展示但仍保留兼容。 */
-const MODE_SETTING_IDS = ["pi-mini-mode-minimal-show", "pi-mini-mode-input-enhancements"] as const;
-
-function isModeSetting(id: string): boolean {
-  return (MODE_SETTING_IDS as readonly string[]).includes(id);
-}
-
 export function isCollapsedReplyChildSetting(id: string): boolean {
   return (LEGACY_MINIMAL_SETTING_IDS as readonly string[]).includes(id);
 }
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
-  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted">, string> = {
+  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder">, string> = {
+    "pi-mini-mode-project-branch-show": "显示项目名称和分支（互斥）",
+    "pi-mini-mode-branch-show": "仅显示分支（思考等级后，互斥）",
     "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
   };
   return (Object.keys(labels) as Array<keyof typeof labels>).map((id) => ({
@@ -792,19 +835,20 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const body = split < 0 ? "" : text.slice(split + 1);
             const activeThinking = entry.thinking && entry.state === "running";
             const thinkingElapsed = entry.thinking ? theme.fg(activeThinking ? "success" : "muted", ` ${formatElapsed(turn.startedAt)}`) : "";
-            const summary = theme.fg("text", theme.bold(label)) + thinkingElapsed + " ";
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : !!(entry.thinking && expandedThinking.has(entry.id));
+            const identity = open ? "accent" : "text";
+            const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
-            const status = entry.state === "error" ? "×" : entry.state === "running" ? runningGlyph() : "●";
+            const status = entry.state === "error" ? "✕" : entry.state === "running" ? runningGlyph() : "●";
             const arrow = !!controlId && (open || hoveredTool?.id === controlId);
             const keepStatus = entry.state === "running" || (open && entry.state === "error");
-            const glyph = arrow ? (open ? "▾" : "▸") + (keepStatus ? ` ${status}` : "") : status;
+            const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
             const last = row === shown.length - 1 && !agents.rows.length;
-            const prefix = theme.fg("dim", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
+            const prefix = theme.fg(open ? "accent" : "dim", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
             if (activeThinking) {
               const renderedBody = markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim();
               const bodyWidth = Math.max(0, width - visibleWidth(prefix));
@@ -819,18 +863,18 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg("muted", body)), width, controlId ? "" : "…"), open));
+              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", body)), width, controlId ? "" : "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
               // ponytail: saved text only; native view retains images, args and custom renderers.
               const output = stripVTControlCharacters(call.output ?? "").replace(/\r\n?/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-              const rail = width > 5 ? (last ? "     " : theme.fg("dim", "│    ")) : "";
+              const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               const details = new Text(output || (entry.state === "running" ? "等待工具文本结果…" : "无文本结果"), 0, 0).render(detailWidth);
               lines.push(...details.map(line => truncateToWidth(rail + theme.fg("muted", line), width, "")));
             } else if (open && entry.thinking) {
-              const rail = width > 5 ? (last ? "     " : theme.fg("dim", "│    ")) : "";
+              const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               lines.push(...markdown(entry.detail, detailWidth, true).map(line => truncateToWidth(rail + line, width, "")));
             } else if (expanded && entry.state === "error" && entry.detail) {
@@ -880,7 +924,8 @@ export default function (pi: ExtensionAPI) {
   let promptView: ReturnType<typeof minimalOutputComponent> | undefined;
   let lastAttachMode: string | undefined;
   let remountQueued = false;
-  let settingsOverlayOpen = false;
+  let settingsWeb: Awaited<ReturnType<typeof import("../lib/settings-web.ts").startSettingsWeb>> | undefined;
+  let settingsWebOpening: Promise<void> | undefined;
   const agentDeadlines = new Map<string, number>();
   let minimalTurns: MinimalTurn[] = [];
   let activeMinimalTurn: MinimalTurn | undefined;
@@ -1033,7 +1078,7 @@ export default function (pi: ExtensionAPI) {
         restoreAgentWidgets?.();
         restoreAgentWidgets = undefined;
         // Settings overlay replaces the transcript; remount after it closes instead of warning.
-        if (!settingsOverlayOpen) ctx.ui.notify(tui.mode === "regular"
+        ctx.ui.notify(tui.mode === "regular"
           ? "Minimal output needs the fullscreen renderer. Quit and restart Pi — /reload does not switch TUI mode. Or set TUI mode to fullscreen in /settings."
           : "Pi transcript layout not recognized; minimal mode disabled, native output preserved.", "warning");
       }
@@ -1130,128 +1175,42 @@ export default function (pi: ExtensionAPI) {
     }
   };
   const openSettings = async (ctx: ExtensionContext) => {
-    if (ctx.mode !== "tui") {
-      ctx.ui.notify(COPY.tuiRequired, "error");
-      return;
-    }
-    settingsOverlayOpen = true;
+    if (ctx.mode !== "tui") { ctx.ui.notify(COPY.tuiRequired, "error"); return; }
     try {
-      await ctx.ui.custom((tui, theme, _keybindings, done) => {
-      const container = new Container();
-      const preview = new Text(settingsPreviewLine(theme, settings), 1, 1);
-      const title = new Text(theme.fg("accent", theme.bold(COPY.title)), 1, 1);
-      const previewLabel = new Text(theme.fg("muted", COPY.preview), 1, 0);
-      container.addChild(title);
-      container.addChild(previewLabel);
-      container.addChild(preview);
-      let items = settingsItems(settings);
-      let highlighted: keyof MiniLensSettings | undefined;
-      const onChange = (id: string, value: string) => {
-        settings = { ...settings, [id]: value === "on", onboardingCompleted: true };
-        items = settingsItems(settings);
-        cleanupInputEnhancements?.refresh();
-        preview.setText(settingsPreviewLine(theme, settings));
-        void persistSettings(ctx);
-        refresh();
-        refreshMinimalOutput();
-      };
-      const baseSettingsTheme = getSettingsListTheme();
-      const settingsTheme = {
-        ...baseSettingsTheme,
-        cursor: theme.bg("selectedBg", theme.fg("accent", theme.bold("→ "))),
-        label: (text: string, selected: boolean) => {
-          const name = text.trimEnd();
-          if (selected) highlighted = items.find((item) => item.label === name)?.id as keyof MiniLensSettings | undefined;
-          if (selected) return theme.bg("selectedBg", theme.fg("accent", theme.bold(text)));
-          return theme.fg("text", text);
-        },
-        value: (text: string, selected: boolean) =>
-          selected ? theme.bg("selectedBg", theme.fg("accent", theme.bold(text))) : theme.fg("muted", text),
-      };
-      const separator: SettingItem = { id: "settings-separator", label: "────────────", currentValue: "" };
-      const modeItems = items.filter((item) => isModeSetting(item.id));
-      const lensItems = items.filter((item) => !isModeSetting(item.id) && !isCollapsedReplyChildSetting(item.id));
-      const settingsList = new SettingsList([...modeItems, separator, ...lensItems], 14, settingsTheme, onChange, () => done(undefined), { enableSearch: true });
-      container.addChild(settingsList);
-      return {
-        render: (width: number) => {
-          // SettingsList exposes selection through its theme callback, including search and mouse navigation.
-          highlighted = undefined;
-          settingsList.render(width);
-          preview.setText(settingsPreviewLine(theme, settings, Math.max(0, width - 2), highlighted));
-          return container.render(width);
-        },
-        invalidate: () => container.invalidate(),
-        handleMouse: (event: TuiMouseEvent) => container.handleMouse(event),
-        handleInput: (data: string) => {
-          settingsList.handleInput(data);
-          tui.requestRender();
-        },
-      };
-    });
-    } finally {
-      settingsOverlayOpen = false;
-      mountMinimalOutput(ctx);
+      settingsWebOpening ??= (async () => {
+        const { startSettingsWeb } = await import("../lib/settings-web.ts");
+        settingsWeb = await startSettingsWeb(() => ({
+          settings, defaults: DEFAULT_SETTINGS, order: FOOTER_FIELDS,
+          items: settingsItems(settings).filter(item => !isCollapsedReplyChildSetting(item.id)),
+        }), async value => {
+          if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Invalid settings");
+          const input = value as Record<string, unknown>;
+          for (const [key, entry] of Object.entries(input)) {
+            if (key === "footerOrder") {
+              if (!Array.isArray(entry) || entry.length !== FOOTER_FIELDS.length || new Set(entry).size !== entry.length
+                || entry.some(id => !(FOOTER_FIELDS as readonly unknown[]).includes(id))) throw new TypeError("Invalid order");
+            } else if (!SETTING_IDS.includes(key as typeof SETTING_IDS[number]) || typeof entry !== "boolean") throw new TypeError("Invalid setting");
+          }
+          const next = parseSettings({ ...settings, ...input, onboardingCompleted: true });
+          await saveSettings(next, configPath);
+          settings = next;
+          cleanupInputEnhancements?.refresh();
+          refresh();
+          mountMinimalOutput(ctx);
+          refreshMinimalOutput();
+        });
+      })();
+      await settingsWebOpening;
+      const url = settingsWeb!.url;
+      const result = process.platform === "darwin" ? await pi.exec("open", [url])
+        : process.platform === "win32" ? await pi.exec("rundll32.exe", ["url.dll,FileProtocolHandler", url])
+        : await pi.exec("xdg-open", [url]);
+      if (result.code !== 0) ctx.ui.notify(`请在本机浏览器打开：${url}`, "warning");
+    } catch (error) {
+      if (!settingsWeb) settingsWebOpening = undefined;
+      ctx.ui.notify(`无法打开设置：${error instanceof Error ? error.message : String(error)}${settingsWeb ? `\n${settingsWeb.url}` : ""}`, "error");
     }
   };
-
-  pi.registerCommand("pi-mini-mode-minimal", {
-    description: "Toggle minimal output (off keeps Pi's default conversation history)",
-    handler: async (args, ctx) => {
-      const normalized = args.trim().toLowerCase();
-      if (ctx.mode !== "tui") {
-        ctx.ui.notify(COPY.minimalRequired, "error");
-        return;
-      }
-      if (normalized && normalized !== "on" && normalized !== "off") {
-        ctx.ui.notify(COPY.minimalUsage, "warning");
-        return;
-      }
-      settings = {
-        ...settings,
-        "pi-mini-mode-minimal-show": normalized === "on" ? true : normalized === "off" ? false : !settings["pi-mini-mode-minimal-show"],
-        onboardingCompleted: true,
-      };
-      if (settings["pi-mini-mode-minimal-show"]) nativeOutput = false;
-      mountMinimalOutput(ctx);
-      await persistSettings(ctx);
-      if (settings["pi-mini-mode-minimal-show"] && !restoreTranscript) return;
-      ctx.ui.notify(`${COPY.minimalState}${settings["pi-mini-mode-minimal-show"] ? "on" : "off"}`, "info");
-    },
-  });
-
-  pi.registerCommand("pi-mini-mode-prompts", {
-    description: "Expand or collapse a user prompt in fullscreen minimal output",
-    handler: async (_args, ctx) => {
-      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
-        if (ctx.hasUI) ctx.ui.notify("Prompt folding requires fullscreen minimal output.", "info");
-        return;
-      }
-      const view = promptView;
-      const choices = view.promptChoices();
-      if (!choices.length) { ctx.ui.notify("No user prompts exceed four lines at this width.", "info"); return; }
-      const labels = choices.map(choice => `${choice.index + 1}. ${choice.label} · ${preview(choice.question)}`);
-      const selected = await ctx.ui.select("User prompts · Enter to toggle · Esc to cancel", labels);
-      const choice = choices[labels.indexOf(selected ?? "")];
-      if (choice && promptView === view) { view.togglePrompt(choice.index, choice.question); refreshMinimalOutput(); }
-    },
-  });
-  pi.registerCommand("pi-mini-mode-tools", {
-    description: "Expand or collapse a tool's saved text or thinking in fullscreen minimal output",
-    handler: async (_args, ctx) => {
-      if (ctx.mode !== "tui" || !restoreTranscript || !promptView) {
-        if (ctx.hasUI) ctx.ui.notify("Tool folding requires fullscreen minimal output.", "info");
-        return;
-      }
-      const view = promptView;
-      const choices = view.toolChoices();
-      if (!choices.length) { ctx.ui.notify("No visible tool calls. Ctrl+O shows older calls.", "info"); return; }
-      const labels = choices.map((choice, index) => `${index + 1}. ${choice.expanded ? "收起" : "展开"} · ${preview(choice.title)}`);
-      const selected = await ctx.ui.select("Tool results · Enter to toggle · Esc to cancel", labels);
-      const choice = choices[labels.indexOf(selected ?? "")];
-      if (choice && promptView === view) { view.toggleTool(choice.id); refreshMinimalOutput(); }
-    },
-  });
 
   const runOnboarding = async (ctx: ExtensionContext) => {
     if (ctx.mode !== "tui" || !ctx.hasUI) return;
@@ -1287,12 +1246,8 @@ export default function (pi: ExtensionAPI) {
     if (choice === COPY.configureNow) await openSettings(ctx);
   };
   pi.registerCommand("pi-mini-mode-settings", {
-    description: "Configure Pi Mini Mode settings",
+    description: "在浏览器打开 HTML 设置", 
     handler: async (_args, ctx) => openSettings(ctx),
-  });
-  pi.registerCommand("pi-mini-mode-setup", {
-    description: "Set up Pi Mini Mode theme and fullscreen mode",
-    handler: async (_args, ctx) => runOnboarding(ctx),
   });
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
@@ -1309,6 +1264,7 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setFooter((tui, theme, footerData) => {
       refreshFooter = () => tui.requestRender();
       return {
+        dispose: footerData?.onBranchChange?.(() => tui.requestRender()),
         invalidate() {},
         render(width: number): string[] {
           // switchTuiMode does not re-run setWidget; remount once the live renderer is fullscreen.
@@ -1320,7 +1276,7 @@ export default function (pi: ExtensionAPI) {
               mountMinimalOutput(ctx);
             });
           }
-          return [statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.())];
+          return [statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.(), footerData?.getGitBranch?.())];
         },
       };
     });
@@ -1539,6 +1495,9 @@ export default function (pi: ExtensionAPI) {
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    settingsWeb?.close();
+    settingsWeb = undefined;
+    settingsWebOpening = undefined;
     cleanupInputEnhancements?.();
     cleanupInputEnhancements = undefined;
     persistAgentStatuses?.();
