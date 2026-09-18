@@ -3,7 +3,7 @@ import { registerHooks } from 'node:module';
 import { Markdown, visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme, getMarkdownTheme, getThemeByName } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
 import { minimalSurface } from '../lib/minimal-theme.ts';
-import { diagramMarkdown, isFencedMarkdown, isMarkdownProse, minimalMarkdownTheme, normalizeProseMarkdown } from '../lib/minimal-markdown.ts';
+import { diagramMarkdown, isFencedMarkdown, isMarkdownProse, minimalMarkdownTheme, normalizeProseMarkdown, renderMinimalMarkdown } from '../lib/minimal-markdown.ts';
 const moduleUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
 const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
 registerHooks({
@@ -91,8 +91,8 @@ for (const name of ['dark', 'light']) {
   assert.doesNotMatch(plain(mdOutput), /\*\*/);
   assert.ok(mdOutput.includes(theme.bold('SAPI 网关')), 'Output prose renders Markdown emphasis');
   // Block and inline structure is decided by the lexer, then rendered for real.
-  const renderMd = (source, width = 100) => new Markdown(source, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: value => theme.fg('text', value) }, { transform: (src, available) => diagramMarkdown(src, available) }).render(width);
+  const renderMd = (source, width = 100) => renderMinimalMarkdown(source, width, getMarkdownTheme(), theme.getBgAnsi('userMessageBg'),
+    { color: value => theme.fg('text', value) }, diagramMarkdown);
   const renderProse = source => plain(renderMd(source).join('\n'));
   const syntaxColors = source => [...new Set([...renderMd(source).join('\n').matchAll(/\x1b\[(38;[0-9;]+)m/g)].map(match => match[1]))].sort();
   const structureCases = [
@@ -129,7 +129,8 @@ for (const name of ['dark', 'light']) {
     assert.match(rendered, /flowchart LR/, `${name}: ${fence}${lang} keeps its body`);
     assert.match(rendered, /A-->B/, `${name}: ${fence}${lang} keeps its body`);
     assert.doesNotMatch(rendered, /┌|▶/, `${name}: ${fence}${lang} must not become a diagram`);
-    if (lang) assert.match(rendered, new RegExp('```' + lang), `${name}: ${fence}${lang} keeps its tag`);
+    assert.doesNotMatch(rendered, /──|│ flowchart LR/);
+    assert.doesNotMatch(rendered, /```|~~~/);
   }
   // A fence beats the "looks like source" exclusion, for either fence style and any tag.
   for (const source of ['```js\nconst value = 1;\n```', '~~~js\nconst value = 1;\n~~~', '~~~\nconst value = 1;\n~~~']) {
@@ -141,6 +142,24 @@ for (const name of ['dark', 'light']) {
     assert.notDeepEqual(syntaxColors(source), syntaxColors('```text\n' + code + '\n```'), `${name}: ${tag} highlights`);
     assert.match(renderProse(source), new RegExp(code.split('\n')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${name}: ${tag} keeps its code`);
   }
+  const json5Body = '// 工程 build-profile.json5\nproducts: [\n  { name: "default", enabled: true, count: 42, },\n]';
+  for (const tag of ['json5', 'JSON5 title="build-profile.json5"']) {
+    const source = '```' + tag + '\n' + json5Body + '\n```';
+    assert.notDeepEqual(syntaxColors(source), syntaxColors('```text\n' + json5Body + '\n```'), `${name}: ${tag} highlights`);
+    const rows = renderMd(source).map(plain).map(row => row.trimEnd());
+    assert.deepEqual(rows.slice(1, -1), json5Body.split('\n').map(line => ' ' + line), `${name}: ${tag} preserves source without border`);
+  }
+  const jsoncBody = '{\n  // comment\n  "name": "default", "enabled": true\n}';
+  assert.notDeepEqual(syntaxColors('```jsonc\n' + jsoncBody + '\n```'), syntaxColors('```text\n' + jsoncBody + '\n```'));
+  for (const tag of ['text', 'txt', 'plaintext', 'made-up-language']) {
+    const source = '```' + tag + '\n' + json5Body + '\n```';
+    assert.deepEqual(syntaxColors(source), syntaxColors('```text\n' + json5Body + '\n```'), `${name}: ${tag} stays plain`);
+    for (const width of [12, 40, 100]) {
+      const rows = minimalOutputComponent(theme, () => [{ question: '', process: [], final: source }]).render(width);
+      assert.ok(rows.every(row => visibleWidth(row) <= width), `${name}/${tag}/${width}: ${JSON.stringify(rows.filter(row => visibleWidth(row) > width).map(plain))}`);
+    }
+  }
+  assert.match(renderProse('```json5\n{ name: "streaming'), /streaming/);
   // A CJK indented tree keeps its guides inside a fence and draws nothing outside one.
   const tree = '项目结构：\n　　├── src\n　　│   └── index.ts\n　　└── package.json';
   for (const lang of ['', 'text', 'txt', 'plaintext', 'unknown']) {
@@ -186,12 +205,12 @@ for (const name of ['dark', 'light']) {
   }
   for (const body of ['unknown graph', 'pie\n"已完成" : 60\n"未完成" : 40', 'flowchart LR\nA[broken']) {
     const rendered = renderProse('```mermaid\n' + body + '\n```');
-    assert.match(rendered, /```mermaid/, `${name}: ${body} keeps its source`);
+    assert.doesNotMatch(rendered, /── mermaid/, `${name}: ${body} keeps its source without label`);
     assert.match(rendered, new RegExp(body.split('\n')[0]), `${name}: ${body} keeps its source`);
   }
   // Four backticks wrap a three-backtick example without turning it into a diagram.
   const nested = renderProse('````md\n```js\nconst value = 1;\n```\n````');
-  assert.match(nested, /```md/);
+  assert.doesNotMatch(nested, /── md/);
   assert.match(nested, /```js/);
   assert.match(nested, /const value = 1;/);
   assert.doesNotMatch(nested, /┌|▶/);

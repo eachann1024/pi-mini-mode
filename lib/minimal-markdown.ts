@@ -1,4 +1,4 @@
-import { Marked, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { Marked, Markdown, visibleWidth, type DefaultTextStyle, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { render } from "grok-mermaid";
 
 const parser = new Marked();
@@ -7,19 +7,46 @@ const parser = new Marked();
 const languageToken = (lang?: string) => lang?.trim().split(/\s+/)[0].toLowerCase() ?? "";
 
 /** Theme emphasis remains visible when the terminal's CJK font lacks bold/italic faces. */
-export function minimalMarkdownTheme(base: MarkdownTheme): MarkdownTheme {
+const REGISTERED_LANGUAGES = new Set([
+  "bash", "sh", "shell", "zsh", "fish", "powershell", "javascript", "js", "typescript", "ts", "jsx", "tsx",
+  "python", "ruby", "rust", "go", "java", "kotlin", "swift", "c", "cpp", "csharp", "php", "sql", "html", "css",
+  "scss", "sass", "less", "yaml", "yml", "json", "json5", "jsonc", "toml", "xml", "markdown", "md", "lua", "perl",
+  "r", "scala", "clojure", "elixir", "erlang", "haskell", "ocaml", "vim", "graphql", "protobuf", "hcl", "dockerfile",
+]);
+const ANSI_FOREGROUND = /\x1b\[(?:38;(?:2;\d+;\d+;\d+|5;\d+)|3[0-9]|9[0-7])m/g;
+
+export function minimalMarkdownTheme(base: MarkdownTheme, codeBackground = ""): MarkdownTheme {
   // Inline prose arrives with its default foreground already applied. Remove
   // those foreground codes before wrapping, otherwise they override emphasis.
   const emphasis = (text: string) => base.heading(text.replace(/\x1b\[(?:38;(?:2;\d+;\d+;\d+|5;\d+)|3[0-9]|9[0-7])m/g, ""));
   const highlightCode = base.highlightCode;
+  const neutralCode = (text: string) => base.codeBlock(text).replace(ANSI_FOREGROUND, "");
   return {
     ...base,
     bold: text => emphasis(base.bold(text)),
     italic: text => emphasis(base.italic(text)),
-    // highlight.js knows languages, not info strings, so `ts title=x.ts` would
-    // otherwise lose highlighting entirely.
-    ...(highlightCode && { highlightCode: (code: string, lang?: string) => highlightCode(code, languageToken(lang)) }),
+    codeBlock: neutralCode,
+    // A blank, background-painted row replaces the old language/border text.
+    codeBlockBorder: () => codeBackground ? `${codeBackground} ` : "",
+    codeBlockIndent: codeBackground ? `${codeBackground} ` : "  ",
+    // ponytail: reuse installed grammars; only registered languages are sent to it.
+    ...(highlightCode && { highlightCode: (code: string, lang?: string) => {
+      const language = languageToken(lang);
+      if (!REGISTERED_LANGUAGES.has(language) || /^(?:text|txt|plaintext)$/.test(language)) return code.split("\n").map(neutralCode);
+      return highlightCode(code, /^json[5c]$/.test(language) ? "javascript" : language);
+    } }),
   };
+}
+
+/** Render Markdown with A's code-only background, after native wrapping has settled. */
+export function renderMinimalMarkdown(source: string, width: number, base: MarkdownTheme, codeBackground: string,
+  defaultTextStyle?: DefaultTextStyle, transform?: (source: string, available: number) => string): string[] {
+  const rows = new Markdown(source, 0, 0, minimalMarkdownTheme(base, codeBackground), defaultTextStyle,
+    transform ? { transform } : undefined).render(width);
+  if (!codeBackground) return rows;
+  return rows.map(row => row.startsWith(codeBackground)
+    ? `${row}${" ".repeat(Math.max(0, width - visibleWidth(row)))}\x1b[49m`
+    : row);
 }
 
 type MarkdownNode = {
