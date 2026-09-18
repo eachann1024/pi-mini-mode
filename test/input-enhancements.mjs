@@ -31,7 +31,10 @@ try {
   const existing = `[file](${pathToFileURL(file).href})`;
   assert.equal(linkMessageFiles(existing, dir), existing);
   assert.equal(linkMessageFiles('https://example.com/a.png /missing/file.txt', dir), 'https://example.com/a.png /missing/file.txt');
-  const fencedPath = '```text\nsee "' + file + '"\n```';
+  const separators = '派发子代理 / executor / 其他 agent';
+assert.deepEqual(filePaths(separators), [], 'standalone slashes are prose separators, not paths');
+assert.equal(linkMessageFiles(separators, dir), separators, 'prose separators must not become underlined links');
+const fencedPath = '```text\nsee "' + file + '"\n```';
   assert.deepEqual(filePaths(fencedPath), [], 'paths inside a fence are not links');
   assert.equal(linkMessageFiles(fencedPath, dir), fencedPath);
   assert.equal(filePaths('see `' + file + '`')[0]?.path, file, 'inline ticks remain paths');
