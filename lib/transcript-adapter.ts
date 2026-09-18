@@ -1,13 +1,13 @@
 import { Markdown, Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { diagramMarkdown, isMarkdownProse, minimalMarkdownTheme } from "./minimal-markdown.ts";
+import { diagramMarkdown, isMarkdownProse, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { stripVTControlCharacters } from "node:util";
 import { attachStickyTool } from "./sticky-tool.ts";
 
 const record = (value: unknown): Record<string, unknown> | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const clean = (text: string) => stripVTControlCharacters(text).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
-const renderMarkdownBody = (body: string, width: number) => isMarkdownProse(body)
-  ? new Markdown(body, 0, 0, minimalMarkdownTheme(getMarkdownTheme()), undefined, { transform: diagramMarkdown }).render(Math.max(1, width))
+const renderMarkdownBody = (body: string, width: number, theme?: ExtensionContext["ui"]["theme"]) => isMarkdownProse(body)
+  ? renderMinimalMarkdown(body, Math.max(1, width), getMarkdownTheme(), theme?.getBgAnsi?.("userMessageBg") ?? "", undefined, diagramMarkdown)
   : new Text(body, 0, 0).render(Math.max(1, width));
 const isSupervisorReply = (message: unknown) => record(message)?.customType === "subagent_supervisor_reply";
 
@@ -239,7 +239,7 @@ export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["t
   const hint = theme.fg(expanded ? "accent" : "muted", " · Ctrl+O");
   const summary = truncateToWidth(objective, Math.max(0, width - visibleWidth(title) - visibleWidth(hint) - 3), "…");
   const rows = [truncateToWidth(`${title} · ${theme.fg(expanded ? "accent" : "text", summary)}${hint}`, width, "")];
-  if (expanded) rows.push(...renderMarkdownBody(objective, width));
+  if (expanded) rows.push(...renderMarkdownBody(objective, width, theme));
   return rows;
 }
 
@@ -277,7 +277,7 @@ export function compactSupervisorNotice(message: unknown, theme: ExtensionContex
       if (body && !bodies.includes(body)) bodies.push(body);
     }
     for (const body of bodies) {
-      rows.push(...renderMarkdownBody(body, width));
+      rows.push(...renderMarkdownBody(body, width, theme));
     }
   }
   return rows;

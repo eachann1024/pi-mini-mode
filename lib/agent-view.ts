@@ -1,4 +1,4 @@
-import { diagramMarkdown, isMarkdownProse, minimalMarkdownTheme } from "./minimal-markdown.ts";
+import { diagramMarkdown, isMarkdownProse, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { extractNoticeBody, supervisorNoticeBody } from "./transcript-adapter.ts";
 import { paintExpandedHeading } from "./minimal-theme.ts";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -144,8 +144,8 @@ export function restyleAgentWidget(lines: string[], theme: Theme, width: number,
   const visible = blocks.filter(block => expanded || isFailed(block) || !isDone(block));
   const rows = [agentSummary(theme, width, blocks.length - done - errors, done, errors, expanded)];
   if (!blocks.length) rows.push(truncateToWidth(theme.fg("text", content[0]), width));
-  const markdown = (text: string, available: number) => new Markdown(text, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-    { color: value => theme.fg("text", value) }, { transform: diagramMarkdown }).render(Math.max(1, available));
+  const markdown = (text: string, available: number) => renderMinimalMarkdown(text, Math.max(1, available), getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
+    { color: value => theme.fg("text", value) }, diagramMarkdown);
   // ponytail: native widget exposes bounded live previews, not the full child transcript.
   visible.forEach((block, index) => {
     const heading = block[0].replace(/^(?:[└├]─\s*)?[●○◉✓✗×◦■\u2800-\u28ff]\s*/, "");
@@ -337,8 +337,8 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
     ? stripAcceptanceReport(plain(value).replace(/[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/g, " ")).trim() : "";
   const renderBody = (source: string, available: number) => {
     const width = Math.max(1, available);
-    if (isMarkdownProse(source)) return new Markdown(source, 0, 0, minimalMarkdownTheme(getMarkdownTheme()),
-      { color: value => theme.fg("muted", value) }, { transform: diagramMarkdown }).render(width);
+    if (isMarkdownProse(source)) return renderMinimalMarkdown(source, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
+      { color: value => theme.fg("muted", value) }, diagramMarkdown);
     // Wrap by visible columns. Do not re-slice truncateToWidth: it appends a
     // reset, so slice(row.length) would drop source characters on every wrap.
     return wrapTextWithAnsi(source, width).map(row => theme.fg("muted", row));
@@ -359,8 +359,7 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
       || [text(latest?.tool), latestArgs].filter(Boolean).join(" ")
       || text(child.description) || text(child.status ?? child.state) || "waiting";
     // Tool inputs are literal code, not Markdown (heredocs can contain HTML-like text).
-    const body = latest || child.currentTool ? text(activity) : text(new Markdown(activity, 0, 0, minimalMarkdownTheme(getMarkdownTheme()), undefined, { transform: diagramMarkdown })
-      .render(Math.max(1, visibleWidth(activity) + 1)).join(" "));
+    const body = latest || child.currentTool ? text(activity) : text(renderMinimalMarkdown(activity, Math.max(1, visibleWidth(activity) + 1), getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "", undefined, diagramMarkdown).join(" "));
     const state = text(child.status ?? child.state) || "waiting";
     const terminal = failedAgent(child) || finishedAgent(state);
     const isRunning = /^(running|active|starting|queued|pending)$/.test(state);
