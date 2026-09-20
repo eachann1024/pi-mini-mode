@@ -1321,10 +1321,7 @@ export default function (pi: ExtensionAPI) {
     description: "Open HTML settings in the browser",
     handler: async (_args, ctx) => openSettings(ctx),
   });
-  pi.registerCommand("pi-mini-mode-setup", {
-    description: "Set up Pi Mini Mode theme and fullscreen mode",
-    handler: async (_args, ctx) => runOnboarding(ctx),
-  });
+
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
     settings = loaded.settings;
