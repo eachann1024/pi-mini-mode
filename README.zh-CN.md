@@ -46,6 +46,9 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 使用 `Ctrl+V` 粘贴图片，Windows/WSL 使用 `Alt+V`。关闭输入增强不会关闭 Pi 原生剪贴板功能。
 
+<img width="1225" height="918" alt="image" src="https://github.com/user-attachments/assets/4cde0f64-35c9-4b15-9650-d8ba48863e6a" />
+
+
 ### 02 / 过程，更安静
 
 在设置中开启 **极简输出**，或运行 `/pi-mini-mode-minimal on`。
