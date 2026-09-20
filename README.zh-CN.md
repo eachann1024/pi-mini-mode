@@ -6,9 +6,14 @@
 
 # Pi Mini Mode
 
+
 **少一点干扰。多一点专注。**
 
 为 [Pi](https://pi.dev) 的日常工作做一点精细的改进，不止于页脚。光标处预览图片，折叠长消息和过程详情，展开子代理工作，让重要的会话状态始终清晰。
+
+<img width="1259" height="1020" alt="file-5ec414a82040ac062f4cda734fc10769" src="https://github.com/user-attachments/assets/0a894706-9ae6-46e5-bf85-3c7f85cf0273" />
+
+
 
 ## 安装
 
