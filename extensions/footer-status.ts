@@ -51,9 +51,9 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-session-tokens-show": true,
   "pi-mini-mode-cache-tokens-show": true,
   "pi-mini-mode-cost-show": true,
-  "pi-mini-mode-mcp-show": false,
+  "pi-mini-mode-mcp-show": true,
   "pi-mini-mode-context-show": true,
-  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-dots-show": true,
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
 
 const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<Exclude<keyof MiniLensSettings, "footerOrder">>;
 export const FOOTER_FIELDS = ["project-branch", "model", "thinking", "branch", "session-tokens", "cache-tokens", "ch", "cost", "mcp", "context", "context-percent", "speed"] as const;
+export const FOOTER_STYLE_OPTIONS = ["context-dots", "speed-unit"] as const;
 
 const COPY = {
   title: "Pi Mini Mode 设置", preview: "预览（示例数据）", lens: "设置", minimal: "极简输出",
@@ -77,7 +78,7 @@ const COPY = {
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
   inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "MCP 数量、点阵样式和仅显示分支默认关闭；项目名称和分支默认开启，与仅显示分支互斥。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "几乎全部功能默认开启；仅「仅显示分支」默认关，与「项目与分支」互斥。可用 /pi-mini-mode-settings 再改。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
 } as const;
 
 const RECOMMENDED_THEMES = ["cc-dark", "cc-light"] as const;
@@ -108,17 +109,31 @@ export function parseSettings(value: unknown): MiniLensSettings {
   return settings;
 }
 
+/** True when saved JSON is missing a boolean key or a footer field, so defaults can be written back. */
+export function settingsNeedBackfill(raw: unknown, parsed: MiniLensSettings): boolean {
+  if (!raw || typeof raw !== "object") return true;
+  const candidate = raw as Record<string, unknown>;
+  for (const id of SETTING_IDS) {
+    if (!Object.hasOwn(candidate, id)) return true;
+  }
+  if (!Array.isArray(candidate.footerOrder)) return false;
+  const order = parsed.footerOrder ?? [];
+  return FOOTER_FIELDS.some(id => !order.includes(id));
+}
+
 /** Pi /model and other selectors own Ctrl+S; the editor exposes getText. */
 export function focusedSelectorOwnsKeys(tui?: { getFocusedComponent?(): unknown } | null): boolean {
   const focused = tui?.getFocusedComponent?.();
   return !!focused && typeof focused === "object" && typeof (focused as { getText?: unknown }).getText !== "function";
 }
 
-export async function loadSettings(path = settingsPath()): Promise<{ settings: MiniLensSettings; exists: boolean }> {
+export async function loadSettings(path = settingsPath()): Promise<{ settings: MiniLensSettings; exists: boolean; backfilled: boolean }> {
   try {
-    return { settings: parseSettings(JSON.parse(await readFile(path, "utf8"))), exists: true };
+    const raw: unknown = JSON.parse(await readFile(path, "utf8"));
+    const settings = parseSettings(raw);
+    return { settings, exists: true, backfilled: settingsNeedBackfill(raw, settings) };
   } catch {
-    return { settings: { ...DEFAULT_SETTINGS }, exists: false };
+    return { settings: { ...DEFAULT_SETTINGS }, exists: false, backfilled: false };
   }
 }
 
@@ -1233,7 +1248,7 @@ export default function (pi: ExtensionAPI) {
       else settingsWebOpening ??= (async () => {
         const { startSettingsWeb } = await import("../lib/settings-web.ts");
         const server = await startSettingsWeb(() => ({
-          settings, defaults: DEFAULT_SETTINGS, order: FOOTER_FIELDS,
+          settings, defaults: DEFAULT_SETTINGS, order: FOOTER_FIELDS, options: FOOTER_STYLE_OPTIONS,
           items: settingsItems(settings).filter(item => !isCollapsedReplyChildSetting(item.id)),
           // "regular" means minimal output is saved but cannot mount; the page offers a Pi prompt.
           tuiMode: lastAttachMode ?? null,
@@ -1242,8 +1257,8 @@ export default function (pi: ExtensionAPI) {
           const input = value as Record<string, unknown>;
           for (const [key, entry] of Object.entries(input)) {
             if (key === "footerOrder") {
-              if (!Array.isArray(entry) || entry.length !== FOOTER_FIELDS.length || new Set(entry).size !== entry.length
-                || entry.some(id => !(FOOTER_FIELDS as readonly unknown[]).includes(id))) throw new TypeError("Invalid order");
+              if (!Array.isArray(entry) || new Set(entry).size !== entry.length
+                || entry.some(id => typeof id !== "string" || !(FOOTER_FIELDS as readonly string[]).includes(id))) throw new TypeError("Invalid order");
             } else if (!SETTING_IDS.includes(key as typeof SETTING_IDS[number]) || typeof entry !== "boolean") throw new TypeError("Invalid setting");
           }
           const next = parseSettings({ ...settings, ...input, onboardingCompleted: true });
@@ -1275,7 +1290,7 @@ export default function (pi: ExtensionAPI) {
     let choice: string | undefined;
     try {
       choice = await ctx.ui.select(
-        `Pi Mini Mode ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s\n\n${COPY.onboarding}`,
+        `Pi Mini Mode ${COPY.preview}\n\n  deepseek-v4-flash  high  ${COPY.totalLabel} 45K  ${COPY.cachedLabel} 25K  ${COPY.cacheHitLabel} 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s\n\n${COPY.onboarding}`,
         [COPY.keepDefaults, COPY.configureNow, COPY.applyRecommended],
       );
     } catch (error) {
@@ -1363,10 +1378,15 @@ export default function (pi: ExtensionAPI) {
     description: "Open HTML settings in the browser",
     handler: async (_args, ctx) => openSettings(ctx),
   });
+  pi.registerCommand("pi-mini-mode-setup", {
+    description: "Show the first-run setup prompt again",
+    handler: async (_args, ctx) => runOnboarding(ctx),
+  });
 
   pi.on("session_start", async (_event, ctx) => {
     const loaded = await loadSettings(configPath);
     settings = loaded.settings;
+    if (loaded.exists && loaded.backfilled) await persistSettings(ctx);
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
     const { installInputEnhancements } = await import("../lib/input-enhancements.ts");
@@ -1396,7 +1416,7 @@ export default function (pi: ExtensionAPI) {
       };
     });
     refresh();
-    if (!loaded.exists && ctx.mode === "tui" && ctx.hasUI) await runOnboarding(ctx);
+    if (!settings.onboardingCompleted && ctx.mode === "tui" && ctx.hasUI) await runOnboarding(ctx);
   });
   const syncMinimalBranch = (_event: unknown, ctx: ExtensionContext) => {
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());

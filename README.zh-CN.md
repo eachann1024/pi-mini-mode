@@ -83,6 +83,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 | 命令／快捷键 | 用途 |
 | --- | --- |
 | `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
+| `/pi-mini-mode-setup` | 再次显示首次设置提示 |
 | `/pi-mini-mode-minimal on` / `off` | 开启极简输出／恢复原生历史 |
 | `Ctrl+O` | 展开／收起完整过程树 |
 | `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
@@ -106,10 +107,10 @@ pi install git:github.com/eachann1024/pi-mini-mode
 <details>
 <summary><strong>首次使用与配置</strong></summary>
 
-首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。页脚指标除 MCP 数量外默认开启，点阵样式默认关闭，极简输出默认开启，例如：
+首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。几乎全部功能默认开启；仅「仅显示分支」默认关，与「项目与分支」互斥。之后可用 `/pi-mini-mode-settings` 再改。
 
 ```text
-deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
+deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
 ```
 
 首次设置会提供 **Keep defaults（保留默认值）**、**Configure now（立即配置）** 和 **Apply recommended setup（应用推荐配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。应用推荐配置会让你选择内置的 `cc-dark` 或 `cc-light` 主题，通过 Pi 官方设置 API 保存该主题和全局 `tuiMode=fullscreen`，立即应用主题，并提示重启 Pi（全屏渲染器在启动时决定）。项目设置和命令行参数可能覆盖全局设置。按 Esc／取消不会完成首次设置，可稍后用 `/pi-mini-mode-setup` 重试。Print、JSON 等非交互模式不会显示提示。
@@ -124,9 +125,9 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
   "pi-mini-mode-session-tokens-show": true,
   "pi-mini-mode-cache-tokens-show": true,
   "pi-mini-mode-cost-show": true,
-  "pi-mini-mode-mcp-show": false,
+  "pi-mini-mode-mcp-show": true,
   "pi-mini-mode-context-show": true,
-  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-dots-show": true,
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
@@ -144,9 +145,9 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █�
 | `pi-mini-mode-session-tokens-show` | `true` | 显示会话累计令牌（`Total`） |
 | `pi-mini-mode-cache-tokens-show` | `true` | 显示缓存读取与写入令牌（已包含在 Total 中） |
 | `pi-mini-mode-cost-show` | `true` | 显示会话费用估算 |
-| `pi-mini-mode-mcp-show` | `false` | 显示已启用的 MCP 服务器数量 |
+| `pi-mini-mode-mcp-show` | `true` | 显示已启用的 MCP 服务器数量 |
 | `pi-mini-mode-context-show` | `true` | 显示已用/总上下文令牌和进度条 |
-| `pi-mini-mode-context-dots-show` | `false` | 使用单行点阵进度条替代默认实心进度条 |
+| `pi-mini-mode-context-dots-show` | `true` | 使用单行点阵进度条替代实心进度条 |
 | `pi-mini-mode-context-percent-show` | `true` | 显示上下文使用百分比 |
 | `pi-mini-mode-speed-show` | `true` | 显示最新生成速度 |
 | `pi-mini-mode-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
