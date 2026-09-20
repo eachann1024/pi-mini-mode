@@ -20,9 +20,9 @@
   <div><code id="noticePrompt"></code><button type="button" id="copyPrompt"></button></div>
 </div>
 <div role="status" aria-live="polite"><span id="status"></span><button id="retry" hidden></button></div>
-<section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
 <section><h2 id="fieldsHeading"></h2><p class="hint" id="dragHint"></p><div id="preview" role="group" tabindex="0"></div><div class="grid" id="fields"></div></section>
 <section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
+<section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
 </main>
 <script>
 const $=id=>document.getElementById(id),token=location.hash.slice(1);
@@ -173,7 +173,7 @@ function render(){
   renderNotice();
   $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))));
   $('features').replaceChildren(...t('featureList').map(feature));
-  $('options').replaceChildren(...['context-dots','speed-unit'].map(id=>checkbox(id,FIELD_KEY[id])));
+  $('options').replaceChildren(...(data.options||[]).map(id=>checkbox(id,FIELD_KEY[id]||key(id))));
   preview();
 }
 function renderNotice(){
@@ -201,9 +201,10 @@ function setLang(next){lang=next;localStorage.piMiniModeLang=lang;render()}
 $('lang-zh').onclick=()=>setLang('zh');
 $('lang-en').onclick=()=>setLang('en');
 $('retry').onclick=save;
-$('reset').onclick=()=>{if(!confirm(t('confirmReset')))return;state={...data.defaults};order=[...data.order];render();change()};
+function mergeOrder(base,all){const next=[...new Set((base||[]).filter(id=>(all||[]).includes(id)))];for(const id of all||[])if(!next.includes(id))next.push(id);return next}
+$('reset').onclick=()=>{if(!confirm(t('confirmReset')))return;state={...data.defaults};order=mergeOrder(data.order,data.order);render();change()};
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue=''}});
 applyLang();status(t('connecting'));
-request('GET').then(value=>{data=value;state={...data.settings};order=[...(state.footerOrder||data.order)];render();$('reset').disabled=false;status(t('connected'))}).catch(()=>status(t('reconnect'),true));
+request('GET').then(value=>{data=value;state={...data.settings};order=mergeOrder(state.footerOrder||data.order,data.order);render();$('reset').disabled=false;status(t('connected'))}).catch(()=>status(t('reconnect'),true));
 </script>
 </html>

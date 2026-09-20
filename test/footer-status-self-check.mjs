@@ -271,8 +271,9 @@ assert.equal(restoredTurns.length, 7, "process limit must not delete conversatio
 assert.equal(restoredTurns[6].final, "answer-6");
 assert.deepEqual(restoredTurns[6].process, ["output tool output"]);
 
-assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-mcp-show"], false, "MCP count defaults to off");
-assert.equal(extension.parseSettings({ "pi-mini-mode-mcp-show": "true" })["pi-mini-mode-mcp-show"], false, "invalid MCP setting falls back to off");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-mcp-show"], true, "MCP count defaults to on");
+assert.equal(extension.parseSettings({ "pi-mini-mode-mcp-show": "true" })["pi-mini-mode-mcp-show"], true, "invalid MCP setting falls back to default on");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-branch-show"], false, "branch-only stays off by default");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-ch-show"], true, "pi-mini-mode-ch-show defaults to true");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-session-tokens-show"], true, "session-token display defaults to true");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-cache-tokens-show"], true, "cache-token display defaults to true");
@@ -291,6 +292,46 @@ assert.equal(JSON.parse(await readFile(configPath, "utf8"))["pi-mini-mode-ch-sho
 const corruptPath = join(configDir, "corrupt.json");
 await writeFile(corruptPath, "{not JSON", "utf8");
 assert.deepEqual((await extension.loadSettings(corruptPath)).settings, extension.DEFAULT_SETTINGS, "corrupt configuration files safely fall back to defaults");
+assert.equal((await extension.loadSettings(corruptPath)).backfilled, false, "unreadable files are not treated as a backfill");
+
+const oldPartial = {
+  "pi-mini-mode-model-show": true,
+  "pi-mini-mode-mcp-show": false,
+  onboardingCompleted: true,
+  footerOrder: ["model", "thinking"],
+};
+const parsedPartial = extension.parseSettings(oldPartial);
+assert.equal(parsedPartial["pi-mini-mode-mcp-show"], false, "explicit MCP off is preserved");
+assert.equal(parsedPartial["pi-mini-mode-context-dots-show"], true, "missing dots key backfills to default on");
+assert.equal(parsedPartial["pi-mini-mode-context-show"], true, "missing footer keys backfill to default on");
+assert.deepEqual(parsedPartial.footerOrder, ["model", "thinking", ...extension.FOOTER_FIELDS.filter((id) => id !== "model" && id !== "thinking")]);
+assert.equal(extension.settingsNeedBackfill(oldPartial, parsedPartial), true, "partial JSON needs a disk backfill");
+assert.equal(extension.settingsNeedBackfill(extension.DEFAULT_SETTINGS, extension.parseSettings(extension.DEFAULT_SETTINGS)), false, "complete defaults do not need backfill");
+const keptOff = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": false, footerOrder: [...extension.FOOTER_FIELDS] };
+assert.equal(extension.settingsNeedBackfill(keptOff, extension.parseSettings(keptOff)), false, "explicit false with a full order is left alone");
+
+const migrateDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-migrate-"));
+process.env.PI_MINI_MODE_AGENT_DIR = migrateDir;
+await writeFile(extension.settingsPath(migrateDir), `${JSON.stringify(oldPartial)}\n`);
+const migrateExtension = await import(pathToFileURL(source.pathname).href + `?migrate=${Date.now()}`);
+const migrateHandlers = new Map();
+migrateExtension.default({
+  events: { on() { return () => {}; } },
+  on(name, handler) { migrateHandlers.set(name, handler); },
+  registerCommand() {},
+  registerShortcut() {},
+});
+await migrateHandlers.get("session_start")({}, {
+  cwd: migrateDir, mode: "print", hasUI: false, model: { id: "deepseek-v4-flash" }, thinkingLevel: "high",
+  getContextUsage() { return {}; }, sessionManager: { getBranch() { return []; } },
+  ui: { setFooter() {}, notify() {}, setWidget() {}, getEditorComponent() {}, setEditorComponent() {}, addAutocompleteProvider() {} },
+});
+const migrated = JSON.parse(await readFile(extension.settingsPath(migrateDir), "utf8"));
+assert.equal(migrated["pi-mini-mode-mcp-show"], false, "session_start keeps an explicit MCP off");
+assert.equal(migrated["pi-mini-mode-context-dots-show"], true, "session_start writes missing keys to disk");
+assert.ok(migrated.footerOrder.includes("speed"), "session_start appends missing footer fields");
+await rm(migrateDir, { recursive: true, force: true });
+process.env.PI_MINI_MODE_AGENT_DIR = configDir;
 
 const runtimeDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-runtime-"));
 process.env.PI_MINI_MODE_AGENT_DIR = runtimeDir;
@@ -372,7 +413,7 @@ assert.equal(branchDisposed, true);
 
 let lines = footer.render(100);
 assert.equal(lines.length, 1, "footer always renders one line");
-assert.doesNotMatch(footer.render(140)[0], /MCP/, "startup snapshot does not enable MCP display by default");
+assert.match(footer.render(140)[0], /◇ MCP 3/, "startup snapshot shows MCP count by default");
 assert.match(lines[0], /^deepseek-v4-flash  high/, "README example model is displayed generically");
 assert.doesNotMatch(lines[0], /deepseek\//, "provider prefix is omitted from the model label");
 assert.ok(lines[0].includes("Total 115K"), "footer shows provider-reported cumulative session tokens");
@@ -381,15 +422,15 @@ assert.match(lines[0], /CH 25\.0%/, "footer shows cumulative cache-hit rate");
 assert.ok(lines[0].includes("0/1.0M"), "middle shows used tokens and context total");
 assert.match(lines[0], /0%$/, "without a speed sample, context percentage remains rightmost");
 assert.doesNotMatch(lines[0], /--|tok\/s/, "without a speed sample, speed is hidden rather than rendered as a placeholder");
-assert.match(lines[0], /░░+/, "zero percent renders an entirely empty progress bar");
+assert.match(lines[0], /⣀+/, "zero percent renders an entirely empty dot-matrix bar");
 assert.ok(colors.includes("accent") && colors.includes("borderMuted"), "progress uses semantic theme colors");
 
 usage = { tokens: 50_000, percent: 50, contextWindow: 100_000 };
 lines = footer.render(100);
 assert.ok(lines[0].includes("50K/100K"), "middle reads token values from getContextUsage");
 assert.match(lines[0], /50%$/, "percentage remains rightmost while generation speed is unavailable");
-const middleBar = lines[0].match(/[█░]+/)?.[0] ?? "";
-assert.ok(middleBar.includes("█") && middleBar.includes("░"), "an intermediate percentage has filled and empty progress cells");
+const middleBar = lines[0].match(/[⣿⣀]+/)?.[0] ?? "";
+assert.ok(middleBar.includes("⣿") && middleBar.includes("⣀"), "an intermediate percentage has filled and empty progress cells");
 
 assert.equal(extension.outputSpeed(70, 2_000, 4_000), 35, "decode TPS is output tokens / seconds after the first output token");
 assert.equal(extension.outputSpeed(70, undefined, 4_000), undefined, "speed is hidden until the first output token");
@@ -448,7 +489,7 @@ assert.deepEqual(totals, { totalTokens: 175_080, input: 125_000, output: 10_080,
 Date.now = originalNow;
 
 const sampleTotals = { totalTokens: 100_000, input: 75_000, output: 10_000, cacheRead: 25_000, cacheWrite: 0, cost: 0.01234 };
-assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-context-dots-show"], false, "solid bar remains default");
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-context-dots-show"], true, "dot-matrix bar is default");
 const missingContext = extension.statusLine({ ...ctx, model: undefined, thinkingLevel: undefined, getContextUsage: () => ({ contextWindow: 272_000 }) }, theme, 140, sampleTotals, extension.DEFAULT_SETTINGS, undefined);
 assert.doesNotMatch(missingContext, /\?|272K|no model|off|[█░⣿⣀]|tok\/s/, "missing fields hide without placeholders");
 assert.match(missingContext, /Total 100K/, "known usage stays visible");
@@ -460,12 +501,15 @@ const dotted = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-context-dots-show"
 const dottedLine = extension.statusLine(ctx, theme, 140, sampleTotals, dotted, 40);
 assert.match(dottedLine, /⣿+⣀+/, "dot-matrix bar renders filled and empty cells");
 assert.doesNotMatch(dottedLine, /[█░]/, "dot-matrix mode replaces solid cells");
-assert.equal(extension.parseSettings({ "pi-mini-mode-context-dots-show": "bad" })["pi-mini-mode-context-dots-show"], false);
+assert.equal(extension.parseSettings({ "pi-mini-mode-context-dots-show": "bad" })["pi-mini-mode-context-dots-show"], true);
 const withMcp = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-mcp-show": true };
 assert.doesNotMatch(extension.statusLine(ctx, theme, 140, sampleTotals, withMcp, 40), /MCP/, "unknown MCP state is hidden and old statusLine calls remain compatible");
 assert.match(extension.statusLine(ctx, theme, 140, sampleTotals, withMcp, 40, undefined, 0), /◇ MCP 0/, "a known empty snapshot displays zero");
-assert.doesNotMatch(extension.settingsPreviewLine(theme, extension.DEFAULT_SETTINGS), /MCP/, "preview defaults to MCP off");
+assert.match(extension.settingsPreviewLine(theme, extension.DEFAULT_SETTINGS), /◇ MCP 3/, "preview defaults to MCP on");
 assert.match(extension.settingsPreviewLine(theme, withMcp), /◇ MCP 3/, "preview provides sample MCP count");
+const solidBar = { ...extension.DEFAULT_SETTINGS, "pi-mini-mode-context-dots-show": false };
+assert.match(extension.settingsPreviewLine(theme, solidBar), /[█░]/, "solid bar remains available when dots are off");
+assert.match(extension.settingsPreviewLine(theme, extension.DEFAULT_SETTINGS), /[⣿⣀]/, "preview uses the default dot-matrix bar");
 assert.ok(colorTexts.some(([color, text]) => color === "muted" && text === "◇ MCP 3"), "MCP icon and count use semantic monochrome theme color");
 for (let width = 0; width <= 140; width++) {
   const line = extension.statusLine(ctx, theme, width, sampleTotals, withMcp, 40, undefined, 123);
@@ -545,6 +589,16 @@ const updateSettings = async (patch) => {
 };
 const servedSettings = await settingsSnapshot();
 assert.deepEqual(servedSettings.order, extension.FOOTER_FIELDS, "settings page serves the footer field order");
+assert.deepEqual(servedSettings.options, extension.FOOTER_STYLE_OPTIONS, "settings page serves style option ids");
+const shortPut = await fetch(settingsEndpoint, {
+  method: "PUT",
+  headers: settingsHeaders,
+  body: JSON.stringify({ ...servedSettings.settings, footerOrder: ["model", "thinking"] }),
+});
+assert.equal(shortPut.status, 200, "short footerOrder is accepted");
+const shortSaved = (await shortPut.json()).settings.footerOrder;
+assert.deepEqual(shortSaved.slice(0, 2), ["model", "thinking"], "PUT keeps the saved footer order");
+assert.deepEqual([...shortSaved].sort(), [...extension.FOOTER_FIELDS].sort(), "PUT backfills missing footer fields");
 const settingsItems = new Map(servedSettings.items.map((item) => [item.id, item]));
 assert.ok([...settingsItems.values()].every((item) => !item.submenu), "极简输出不再有子菜单");
 assert.ok([...settingsItems.values()].every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
@@ -572,8 +626,7 @@ await updateSettings({ "pi-mini-mode-input-enhancements": false });
 assert.equal(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), undefined, "关闭输入增强后保留 Pi 原生输入");
 await updateSettings({ "pi-mini-mode-input-enhancements": true });
 assert.ok(await inputHandler({ text: skillPrompt, source: "interactive" }, settingsCtx), "重新打开后立即生效，无需重装");
-assert.equal(settingsItems.get("pi-mini-mode-mcp-show")?.currentValue, "off", "settings expose MCP toggle initially off");
-await updateSettings({ "pi-mini-mode-mcp-show": true });
+assert.equal(settingsItems.get("pi-mini-mode-mcp-show")?.currentValue, "on", "settings expose MCP toggle initially on");
 assert.match(footer.render(140)[0], /◇ MCP 3/, "startup broadcast survives session_start and counts enabled, not connected servers or tools");
 let beforeMcpRefresh = renders;
 events.emit(mcpStatusEvent, { version: 1, servers: [{ name: "offline", disabled: false, status: "not-connected" }] });
@@ -815,7 +868,8 @@ const onboardingDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-onboarding-"));
 process.env.PI_MINI_MODE_AGENT_DIR = onboardingDir;
 const onboardingExtension = await import(pathToFileURL(source.pathname).href + `?onboarding=${Date.now()}`);
 const onboardingHandlers = new Map();
-onboardingExtension.default({ events, on(name, handler) { onboardingHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
+const onboardingCommands = new Map();
+onboardingExtension.default({ events, on(name, handler) { onboardingHandlers.set(name, handler); }, registerCommand(name, command) { onboardingCommands.set(name, command); }, registerShortcut() {} });
 const previews = [];
 let customCalls = 0;
 const onboardingCtx = {
@@ -837,11 +891,25 @@ const onboardingCtx = {
 };
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
 assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置", "应用推荐配置"], "onboarding offers explicit default, configure, and recommended paths");
-assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, context, and speed data");
-assert.match(previews[0]?.[0] ?? "", /MCP 数量、点阵样式和仅显示分支默认关闭；项目名称和分支默认开启，与仅显示分支互斥。/, "onboarding describes defaults accurately");
+assert.match(previews[0]?.[0] ?? "", /Total 45K  Cached 25K  CH 40\.0%.*◇ MCP 3.*500\/1\.0M.*120 tok\/s/, "onboarding preview has realistic session, cache, MCP, context, and speed data");
+assert.match(previews[0]?.[0] ?? "", /几乎全部功能默认开启；仅「仅显示分支」默认关，与「项目与分支」互斥。可用 \/pi-mini-mode-settings 再改。/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
+assert.ok(onboardingCommands.has("pi-mini-mode-setup"), "setup command is registered for retrying first-run");
+previews.length = 0;
+await onboardingCommands.get("pi-mini-mode-setup").handler("", onboardingCtx);
+assert.equal(previews.length, 1, "/pi-mini-mode-setup shows the first-run prompt again");
+
+const emptyFileDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-empty-onboarding-"));
+process.env.PI_MINI_MODE_AGENT_DIR = emptyFileDir;
+await writeFile(onboardingExtension.settingsPath(emptyFileDir), "{}\n");
+const emptyHandlers = new Map();
+onboardingExtension.default({ events, on(name, handler) { emptyHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
+previews.length = 0;
+await emptyHandlers.get("session_start")({}, { ...onboardingCtx, cwd: emptyFileDir });
+assert.equal(previews.length, 1, "empty settings file still shows first-run prompt");
+await rm(emptyFileDir, { recursive: true, force: true });
 
 const configureDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-configure-"));
 process.env.PI_MINI_MODE_AGENT_DIR = configureDir;

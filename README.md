@@ -75,6 +75,7 @@ This earlier screenshot and recording show footer configuration, not the newer i
 | Command / shortcut | Purpose |
 | --- | --- |
 | `/pi-mini-mode-settings` | Configure fields, input enhancements and minimal output |
+| `/pi-mini-mode-setup` | Show the first-run setup prompt again |
 | `/pi-mini-mode-minimal on` / `off` | Enable minimal output / restore native history |
 | `Ctrl+O` | Expand or collapse the complete process tree |
 | `Ctrl+S` | Expand or collapse completed subagent rows; yields to Pi `/model`, `/thinking`, and other selectors |
@@ -98,10 +99,10 @@ This earlier screenshot and recording show footer configuration, not the newer i
 <details>
 <summary><strong>First run & configuration</strong> — defaults, controls, and settings file</summary>
 
-On the first interactive TUI session, Pi Mini Mode shows a preview. Footer metrics are on by default except MCP count; the dot-matrix style is off; minimal output is on:
+On the first interactive TUI session, Pi Mini Mode shows a preview. Almost every feature is on by default; only **branch-only** is off (it is mutually exclusive with **project & branch**). Change anything later with `/pi-mini-mode-settings`.
 
 ```text
-deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  500/1.0M  █░░░░░░░░░  1%  120 tok/s
+deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
 ```
 
 The first-run picker offers **Keep defaults**, **Configure now**, and **Apply recommended setup**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Applying the recommendation asks you to choose the bundled `cc-dark` or `cc-light` theme, saves that theme and global `tuiMode=fullscreen` through Pi's settings API, applies the theme immediately, and asks you to restart Pi because the fullscreen renderer is chosen at startup. Project settings and CLI flags may override these global values. Escape/cancel leaves onboarding incomplete; retry with `/pi-mini-mode-setup`. Print, JSON, and other non-interactive modes never prompt.
@@ -126,9 +127,9 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
   "pi-mini-mode-session-tokens-show": true,
   "pi-mini-mode-cache-tokens-show": true,
   "pi-mini-mode-cost-show": true,
-  "pi-mini-mode-mcp-show": false,
+  "pi-mini-mode-mcp-show": true,
   "pi-mini-mode-context-show": true,
-  "pi-mini-mode-context-dots-show": false,
+  "pi-mini-mode-context-dots-show": true,
   "pi-mini-mode-context-percent-show": true,
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
@@ -146,9 +147,9 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
 | `pi-mini-mode-session-tokens-show` | `true` | Accumulated session tokens (`Total`) |
 | `pi-mini-mode-cache-tokens-show` | `true` | Accumulated cache read + cache write tokens |
 | `pi-mini-mode-cost-show` | `true` | Estimated session list price |
-| `pi-mini-mode-mcp-show` | `false` | Enabled MCP server count |
+| `pi-mini-mode-mcp-show` | `true` | Enabled MCP server count |
 | `pi-mini-mode-context-show` | `true` | Used/total context tokens and progress bar |
-| `pi-mini-mode-context-dots-show` | `false` | Use a single-line dot-matrix bar instead of the default solid bar |
+| `pi-mini-mode-context-dots-show` | `true` | Use a single-line dot-matrix bar instead of the solid bar |
 | `pi-mini-mode-context-percent-show` | `true` | Context-use percentage |
 | `pi-mini-mode-speed-show` | `true` | Generation speed at the far right |
 | `pi-mini-mode-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
