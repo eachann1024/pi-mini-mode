@@ -484,8 +484,15 @@ export interface MinimalTurn {
   /** Wall-clock start of this user-request execution; retained across tool and thinking turns. */
   startedAt?: number;
   thinking?: number;
+  /** Per-process-index Thinking clocks. Live rows count; completed rows keep endedAt. */
+  thinkingClocks?: Array<ThinkingClock | undefined>;
   awaitingResponse?: boolean;
   waitingTools?: Array<{ id: string; name: string; startedAt: number }>;
+}
+
+export interface ThinkingClock {
+  startedAt: number;
+  endedAt?: number;
 }
 
 const PROCESS_PREVIEW_LIMIT = 180;
@@ -522,6 +529,37 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   const minutes = Math.floor(seconds / 60);
   const remainder = String(seconds % 60).padStart(2, "0");
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
+}
+
+function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt = Date.now()): ThinkingClock {
+  const clocks = turn.thinkingClocks ??= [];
+  return clocks[index] ??= { startedAt: turn.startedAt ?? startedAt };
+}
+
+function freezeThinkingClock(turn: MinimalTurn | undefined, index: number | undefined, endedAt = Date.now()): void {
+  if (!turn || index === undefined) return;
+  const clock = turn.thinkingClocks?.[index];
+  if (clock && clock.endedAt === undefined) clock.endedAt = endedAt;
+}
+
+function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt = Date.now()): void {
+  if (!turn?.thinkingClocks) return;
+  for (const clock of turn.thinkingClocks) {
+    if (clock && clock.endedAt === undefined) clock.endedAt = endedAt;
+  }
+}
+
+/** Active Thinking counts from the turn start; completed Thinking keeps the frozen stop time. */
+export function formatThinkingElapsed(
+  turn: Pick<MinimalTurn, "startedAt" | "thinkingClocks">,
+  processIndex: number,
+  active: boolean,
+  now = Date.now(),
+): string {
+  const clock = turn.thinkingClocks?.[processIndex];
+  if (active) return formatElapsed(clock?.startedAt ?? turn.startedAt, now);
+  if (clock?.endedAt != null) return formatElapsed(clock.startedAt, clock.endedAt);
+  return "";
 }
 
 function pushProcess(turn: MinimalTurn | undefined, kind: string, value: unknown): void {
@@ -611,12 +649,14 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
   return turns.map((turn) => {
     let thinking: number | undefined;
     let visibleCount = 0;
+    const thinkingClocks: Array<ThinkingClock | undefined> = [];
     const process = turn.process.filter((line, index) => {
       const visible = line.startsWith("thinking ") ? settings["pi-mini-mode-minimal-thinking-show"]
         : /^(tool|call) /.test(line) ? settings["pi-mini-mode-minimal-tools-show"]
         : line.startsWith("output ") ? settings["pi-mini-mode-minimal-output-show"]
         : line.startsWith("skill ") ? settings["pi-mini-mode-minimal-skills-show"] : true;
       if (visible) {
+        if (turn.thinkingClocks?.[index]) thinkingClocks[visibleCount] = turn.thinkingClocks[index];
         if (index === turn.thinking) thinking = visibleCount;
         visibleCount++;
       }
@@ -628,6 +668,7 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
       awaitingResponse: turn.awaitingResponse && settings["pi-mini-mode-minimal-thinking-show"],
       agentCalls: settings["pi-mini-mode-minimal-tools-show"] ? turn.agentCalls : [],
       process,
+      thinkingClocks: turn.thinkingClocks ? thinkingClocks : undefined,
     };
   });
 }
@@ -793,19 +834,19 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const call = turn.agentCalls?.find(call => call.id === entry.slice(5));
             if (call && isAgentTool(call.tool ?? call.name) && !isExpanded()) return [];
             const display = call && agentCallDisplay(call);
-            return call && display ? [{ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`.trim(), detail: display.detail, state: call.state, id: call.id, thinking: false }] : [];
+            return call && display ? [{ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`.trim(), detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex, activeThinking: false }] : [];
           }
           const part = entry.match(/^(tool|output|thinking|skill)(?:\s+|$)([\s\S]*)/);
           const thinking = part?.[1] === "thinking";
           const activeThinking = thinking && turn.running && turn.thinking === processIndex;
           const label = ({ tool: "Tool", output: "Output", thinking: "Thinking", skill: "Skill" } as Record<string, string>)[part?.[1] ?? ""] ?? "Process";
-          return [{ title: `${label} ${part?.[2] ?? entry}`, detail: part?.[2] ?? entry, state: activeThinking ? "running" : "done", id: thinking ? `thinking:${index}:${processIndex}` : "", thinking }];
+          return [{ title: `${label} ${part?.[2] ?? entry}`, detail: part?.[2] ?? entry, state: activeThinking ? "running" : "done", id: thinking ? `thinking:${index}:${processIndex}` : "", thinking, processIndex, activeThinking }];
         });
         // Older in-memory turns may predate call markers.
         for (const call of turn.agentCalls ?? []) {
           if (isAgentTool(call.tool ?? call.name) && !isExpanded()) continue;
           const display = agentCallDisplay(call);
-          if (!entries.some(entry => entry.id === call.id)) entries.push({ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`, detail: display.detail, state: call.state, id: call.id, thinking: false });
+          if (!entries.some(entry => entry.id === call.id)) entries.push({ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`, detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex: -1, activeThinking: false });
         }
         const agentTurnControls: Array<{ runId: string; y: number; width: number; line: string }> = [];
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
@@ -841,8 +882,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const split = text.indexOf(" ");
             const label = split < 0 ? text : text.slice(0, split);
             const body = split < 0 ? "" : text.slice(split + 1);
-            const activeThinking = entry.thinking && entry.state === "running";
-            const thinkingElapsed = entry.thinking ? theme.fg(activeThinking ? "success" : "muted", ` ${formatElapsed(turn.startedAt)}`) : "";
+            const activeThinking = !!entry.activeThinking;
+            const elapsed = entry.thinking ? formatThinkingElapsed(turn, entry.processIndex, activeThinking) : "";
+            const thinkingElapsed = elapsed ? theme.fg(activeThinking ? "success" : "muted", ` ${elapsed}`) : "";
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : !!(entry.thinking && expandedThinking.has(entry.id));
@@ -1387,9 +1429,23 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("model_select", refresh);
   pi.on("thinking_level_select", refresh);
+  const writeThinkingLine = (turn: MinimalTurn, blockIndex: number, line: string): number => {
+    const existing = minimalMessageIndices.get(blockIndex);
+    if (existing === undefined) {
+      const index = turn.process.length;
+      minimalMessageIndices.set(blockIndex, index);
+      turn.process.push(line);
+      ensureThinkingClock(turn, index);
+      return index;
+    }
+    turn.process[existing] = line;
+    ensureThinkingClock(turn, existing);
+    return existing;
+  };
   pi.on("message_start", (event) => {
     if (event.message.role === "user") {
       if (activeMinimalTurn) {
+        freezeOpenThinkingClocks(activeMinimalTurn);
         activeMinimalTurn.final = pendingMinimalFinal;
         activeMinimalTurn.running = false;
         activeMinimalTurn.thinking = undefined;
@@ -1411,6 +1467,7 @@ export default function (pi: ExtensionAPI) {
     // Background completions can start a new assistant turn without a user message.
     activeMinimalTurn ??= minimalTurns.at(-1);
     if (activeMinimalTurn) {
+      freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
       if (activeMinimalTurn.final) (activeMinimalTurn.replies ??= []).push(activeMinimalTurn.final);
       activeMinimalTurn.final = undefined;
       activeMinimalTurn.running = true;
@@ -1429,17 +1486,21 @@ export default function (pi: ExtensionAPI) {
   pi.on("message_update", (event) => {
     const partial = (event.assistantMessageEvent as { partial?: { usage?: UsageLike; content?: Array<Record<string, unknown>> } }).partial;
     if (activeMinimalTurn && partial?.content) {
+      const previousThinking = activeMinimalTurn.thinking;
       activeMinimalTurn.thinking = undefined;
       if (partial.content.length) activeMinimalTurn.awaitingResponse = false;
       for (const [blockIndex, item] of partial.content.entries()) {
         if (item.type !== "thinking") continue;
-        const line = `${item.type === "thinking" ? "thinking" : "output"} ${processText(item.thinking ?? item.text)}`;
-        const index = minimalMessageIndices.get(blockIndex);
-        if (index === undefined) {
-          minimalMessageIndices.set(blockIndex, activeMinimalTurn.process.length);
-          activeMinimalTurn.process.push(line);
-        } else activeMinimalTurn.process[index] = line;
-        if (blockIndex === partial.content.length - 1 && event.assistantMessageEvent.type !== "thinking_end") activeMinimalTurn.thinking = minimalMessageIndices.get(blockIndex);
+        const line = `thinking ${processText(item.thinking ?? item.text)}`;
+        const index = writeThinkingLine(activeMinimalTurn, blockIndex, line);
+        if (blockIndex === partial.content.length - 1 && event.assistantMessageEvent.type !== "thinking_end") {
+          activeMinimalTurn.thinking = index;
+        } else {
+          freezeThinkingClock(activeMinimalTurn, index);
+        }
+      }
+      if (previousThinking !== undefined && previousThinking !== activeMinimalTurn.thinking) {
+        freezeThinkingClock(activeMinimalTurn, previousThinking);
       }
       activeMinimalTurn.final = contentText(partial.content) || undefined;
       refreshMinimalOutput();
@@ -1466,6 +1527,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("message_end", (event) => {
     if (event.message.role === "assistant") {
       if (activeMinimalTurn) {
+        freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
+        freezeOpenThinkingClocks(activeMinimalTurn);
         activeMinimalTurn.thinking = undefined;
         activeMinimalTurn.awaitingResponse = false;
         activeMinimalTurn.usage = addUsage(activeMinimalTurn.usage ?? EMPTY_USAGE, event.message.usage as UsageLike | undefined);
@@ -1482,6 +1545,10 @@ export default function (pi: ExtensionAPI) {
         for (const [blockIndex, item] of (content as Array<Record<string, unknown>>).entries()) {
           if (item.type !== "thinking" && !(item.type === "text" && content.some((block) => block.type === "toolCall"))) continue;
           const line = `${item.type === "thinking" ? "thinking" : "output"} ${processText(item.thinking ?? item.text)}`;
+          if (item.type === "thinking") {
+            freezeThinkingClock(activeMinimalTurn, writeThinkingLine(activeMinimalTurn, blockIndex, line));
+            continue;
+          }
           const index = minimalMessageIndices.get(blockIndex);
           if (index === undefined) activeMinimalTurn.process.push(line);
           else activeMinimalTurn.process[index] = line;
@@ -1502,6 +1569,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_execution_start", (event) => {
     toolStarts.set(event.toolCallId, Date.now());
     if (activeMinimalTurn) {
+      freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
       activeMinimalTurn.thinking = undefined;
       activeMinimalTurn.awaitingResponse = false;
       (activeMinimalTurn.agentCalls ??= []).push(agentCall(event.toolCallId, event.toolName, event.args));
@@ -1568,7 +1636,11 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_end", refresh);
   pi.on("agent_settled", () => {
     if (!activeMinimalTurn) return;
-    for (const turn of minimalTurns) { turn.running = false; turn.thinking = undefined; }
+    for (const turn of minimalTurns) {
+      freezeOpenThinkingClocks(turn);
+      turn.running = false;
+      turn.thinking = undefined;
+    }
     activeMinimalTurn.final = pendingMinimalFinal;
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";

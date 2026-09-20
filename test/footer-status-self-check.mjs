@@ -157,7 +157,8 @@ for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   const view = extension.minimalOutputComponent(theme, () => [{ question: 'CORS', process: ['thinking Clarifying CORS behavior'], running: false }], () => expanded);
   const text = stripAnsi(view.render(100).join('\n'));
   assert.match(text, /Agent · 1\/1/, 'collapse does not change process totals');
-  assert.equal(text.includes('Thinking 0:00 Clarifying CORS behavior'), expanded);
+  assert.equal(text.includes('Thinking Clarifying CORS behavior'), expanded);
+  assert.doesNotMatch(text, /Thinking \d+:\d/, 'restored Thinking has no fake live timer');
 }
 const settled = extension.minimalOutputComponent(theme, () => [{ question: 'settled', process: [], usage: { totalTokens: 10 }, running: false }]);
   const settledText = stripAnsi(settled.render(100).join('\n'));
@@ -166,6 +167,9 @@ const settled = extension.minimalOutputComponent(theme, () => [{ question: 'sett
 }
 assert.equal(extension.formatElapsed(0, 0), "0:00");
 assert.equal(extension.formatElapsed(0, 3_723_000), "1:02:03");
+assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0, endedAt: 2_000 }] }, 0, false, 1_261_000), "0:02");
+assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0 }] }, 0, true, 1_261_000), "21:01");
+assert.equal(extension.formatThinkingElapsed({ startedAt: 0 }, 0, false, 1_261_000), "");
 const elapsedColors = [];
 const elapsedTheme = { ...minimalTheme, fg: (token, text) => { elapsedColors.push([token, text]); return text; } };
 const savedElapsedNow = Date.now;
@@ -185,9 +189,20 @@ try {
   assert.match(later, /Thinking 0:04/, "elapsed duration advances without resetting during the turn");
   assert.notEqual(first, later, "long active thinking body horizontally scrolls while its prefix remains fixed");
   assert.ok(elapsedColors.some(([token, text]) => token === "success" && text === " 0:02"), "running elapsed duration uses the semantic green success color");
-  const completedThought = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: [`thinking ${thought}`], running: false, startedAt: 0 }], () => true);
-  assert.match(stripAnsi(completedThought.render(100).join("\n")), /Thinking 0:04/, "completed Thinking retains its final elapsed duration when expanded");
+  const completedThought = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: [`thinking ${thought}`], running: false, startedAt: 0, thinkingClocks: [{ startedAt: 0, endedAt: 4_000 }] }], () => true);
+  assert.match(stripAnsi(completedThought.render(100).join("\n")), /Thinking 0:04/, "completed Thinking retains its frozen elapsed duration when expanded");
   assert.ok(elapsedColors.some(([token, text]) => token === "muted" && text === " 0:04"), "completed Thinking duration uses the semantic gray muted color");
+  Date.now = () => 1_261_000;
+  const historical = extension.minimalOutputComponent(elapsedTheme, () => [{
+    question: "elapsed",
+    process: [`thinking ${thought}`, "output later work"],
+    running: true,
+    startedAt: 0,
+    thinkingClocks: [{ startedAt: 0, endedAt: 2_000 }],
+  }], () => true);
+  const historicalText = stripAnsi(historical.render(100).join("\n"));
+  assert.match(historicalText, /Thinking 0:02/, "historical Thinking keeps the stop time from when that block ended");
+  assert.doesNotMatch(historicalText, /Thinking 21:/, "historical Thinking does not keep counting while the turn continues");
   assert.ok(elapsedView.render(12).every(line => stripAnsi(line).length <= 12), "narrow rows retain the width contract");
 } finally { Date.now = savedElapsedNow; }
 const dotTheme = { ...minimalTheme, fg: (token, text) => `<${token}>${text}</${token}>` };
@@ -651,6 +666,10 @@ for (const data of ["\x1b[115;5:2u", "\x1b[115;5:3u"]) {
 inputListener("\x13");
 assert.equal(testTui.children[3].render(100).length, collapsedAgentRows);
 assert.doesNotMatch(doc.render(100).join("\n"), /Thinking|live thought/, "text streaming ends live thinking");
+assert.deepEqual(inputListener("\x0f"), { consume: true });
+assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+:\d{2} live thought/, "completed Thinking keeps a frozen duration when expanded");
+assert.deepEqual(inputListener("\x0f"), { consume: true });
+assert.doesNotMatch(doc.render(100).join("\n"), /Thinking|live thought/, "collapsing hides completed Thinking again");
 minimalHandlers.get("message_update")({ assistantMessageEvent: { partial: { content: [{ type: "thinking", thinking: "live thought updated\nnew paragraph" }, { type: "text", text: "unreleased final" }] } } });
 assert.equal(doc.render(100).filter(line => line.includes("Ctrl+O")).length, 1);
 assert.doesNotMatch(doc.render(100).join("\n"), /new paragraph/);
