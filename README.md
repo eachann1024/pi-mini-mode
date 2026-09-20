@@ -16,7 +16,7 @@ An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview imag
 pi install npm:@each1024/pi-mini-mode
 ```
 
-Run `/reload` in Pi. On the first interactive TUI session, choose **Apply recommended setup** to select `cc-dark` or `cc-light` and save the theme plus `tuiMode=fullscreen` globally; restart Pi for fullscreen to take effect. Project settings and CLI flags may override global settings. You can retry later with `/pi-mini-mode-setup`, or configure only Pi Mini Mode with `/pi-mini-mode-settings`.
+Run `/reload` in Pi. On the first interactive TUI session, choose **Apply recommended setup** to select `cc-dark` or `cc-light` and save the theme plus `tuiMode=fullscreen` globally; restart Pi for fullscreen to take effect. Project settings and CLI flags may override global settings. You can configure Pi Mini Mode any time with `/pi-mini-mode-settings`.
 
 **Pi ≥ 0.84.0.** Input enhancements and minimal output are on by default. Minimal mode uses a private **Pi 0.85.x** layout adapter—see [compatibility](#compatibility) before enabling it.
 
@@ -75,7 +75,6 @@ This earlier screenshot and recording show footer configuration, not the newer i
 | Command / shortcut | Purpose |
 | --- | --- |
 | `/pi-mini-mode-settings` | Configure fields, input enhancements and minimal output |
-| `/pi-mini-mode-setup` | Choose the bundled theme and save global fullscreen mode; restart Pi afterward |
 | `/pi-mini-mode-minimal on` / `off` | Enable minimal output / restore native history |
 | `Ctrl+O` | Expand or collapse the complete process tree |
 | `Ctrl+S` | Expand or collapse completed subagent rows; yields to Pi `/model`, `/thinking`, and other selectors |

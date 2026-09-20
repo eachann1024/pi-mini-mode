@@ -843,11 +843,11 @@ globalThis.__piMiniProjectSettings = {};
 const setupDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-setup-"));
 process.env.PI_MINI_MODE_AGENT_DIR = setupDir;
 const setupHandlers = new Map();
-onboardingExtension.default({ events, on(name, handler) { setupHandlers.set(name, handler); }, registerCommand(name, command) { setupHandlers.set(name, command.handler); }, registerShortcut() {} });
+onboardingExtension.default({ events, on(name, handler) { setupHandlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
 const setupChoices = ["应用推荐配置", "cc-light"];
 const setupNotifications = [];
 const setupCtx = { ...onboardingCtx, cwd: setupDir, ui: { ...onboardingCtx.ui, notify(message, level) { setupNotifications.push({ message, level }); }, async select(title, choices) { previews.push([title, choices]); return setupChoices.shift(); } } };
-await setupHandlers.get("pi-mini-mode-setup")("", setupCtx);
+await setupHandlers.get("session_start")({}, setupCtx);
 assert.equal(setupNotifications.at(-1)?.level, "info", "recommended setup reports success");
 assert.deepEqual(globalThis.__piMiniHostSettings, { unrelated: "preserve", theme: "cc-light", tuiMode: "fullscreen" }, "recommended setup preserves unrelated host settings");
 const setupSaved = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(setupDir))).settings;
@@ -864,10 +864,10 @@ for (const [name, choices, readError, writeError] of [
   globalThis.__piMiniHostSettings = { unrelated: "preserve" };
   globalThis.__piMiniHostErrors = readError ? [{ error: new Error("unreadable settings") }] : [];
   globalThis.__piMiniHostFlushError = writeError ? "write failed" : undefined;
-  const commands = new Map();
+  const handlers = new Map();
   const notices = [];
-  onboardingExtension.default({ events, on() {}, registerCommand(id, command) { commands.set(id, command.handler); }, registerShortcut() {} });
-  await commands.get("pi-mini-mode-setup")("", {
+  onboardingExtension.default({ events, on(name, handler) { handlers.set(name, handler); }, registerCommand() {}, registerShortcut() {} });
+  await handlers.get("session_start")({}, {
     ...setupCtx,
     ui: { ...setupCtx.ui, async select() { return choices.shift(); }, notify(message, level) { notices.push({ message, level }); } },
   });

@@ -16,7 +16,7 @@
 pi install npm:@each1024/pi-mini-mode
 ```
 
-在 Pi 中运行 `/reload`。首次进入交互式 TUI 时，选择 **应用推荐配置**，再选择 `cc-dark` 或 `cc-light`；它会通过 Pi 官方设置 API 保存主题与全局 `tuiMode=fullscreen`，重启 Pi 后全屏模式才会生效。项目设置和命令行参数可能覆盖全局设置。之后可用 `/pi-mini-mode-setup` 重试，或用 `/pi-mini-mode-settings` 只配置 Pi Mini Mode。
+在 Pi 中运行 `/reload`。首次进入交互式 TUI 时，选择 **应用推荐配置**，再选择 `cc-dark` 或 `cc-light`；它会通过 Pi 官方设置 API 保存主题与全局 `tuiMode=fullscreen`，重启 Pi 后全屏模式才会生效。项目设置和命令行参数可能覆盖全局设置。之后可用 `/pi-mini-mode-settings` 随时配置 Pi Mini Mode。
 
 **需要 Pi ≥ 0.84.0。** 输入增强和极简输出默认开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
 
@@ -75,7 +75,6 @@ pi install git:github.com/eachann1024/pi-mini-mode
 | 命令／快捷键 | 用途 |
 | --- | --- |
 | `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
-| `/pi-mini-mode-setup` | 选择内置主题并保存全局全屏模式；之后需重启 Pi |
 | `/pi-mini-mode-minimal on` / `off` | 开启极简输出／恢复原生历史 |
 | `Ctrl+O` | 展开／收起完整过程树 |
 | `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
