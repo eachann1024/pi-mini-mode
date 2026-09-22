@@ -12,7 +12,11 @@ An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview imag
 
 
 
-https://github.com/user-attachments/assets/abd2bb96-8fa1-4b81-ac2e-ca7bf9611a80
+
+
+https://github.com/user-attachments/assets/cd972993-a6f9-4399-81a6-6e0d540dec9a
+
+
 
 
 
