@@ -10,6 +10,12 @@
 
 An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview images at the cursor, fold long messages and process details, inspect subagent work, and keep your session’s essential signals in view.
 
+
+
+https://github.com/user-attachments/assets/abd2bb96-8fa1-4b81-ac2e-ca7bf9611a80
+
+
+
 ## Install
 
 ```bash
