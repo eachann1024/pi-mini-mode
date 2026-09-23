@@ -7,14 +7,17 @@
 *{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{position:relative;padding:16px 20px;background:var(--preview-bg);color:var(--preview-text);border:1px dashed var(--border);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;height:112px;overflow:auto}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;background:transparent;color:var(--preview-muted);cursor:grab;white-space:nowrap}#preview button:focus-visible{border-color:var(--accent)}#preview button.over{border-left:2px solid var(--accent)}#preview button.preview-exit{opacity:0;pointer-events:none;transition:opacity 280ms ease-in;position:absolute}#preview .tone-accent{color:var(--preview-accent);font-weight:650}#preview .tone-text{color:var(--preview-text)}#preview .tone-warning{color:var(--preview-warning);font-weight:650}#preview .tone-success{color:var(--preview-success);font-weight:650}#preview .tone-error{color:var(--preview-error);font-weight:650}#preview .tone-muted{color:var(--preview-muted)}#preview #preview-context{flex:1 1 180px;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--preview-accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 6px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;-webkit-user-select:none;user-select:none}.grid label{border:1px solid transparent;border-radius:var(--radius);padding:10px}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#statusbar{position:fixed;top:12px;right:12px;z-index:2;display:flex;align-items:center;gap:10px;max-width:min(520px,calc(100vw - 24px));padding:8px 12px;background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);box-shadow:0 6px 20px rgb(0 0 0/.12);color:var(--accent);font-size:var(--text-sm);opacity:0;transform:translateY(-6px);transition:opacity 150ms ease-out,transform 150ms ease-out;pointer-events:none}#statusbar.on{opacity:1;transform:none}#statusbar.error{border-color:var(--destructive);color:var(--destructive)}#statusbar #retry{pointer-events:auto}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}.notice{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:20px 0 0;padding:14px 16px;background:var(--surface);border:1px solid var(--accent);border-left-width:4px;border-radius:var(--radius)}.notice strong{font-size:var(--text-sm)}.notice p{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6;max-width:640px}.notice code{display:block;margin:0 0 8px;padding:8px 10px;background:var(--background);border:1px solid var(--border);border-radius:var(--radius);font:var(--text-sm)/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-width:520px;color:var(--foreground)}#preview{margin-top:12px;margin-bottom:20px}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}#statusbar{top:8px;right:8px;max-width:calc(100vw - 16px)}}@media(prefers-reduced-motion:reduce){#preview button.preview-exit{transition-duration:80ms}}@media(prefers-reduced-motion:reduce){#statusbar{transform:none;transition:opacity 80ms ease-out}}
 @media(hover:hover) and (pointer:fine){#preview button:hover,.grid label:hover,.feature:hover{border-color:var(--accent)}}
 #preview button.preview-highlight{border-color:var(--accent)}#preview button.preview-placeholder{border-style:dashed;opacity:1}
+
+/* Editorial headings; controls and status data retain readable system fonts. */
+body{background:light-dark(#f6f3ed,#141614)}main{max-width:1160px;padding:32px 32px 88px}header{align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:36px}h1{font:italic 400 clamp(2.625rem,5vw,3.625rem)/1.06 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:.02em}.subtitle{font:normal 1.625rem/1.4 "Didot","Bodoni 72","Songti SC","STSong",serif;color:var(--accent);margin:16px 0 0}h2{font:normal 2rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:0;text-transform:none;color:var(--foreground);margin:0 0 16px}section{margin:0;padding-top:24px}.feature-head h3{font:normal 1.625rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif}.feature{padding:20px}.feature:first-child{border-top:3px solid var(--accent)}.feature-body,.feature-points{line-height:1.7}#preview{background:var(--surface);border:1px solid var(--border);padding:16px 24px;height:80px;margin-bottom:12px}.grid label{min-height:44px}@media(max-width:760px){main{padding:20px 16px 64px}header{padding-bottom:20px}.features{grid-template-columns:1fr}h2{font-size:1.75rem}.subtitle{font-size:1.375rem}}
 </style>
 <main>
 <div id="statusbar" role="status" aria-live="polite"><span id="status"></span><button type="button" id="retry" hidden></button></div>
 <header>
-  <h1 id="title"></h1>
+  <div><h1 id="title"></h1><p class="subtitle" id="subtitle"></p></div>
   <nav>
-    <button type="button" id="lang-zh" aria-pressed="false">中文</button>
     <button type="button" id="lang-en" aria-pressed="false">EN</button>
+    <button type="button" id="lang-zh" aria-pressed="false">中文</button>
     <button type="button" id="reset" disabled></button>
   </nav>
 </header>
@@ -23,7 +26,7 @@
   <div><code id="noticePrompt"></code><button type="button" id="copyPrompt"></button></div>
 </div>
 <section><h2 id="fieldsHeading"></h2><p class="hint" id="dragHint"></p><div id="preview" role="group" tabindex="0"></div><div class="grid" id="fields"></div></section>
-<section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
+
 <section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
 </main>
 <script>
@@ -31,6 +34,7 @@ const $=id=>document.getElementById(id),token=location.hash.slice(1);
 history.replaceState(null,'',location.pathname);
 const I18N={
   title:{zh:'Pi Mini Mode',en:'Pi Mini Mode'},
+  subtitle:{zh:'轻一点，读得更远。',en:'A quieter way to think.'},
   documentTitle:{zh:'Pi Mini Mode 设置',en:'Pi Mini Mode Settings'},
   dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存。',en:'Drag preview items to reorder · saves on drop.'},
   featuresHeading:{zh:'功能说明',en:'Features'},
@@ -39,13 +43,11 @@ const I18N={
   on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},
   featureList:{
     zh:[
-      {id:'status',title:'状态栏指标',body:'一行看清会话状态，按终端宽度取舍。',points:['模型与思考等级，会话与缓存 Token、命中率、费用','上下文进度条与百分比','生成速度 tok/s，从首个输出 token 起算，不含等待首字']},
       {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'把对话收成结论：思考、工具与技能汇成一棵按时间排序的可折叠过程树。',points:['长用户消息默认保留前四行，点击展开全文','子代理行可展开活动记录与输出','Ctrl+O 展开或收起过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记']},
       {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['光标移入图片路径即可预览，全屏编辑器同样支持','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能并插入光标处','点击图片标签或文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
       {id:'themes',title:'明暗主题',body:'主题让 Markdown、代码高亮、表格与 Mermaid 图表跟随明暗切换。',points:['用户消息使用主题用户背景色，与正文区分','不支持、不完整或过宽的图表保留源文本'],hint:'回到 Pi，输入 /settings → Theme，选择 cc-dark / cc-light'}
     ],
     en:[
-      {id:'status',title:'Status bar metrics',body:'The whole session state on one line, trimmed to fit narrow terminals.',points:['Model and thinking level, session and cache tokens, hit rate, cost','Context usage bar with percentage','Speed in tok/s, measured from the first output token, excluding time to first token']},
       {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'Turns the conversation into conclusions: thinking, tools and skills collapse into one chronological, foldable tree.',points:['Long user messages keep four lines; click to expand','Subagent rows expand to activity and output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked']},
       {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Preview an image as soon as the cursor enters its path, in fullscreen too','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert at the cursor','Click image labels or file paths to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
       {id:'themes',title:'Light and dark themes',body:'Themes keep Markdown, code highlighting, tables and Mermaid diagrams in step with light and dark.',points:['User messages use the theme user background to stand out','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'In Pi, enter /settings → Theme and choose cc-dark or cc-light'}
@@ -55,11 +57,13 @@ const I18N={
   retry:{zh:'重试',en:'Retry'},
   confirmReset:{zh:'恢复默认排序与显示设置？',en:'Reset layout and visibility to defaults?'},
   connecting:{zh:'正在同步…',en:'Connecting…'},
-  saved:{zh:'设置已完成',en:'Settings saved'},
-  unsaved:{zh:'未保存修改',en:'Unsaved changes'},
+  saved:{zh:'已保存',en:'Saved'},
+  unsaved:{zh:'未保存的修改',en:'Unsaved changes'},
   saving:{zh:'正在保存…',en:'Saving…'},
-  saveFailed:{zh:'保存失败',en:'Failed to save'},
-  reconnect:{zh:'连接已断开，请从终端重新打开',en:'Disconnected. Please reopen from the terminal.'},
+  saveFailed:{zh:'保存失败',en:'Could not save'},
+  saveOffline:{zh:'保存失败，连接已断开。请回到终端重新打开设置',en:'Could not save — the connection closed. Reopen settings from the terminal.'},
+  saveRejected:{zh:'保存失败，设置无法写入。请检查配置文件权限后重试',en:'Could not save — settings could not be written. Check the config file permissions and retry.'},
+  reconnect:{zh:'连接已断开。请回到终端重新打开设置',en:'Connection closed. Reopen settings from the terminal.'},
   noticeTitle:{zh:'极简输出需要全屏渲染器',en:'Minimal transcript needs the fullscreen renderer'},
   noticeBody:{zh:'极简输出已保存，但当前 Pi 运行在普通 TUI 模式，暂不生效。复制下面的提示词发给 Pi，让它帮你把 TUI 模式改为 fullscreen；重启 Pi 后生效（/reload 不会切换渲染器）。',en:'Minimal transcript is saved but inactive: Pi is running in regular TUI mode. Copy the prompt below into Pi to set TUI mode to fullscreen; it takes effect after restarting Pi (/reload does not switch the renderer).'},
   noticePrompt:{zh:'把 Pi 全局设置中的 tuiMode 改为 fullscreen',en:'Set tuiMode to fullscreen in Pi global settings'},
@@ -88,7 +92,7 @@ const I18N={
   }
 };
 const FIELD_KEY={minimal:'pi-mini-mode-minimal-show','input-enhancements':'pi-mini-mode-input-enhancements','context-dots':'pi-mini-mode-context-dots-show','speed-unit':'pi-mini-mode-speed-unit-show'};
-let lang=localStorage.piMiniModeLang||(navigator.language.startsWith('zh')?'zh':'en');
+let lang=localStorage.piMiniModeLang||'en';
 let data,state,order,dragged,hovered,saving=false,dirty=false,timer,copyTimer,statusTimer;
 const key=id=>'pi-mini-mode-'+id+'-show';
 const t=(id,fallback='')=>(I18N[id]?.[lang]??fallback);
@@ -106,7 +110,7 @@ function status(text,error=false){
 function applyLang(){
   document.documentElement.lang=lang==='zh'?'zh-CN':'en';
   document.title=t('documentTitle');
-  for(const id of ['title','featuresHeading','fieldsHeading','optionsHeading','dragHint']) $(id).textContent=t(id);
+  for(const id of ['title','subtitle','featuresHeading','fieldsHeading','dragHint']) $(id).textContent=t(id);
   $('reset').textContent=t('reset');$('retry').textContent=t('retry');
   $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
   $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
@@ -114,7 +118,7 @@ function applyLang(){
 }
 async function request(method,body){
   const response=await fetch('/settings',{method,headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
-  if(!response.ok)throw Error(await response.text()||t('saveFailed'));
+  if(!response.ok)throw Error(response.status===403||response.status===404?t('saveOffline'):t('saveRejected'));
   return response.json();
 }
 const previewFade=280,previewFadeReduced=80;
@@ -177,7 +181,7 @@ async function save(){
   if(saving)return;saving=true;$('retry').hidden=true;
   let wrote=false;
   try{while(dirty){dirty=false;const body=structuredClone(state);status(t('saving'));await request('PUT',body);wrote=true}status(wrote?t('saved'):'')}
-  catch(error){dirty=true;status(t('saveFailed')+'：'+error.message,true);$('retry').hidden=false}
+  catch(error){dirty=true;status(error instanceof TypeError?t('saveOffline'):error.message||t('saveFailed'),true);$('retry').hidden=false}
   finally{saving=false}
 }
 function box(settingId,onToggle){
@@ -220,7 +224,7 @@ function render(){
   renderNotice();
   $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))),...(data.options||[]).map(id=>checkbox(id,FIELD_KEY[id]||key(id))));
   $('features').replaceChildren(...t('featureList').map(feature));
-  $('options').replaceChildren();$('optionsHeading').hidden=true;$('options').hidden=true;
+
   preview();
 }
 function renderNotice(){
@@ -252,6 +256,6 @@ function mergeOrder(base,all){const next=[...new Set((base||[]).filter(id=>(all|
 $('reset').onclick=()=>{if(!confirm(t('confirmReset')))return;state={...data.defaults};order=mergeOrder(data.order,data.order);render();change()};
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue=''}});
 applyLang();status(t('connecting'));
-request('GET').then(value=>{data=value;state={...data.settings};order=mergeOrder(state.footerOrder||data.order,data.order);render();$('reset').disabled=false;status('')}).catch(()=>status(t('reconnect'),true));
+request('GET').then(value=>{data=value;state={...data.settings};order=mergeOrder(state.footerOrder||data.order,data.order);render();$('reset').disabled=false;status('')}).catch(error=>status(error instanceof TypeError?t('reconnect'):error.message||t('reconnect'),true));
 </script>
 </html>
