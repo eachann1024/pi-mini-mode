@@ -7,11 +7,14 @@
 # Pi Mini Mode
 
 
+
+
 **少一点干扰。多一点专注。**
 
 为 [Pi](https://pi.dev) 的日常工作做一点精细的改进，不止于页脚。光标处预览图片，折叠长消息和过程详情，展开子代理工作，让重要的会话状态始终清晰。
 
-<img width="1259" height="1020" alt="file-5ec414a82040ac062f4cda734fc10769" src="https://github.com/user-attachments/assets/0a894706-9ae6-46e5-bf85-3c7f85cf0273" />
+<img width="892" height="797" alt="image" src="https://github.com/user-attachments/assets/8f7abdc8-646e-4ded-8009-b58d2833c1f4" />
+
 
 
 
@@ -46,8 +49,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 使用 `Ctrl+V` 粘贴图片，Windows/WSL 使用 `Alt+V`。关闭输入增强不会关闭 Pi 原生剪贴板功能。
 
-<img width="1225" height="918" alt="image" src="https://github.com/user-attachments/assets/4cde0f64-35c9-4b15-9650-d8ba48863e6a" />
-
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
 
 ### 02 / 过程，更安静
 
@@ -60,6 +62,10 @@ pi install git:github.com/eachann1024/pi-mini-mode
 - **把空间留给答案。** 最终 Markdown 流式呈现，不添加额外标题或背景。失败和中断明确标记；折叠只改变显示，不删除原始会话消息。
 
 在设置中关闭 **极简输出** 即恢复 Pi 原生历史。
+
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
+
 
 ### 03 / 状态，更清晰
 
