@@ -10,11 +10,7 @@
 
 An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview images at the cursor, fold long messages and process details, inspect subagent work, and keep your session’s essential signals in view.
 
-
-
-
-
-https://github.com/user-attachments/assets/cd972993-a6f9-4399-81a6-6e0d540dec9a
+<img width="1698" height="1588" alt="Resources 2026-09-23 at 14 26 55@2x" src="https://github.com/user-attachments/assets/9990b080-f82b-4dd0-bc7b-a0cdded72181" />
 
 
 
