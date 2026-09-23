@@ -1,22 +1,21 @@
 <p>
-  <img src="assets/readme-cover.zh-CN.svg" alt="Pi Mini Mode — 少一点干扰，多一点专注。图片输入、可折叠对话、子代理、明暗主题与实时页脚。" width="100%">
+  <img src="https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/readme-cover.zh-CN.svg" alt="Pi Mini Mode — 少一点干扰，多一点专注。图片输入、可折叠对话、子代理、明暗主题与实时页脚。" width="100%">
 </p>
 
-[English](README.md) · [安装](#安装) · [功能](#功能) · [命令速查](#命令速查) · [参考](#参考)
+[English](https://github.com/eachann1024/pi-mini-mode/blob/main/README.md) · [安装](#安装) · [功能](#功能) · [参考](#参考)
 
 # Pi Mini Mode
-
-
-
 
 **少一点干扰。多一点专注。**
 
 为 [Pi](https://pi.dev) 的日常工作做一点精细的改进，不止于页脚。光标处预览图片，折叠长消息和过程详情，展开子代理工作，让重要的会话状态始终清晰。
 
-<img width="892" height="797" alt="image" src="https://github.com/user-attachments/assets/8f7abdc8-646e-4ded-8009-b58d2833c1f4" />
+<details>
+<summary>查看完整界面</summary>
 
+<img width="892" height="797" alt="Pi Mini Mode 完整界面" src="https://github.com/user-attachments/assets/8f7abdc8-646e-4ded-8009-b58d2833c1f4" />
 
-
+</details>
 
 ## 安装
 
@@ -24,7 +23,7 @@
 pi install npm:@each1024/pi-mini-mode
 ```
 
-在 Pi 中运行 `/reload`。首次进入交互式 TUI 时，选择 **应用推荐配置**，再选择 `cc-dark` 或 `cc-light`；它会通过 Pi 官方设置 API 保存主题与全局 `tuiMode=fullscreen`，重启 Pi 后全屏模式才会生效。项目设置和命令行参数可能覆盖全局设置。之后可用 `/pi-mini-mode-settings` 随时配置 Pi Mini Mode。
+已打开的 Pi 会话中，运行 Pi 自带的 `/reload`。首次使用选择 **应用推荐配置**，设置内置主题和全屏模式，重启 Pi 后全屏才会生效。之后可用 `/pi-mini-mode-settings` 随时配置本扩展。项目设置和命令行参数可能覆盖全局设置。
 
 **需要 Pi ≥ 0.84.0。** 输入增强和极简输出默认开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
 
@@ -41,6 +40,8 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ### 01 / 输入，更顺手
 
+<img width="1092" height="764" alt="图片预览与紧凑标签" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
+
 **图片，随光标浮现。** 编辑光标移入图片路径或紧凑标签，即可预览。全屏编辑器也支持悬停，按 `Esc` 关闭。
 
 **收起路径，保留原图。** 输入框和消息中的图片路径收纳为带下划线的 `[image1]` 标签，提交时保留原始路径。使用终端的链接点击手势，即可通过系统默认应用打开原图或其他文件。
@@ -49,23 +50,21 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 使用 `Ctrl+V` 粘贴图片，Windows/WSL 使用 `Alt+V`。关闭输入增强不会关闭 Pi 原生剪贴板功能。
 
-<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
-
 ### 02 / 过程，更安静
 
 在 `/pi-mini-mode-settings` 中开启 **极简输出**。
 
+<img width="1092" height="764" alt="极简输出中的过程树" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
+
 - **长消息，自动折叠。** 全屏极简模式下，长用户消息默认保留前四个显示行。点击折叠控件展开全文。完整代码围栏保持完整。
-- **子代理，清晰可查。** 点击子代理行，展开可用的活动记录与消息／最终输出。任务派发回执或工具调用返回，不等于后台任务已完成。
+- **子代理，清晰可查。** 点击子代理行，展开可用的活动记录与消息／最终输出。极简模式下，本扩展用 `Ctrl+S` 展开／收起已完成的子代理摘要；Pi 当前聚焦的选择器保留自己的快捷键。任务派发回执或工具调用返回，不等于后台任务已完成。
 - **过程是一棵树，而非满屏输出。** 思考、工具与技能读取汇入同一棵时间顺序树，显示最新摘要，包括最新一条思考；`Ctrl+O` 展开／收起完整过程，新问题默认收起。
 - **工具详情，按需展开。** 点击工具或思考条目的折叠控件，最新一条思考也可以展开。思考默认收起，进行中与结束后均只由手动操作展开或收起。工具详情展示保存的文本，不还原原生自定义渲染器或图片输出。
 - **把空间留给答案。** 最终 Markdown 流式呈现，不添加额外标题或背景。失败和中断明确标记；折叠只改变显示，不删除原始会话消息。
 
 在设置中关闭 **极简输出** 即恢复 Pi 原生历史。
 
-<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
-<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
-
+<img width="1092" height="764" alt="展开后的过程详情" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
 
 ### 03 / 状态，更清晰
 
@@ -76,24 +75,13 @@ pi install git:github.com/eachann1024/pi-mini-mode
 <details>
 <summary>查看页脚设置截图与演示</summary>
 
-[![已有的页脚设置截图](assets/pi-mini-mode-settings.jpg)](assets/pi-mini-mode-settings.jpg)
+[![已有的页脚设置截图](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)
 
 [观看页脚设置演示](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
 
 这份已有截图和录屏展示页脚配置，不代表新增图片、折叠与子代理功能的当前界面。设置预览使用示例数据。
 
 </details>
-
-## 命令速查
-
-| 命令／快捷键 | 用途 |
-| --- | --- |
-| `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
-| `Ctrl+O` | 展开／收起完整过程树 |
-| `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
-| `/reload` | 安装或修改源码后重载扩展 |
-
-子代理行有独立的点击展开控件；受支持的第三方小组件保留原生详情快捷键。
 
 ## 兼容性
 
@@ -108,7 +96,9 @@ pi install git:github.com/eachann1024/pi-mini-mode
 <details>
 <summary><strong>首次使用与配置</strong></summary>
 
-首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。几乎全部功能默认开启；仅「仅显示分支」默认关，与「项目与分支」互斥。之后可用 `/pi-mini-mode-settings` 再改。
+首次进入交互式 TUI 会话时，Pi Mini Mode 显示设置预览。「仅显示分支」「缓存 token」「MCP」默认关闭；「仅显示分支」与「项目与分支」互斥。之后可用 `/pi-mini-mode-settings` 再改。
+
+以下示例开启了可选的 Cached 和 MCP 字段：
 
 ```text
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
@@ -120,13 +110,16 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500
 
 ```json
 {
+  "pi-mini-mode-project-branch-show": true,
+  "pi-mini-mode-branch-show": false,
   "pi-mini-mode-model-show": true,
   "pi-mini-mode-thinking-show": true,
   "pi-mini-mode-ch-show": true,
   "pi-mini-mode-session-tokens-show": true,
-  "pi-mini-mode-cache-tokens-show": true,
+  "pi-mini-mode-cache-tokens-show": false,
+  "pi-mini-mode-cache-miss-show": true,
   "pi-mini-mode-cost-show": true,
-  "pi-mini-mode-mcp-show": true,
+  "pi-mini-mode-mcp-show": false,
   "pi-mini-mode-context-show": true,
   "pi-mini-mode-context-dots-show": true,
   "pi-mini-mode-context-percent-show": true,
@@ -140,13 +133,16 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
+| `pi-mini-mode-project-branch-show` | `true` | 显示项目名称与分支 |
+| `pi-mini-mode-branch-show` | `false` | 仅显示分支，代替项目与分支 |
 | `pi-mini-mode-model-show` | `true` | 显示不含 provider 前缀的模型 ID |
 | `pi-mini-mode-thinking-show` | `true` | 显示思考级别 |
 | `pi-mini-mode-ch-show` | `true` | 显示会话缓存命中率（`CH`） |
 | `pi-mini-mode-session-tokens-show` | `true` | 显示会话累计令牌（`Total`） |
-| `pi-mini-mode-cache-tokens-show` | `true` | 显示缓存读取与写入令牌（已包含在 Total 中） |
+| `pi-mini-mode-cache-tokens-show` | `false` | 显示缓存读取与写入令牌（已包含在 Total 中） |
+| `pi-mini-mode-cache-miss-show` | `true` | 检测到缓存 miss 时显示估算量 |
 | `pi-mini-mode-cost-show` | `true` | 显示会话费用估算 |
-| `pi-mini-mode-mcp-show` | `true` | 显示已启用的 MCP 服务器数量 |
+| `pi-mini-mode-mcp-show` | `false` | 显示已启用的 MCP 服务器数量 |
 | `pi-mini-mode-context-show` | `true` | 显示已用/总上下文令牌和进度条 |
 | `pi-mini-mode-context-dots-show` | `true` | 使用单行点阵进度条替代实心进度条 |
 | `pi-mini-mode-context-percent-show` | `true` | 显示上下文使用百分比 |
@@ -201,13 +197,6 @@ python3 test/minimal-pty.py
 日常发布在本机完成，使用 `.npmrc` 中的 npm token（`npm publish --access public`）。`publish.yml` 只作为手动备份（在 `main` 上 `workflow_dispatch`）：先执行 `npm ci`、`npm run check` 和 `npm test`，再运行 `scripts/publish.mjs`。该脚本发布本地版本基线与 npm 最新稳定版本再加一个 patch 中的较高者，版本只在 runner 中变更（不创建版本提交或 tag），并跳过已经发布过的提交。发布 major 或 minor 时，同时提高 `package.json` 和 lockfile 中的基线。
 
 备份流程需要为该包配置指向此 GitHub 仓库及 `publish.yml` 的 npm Trusted Publisher。它使用 OIDC 和 provenance，不使用 npm token。
-
-</details>
-
-<details>
-<summary><strong>协作说明</strong></summary>
-
-主会话负责需求对齐、风险调研、完整方案、任务调度、关键决策、整合与总结；执行前应先调查关键风险点、边界、验收标准和解决方案。获得授权后，应积极使用子代理并并行拆分独立任务以节省时间，同时遵守相关性、风险、预算、并发和单一修改负责人约束。绝大部分任务及子代理默认使用 `low` 模型，仅在复杂推理、关键决策或风险审查确有需要时升级。
 
 </details>
 
