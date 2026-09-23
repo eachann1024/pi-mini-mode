@@ -5,7 +5,7 @@ import { initTheme, getMarkdownTheme, getThemeByName } from '../node_modules/@ea
 import { minimalSurface } from '../lib/minimal-theme.ts';
 import { diagramMarkdown, isFencedMarkdown, isMarkdownProse, minimalMarkdownTheme, normalizeProseMarkdown, renderMinimalMarkdown } from '../lib/minimal-markdown.ts';
 const moduleUrl = new URL('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js', import.meta.url).href;
-const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export const getAgentDir = () => '.pi'; export const SettingsManager = { create: () => ({ drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {}, async flush() {} }) }; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
+const stub = `data:text/javascript,${encodeURIComponent(`export const CONFIG_DIR_NAME = '.pi'; export const getAgentDir = () => '.pi'; export const SettingsManager = { create: () => ({ drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {}, async flush() {} }) }; export class CustomEditor { constructor() {} } export const stripFrontmatter = (text) => text; export { getMarkdownTheme, getSettingsListTheme } from '${moduleUrl}';`)}`;
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === '@earendil-works/pi-coding-agent') return { shortCircuit: true, url: stub };

@@ -8,6 +8,8 @@ export const getAgentDir = () => '.pi';
 export const SettingsManager = { create: () => ({ drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {}, async flush() {} }) };
 export const getMarkdownTheme = () => Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(key => [key, text => text]));
 export const getSettingsListTheme = () => ({});
+export class CustomEditor { constructor() {} }
+export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 `)}`;
 registerHooks({
   resolve(specifier, context, nextResolve) {

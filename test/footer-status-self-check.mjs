@@ -37,7 +37,7 @@ export class Text { constructor() {} }
 export {};
 `;
 const tuiModule = `
-export { Image, allocateImageId, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
+export { Image, allocateImageId, getCellDimensions, setCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
 export const visibleWidth = (text) => String(text).replace(/\\x1b\\[[0-9;]*m/g, "").length;
 export const truncateToWidth = (text, width, suffix = "…") => {
   const plain = String(text).replace(/\\x1b\\[[0-9;]*m/g, "");

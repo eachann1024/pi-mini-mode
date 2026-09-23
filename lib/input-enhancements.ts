@@ -13,7 +13,7 @@
  */
 import { CustomEditor, stripFrontmatter, type ExtensionAPI, type ExtensionContext, type InputEvent, type InputEventResult } from "@earendil-works/pi-coding-agent";
 import {
-  allocateImageId, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, matchesKey, stripTerminalSequences, truncateToWidth, visibleWidth,
+  allocateImageId, getCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, setCellDimensions, getOsc8LinkAtColumn, matchesKey, stripTerminalSequences, truncateToWidth, visibleWidth,
   type AutocompleteItem, type AutocompleteProvider, type EditorComponent, type TuiMouseEvent, type TUI, type OverlayHandle, type OverlayOptions,
 } from "@earendil-works/pi-tui";
 import { filePaths, inputCapabilities, linkRenderedPath, localPath, webPaths } from "./file-links.ts";
@@ -456,6 +456,7 @@ export function installInputEnhancements(pi: ExtensionAPI, ctx: ExtensionContext
     // /reload clears the editor before session_start, so the saved factory can still be current while the live editor is unwrapped.
     const active = ctx.ui.getEditorComponent();
     if (active !== state.editorFactory || !state.editor) installEditor(ctx, state, active === state.editorFactory ? state.baseFactory : active);
+    if (getCapabilities().images) state.tui?.terminal.write("\x1b[16t");
   }
   return state.cleanup;
 }
@@ -557,6 +558,9 @@ function setPointer(state: Enhancements, pointer: boolean): void {
 }
 
 function handleTerminalInput(state: Enhancements, data: string): { consume?: boolean } | undefined {
+  // ponytail: sync this package's cell metrics with Pi's TUI; remove when Pi exposes them directly.
+  const cells = /^\x1b\[6;(\d+);(\d+)t$/.exec(data);
+  if (cells && +cells[1] > 0 && +cells[2] > 0) setCellDimensions({ widthPx: +cells[2], heightPx: +cells[1] });
   const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data);
   if (mouse) {
     const x = Number(mouse[2]) - 1, y = Number(mouse[3]) - 1;
@@ -592,8 +596,8 @@ async function requestPreview(state: Enhancements, path: string | undefined): Pr
 function setPreview(state: Enhancements, preview: Preview | undefined): void {
   const dimensions = preview?.kind === "image" ? getImageDimensions(preview.base64, preview.mimeType) : undefined;
   const graphic = preview?.kind === "image" && dimensions ? renderImage(preview.base64, dimensions, {
-    maxWidthCells: Math.max(1, Math.min(58, (state.tui?.terminal.columns ?? 80) - 2)),
-    maxHeightCells: Math.max(1, Math.floor((state.tui?.terminal.rows ?? 24) / 2) - 2),
+    maxWidthCells: Math.max(1, Math.min(Math.floor(dimensions.widthPx / getCellDimensions().widthPx), (state.tui?.terminal.columns ?? 80) - 2)),
+    maxHeightCells: Math.max(1, (state.tui?.terminal.rows ?? 24) - 2),
     imageId: allocateImageId(), moveCursor: false,
   }) ?? undefined : undefined;
   state.preview = {
@@ -608,7 +612,7 @@ function setPreview(state: Enhancements, preview: Preview | undefined): void {
 function showOverlay(state: Enhancements): void {
   if (!state.tui || !state.theme) return;
   state.overlayReady = true;
-  state.previewOptions = { width: 60, maxHeight: "50%", nonCapturing: true, visible: () => state.enabled() && state.preview.path !== undefined };
+  state.previewOptions = { width: 60, maxHeight: "100%", nonCapturing: true, visible: () => state.enabled() && state.preview.path !== undefined };
   state.previewHandle = state.tui.showOverlay({
     render: width => previewLines(state.preview, state.theme!, width, { row: Number(state.previewOptions?.row ?? 0), col: Number(state.previewOptions?.col ?? 0) }),
     invalidate: () => {},
@@ -619,7 +623,7 @@ function positionPreview(state: Enhancements): void {
   if (!state.previewOptions || !state.tui || !state.theme) return;
   const { rows, columns } = state.tui.terminal;
   const width = Math.max(3, Math.min((state.preview.graphic?.columns ?? 26) + 2, columns || 80));
-  const height = Math.min(Math.floor(rows / 2), previewLines(state.preview, state.theme, width, { row: 0, col: 0 }).length);
+  const height = Math.min(rows, previewLines(state.preview, state.theme, width, { row: 0, col: 0 }).length);
   const { x, y } = state.previewAnchor ?? { x: 0, y: rows - 2 };
   Object.assign(state.previewOptions, { width, col: Math.max(0, Math.min(x, (columns || 80) - width)),
     row: y + 1 + height <= rows ? y + 1 : Math.max(0, y - height) });

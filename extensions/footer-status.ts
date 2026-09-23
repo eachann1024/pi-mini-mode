@@ -5,7 +5,7 @@ import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "../lib
 import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
 import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import type { InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
+import { installInputEnhancements, type InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
 import { linkMessageFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
@@ -1367,7 +1367,6 @@ export default function (pi: ExtensionAPI) {
     if (loaded.exists && loaded.backfilled) await persistSettings(ctx);
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
-    const { installInputEnhancements } = await import("../lib/input-enhancements.ts");
     cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"]);
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
