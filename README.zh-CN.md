@@ -51,15 +51,15 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ### 02 / 过程，更安静
 
-在设置中开启 **极简输出**，或运行 `/pi-mini-mode-minimal on`。
+在 `/pi-mini-mode-settings` 中开启 **极简输出**。
 
-- **长消息，自动折叠。** 全屏极简模式下，长用户消息默认保留前四个显示行。点击折叠控件展开全文，或用 `/pi-mini-mode-prompts` 选择消息。完整代码围栏保持完整。
+- **长消息，自动折叠。** 全屏极简模式下，长用户消息默认保留前四个显示行。点击折叠控件展开全文。完整代码围栏保持完整。
 - **子代理，清晰可查。** 点击子代理行，展开可用的活动记录与消息／最终输出。任务派发回执或工具调用返回，不等于后台任务已完成。
-- **过程是一棵树，而非满屏输出。** 思考、工具与技能读取汇入同一棵时间顺序树，显示最新十条摘要；`Ctrl+O` 展开／收起完整过程，新问题默认收起。
-- **工具详情，按需展开。** 点击工具／思考条目的折叠控件，或用 `/pi-mini-mode-tools` 选择。工具详情展示保存的文本，不还原原生自定义渲染器或图片输出。
+- **过程是一棵树，而非满屏输出。** 思考、工具与技能读取汇入同一棵时间顺序树，显示最新摘要，包括最新一条思考；`Ctrl+O` 展开／收起完整过程，新问题默认收起。
+- **工具详情，按需展开。** 点击工具或思考条目的折叠控件，最新一条思考也可以展开。思考默认收起，进行中与结束后均只由手动操作展开或收起。工具详情展示保存的文本，不还原原生自定义渲染器或图片输出。
 - **把空间留给答案。** 最终 Markdown 流式呈现，不添加额外标题或背景。失败和中断明确标记；折叠只改变显示，不删除原始会话消息。
 
-`/pi-mini-mode-history` 每次浏览五条完整过程记录；`/pi-mini-mode-minimal off` 恢复 Pi 原生历史。
+在设置中关闭 **极简输出** 即恢复 Pi 原生历史。
 
 ### 03 / 状态，更清晰
 
@@ -83,16 +83,11 @@ pi install git:github.com/eachann1024/pi-mini-mode
 | 命令／快捷键 | 用途 |
 | --- | --- |
 | `/pi-mini-mode-settings` | 配置字段、输入增强和极简输出 |
-| `/pi-mini-mode-setup` | 再次显示首次设置提示 |
-| `/pi-mini-mode-minimal on` / `off` | 开启极简输出／恢复原生历史 |
 | `Ctrl+O` | 展开／收起完整过程树 |
 | `Ctrl+S` | 展开／收起已完成的子代理行；打开 `/model`、`/thinking` 等选择器时交给 Pi |
-| `/pi-mini-mode-prompts` | 选择并展开／收起用户消息¹ |
-| `/pi-mini-mode-tools` | 选择并展开／收起保存的工具文本或思考¹ |
-| `/pi-mini-mode-history` | 浏览完整过程记录，每次五条 |
 | `/reload` | 安装或修改源码后重载扩展 |
 
-¹ 需要全屏极简输出。子代理行有独立的点击展开控件；受支持的第三方小组件保留原生详情快捷键。
+子代理行有独立的点击展开控件；受支持的第三方小组件保留原生详情快捷键。
 
 ## 兼容性
 
@@ -113,7 +108,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
 ```
 
-首次设置会提供 **Keep defaults（保留默认值）**、**Configure now（立即配置）** 和 **Apply recommended setup（应用推荐配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。应用推荐配置会让你选择内置的 `cc-dark` 或 `cc-light` 主题，通过 Pi 官方设置 API 保存该主题和全局 `tuiMode=fullscreen`，立即应用主题，并提示重启 Pi（全屏渲染器在启动时决定）。项目设置和命令行参数可能覆盖全局设置。按 Esc／取消不会完成首次设置，可稍后用 `/pi-mini-mode-setup` 重试。Print、JSON 等非交互模式不会显示提示。
+首次设置会提供 **Keep defaults（保留默认值）**、**Configure now（立即配置）** 和 **Apply recommended setup（应用推荐配置）**。保留默认值会保存默认字段选择、保持极简输出开启，并且不再显示首次设置提示；立即配置会直接打开同一设置列表。应用推荐配置会让你选择内置的 `cc-dark` 或 `cc-light` 主题，通过 Pi 官方设置 API 保存该主题和全局 `tuiMode=fullscreen`，立即应用主题，并提示重启 Pi（全屏渲染器在启动时决定）。项目设置和命令行参数可能覆盖全局设置。按 Esc／取消不会完成首次设置，下次交互式会话会再次提示。Print、JSON 等非交互模式不会显示提示。
 
 设置保存在 Pi 的 agent 目录中，通常是 `~/.pi/agent/pi-mini-mode.json`；如果 Pi 使用其他配置目录，则保存在对应目录。文件缺失或格式错误时会安全回退到默认设置。设置示例：
 
@@ -197,12 +192,9 @@ python3 test/minimal-pty.py
 <details>
 <summary><strong>发布</strong></summary>
 
-推送到 `main` 后，GitHub Actions 会在通过 `npm ci`、`npm run check` 和 `npm test` 后自动发布到 npm；也支持在 `main` 上手动触发。每次发布都会取本地版本基线与 npm 最新稳定版本加一个 patch 中的较高者。版本只在 runner 中变更，不创建版本提交或 tag；发布 major/minor 版本时，应同时提高 `package.json` 和 lockfile 中的基线。已经发布过的提交会跳过。Actions 并发策略可能替换等待中的推送，因此不是每次推送或一次推送中的每个提交都保证生成独立版本。
+日常发布在本机完成，使用 `.npmrc` 中的 npm token（`npm publish --access public`）。`publish.yml` 只作为手动备份（在 `main` 上 `workflow_dispatch`）：先执行 `npm ci`、`npm run check` 和 `npm test`，再运行 `scripts/publish.mjs`。该脚本发布本地版本基线与 npm 最新稳定版本再加一个 patch 中的较高者，版本只在 runner 中变更（不创建版本提交或 tag），并跳过已经发布过的提交。发布 major 或 minor 时，同时提高 `package.json` 和 lockfile 中的基线。
 
-后续发布使用 npm Trusted Publisher、OIDC 和 provenance，无需 npm token。
-
-
-发布前需为该包配置指向此 GitHub 仓库及 `publish.yml` 的 npm Trusted Publisher。
+备份流程需要为该包配置指向此 GitHub 仓库及 `publish.yml` 的 npm Trusted Publisher。它使用 OIDC 和 provenance，不使用 npm token。
 
 </details>
 

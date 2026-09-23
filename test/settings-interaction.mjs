@@ -49,6 +49,7 @@ const theme = {
 };
 const ctx = {
   mode: "tui",
+  cwd: dir,
   ui: {
     setWidget() {},
     notify(message, level) { notices.push({ message, level }); },
@@ -68,7 +69,7 @@ assert.equal(items.get("pi-mini-mode-model-show")?.label, "显示模型");
 assert.equal(items.get("pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出默认打开");
 assert.equal(items.get("pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强默认打开");
 assert.ok([...items.values()].every((item) => !/显示工具调用|显示过程输出|显示技能|Agent token 用量|Ctrl\+O 提示/.test(item.label ?? "")), "极简输出的旧细项不再展示");
-assert.equal(items.get("pi-mini-mode-mcp-show")?.currentValue, "on", "MCP toggle defaults to on");
+assert.equal(items.get("pi-mini-mode-mcp-show")?.currentValue, "off", "MCP toggle defaults to off");
 
 const enabled = { ...served.settings, "pi-mini-mode-mcp-show": true };
 assert.equal((await fetch(settingsEndpoint, { method: "PUT", headers: settingsHeaders, body: JSON.stringify(enabled) })).status, 200, "settings page saves accepted changes");

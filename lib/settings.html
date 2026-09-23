@@ -3,12 +3,15 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pi Mini Mode 设置</title>
 <style>
-:root{color-scheme:light dark;--background:light-dark(#f4f3ef,#141614);--foreground:light-dark(#1f241f,#eceee8);--surface:light-dark(#fffcf7,#1d211d);--muted:light-dark(#667066,#a8b0a4);--border:light-dark(#e2ddd4,#3a4038);--accent:light-dark(#2f5a3e,#b7d4b0);--destructive:light-dark(#a52c26,#ffafa5);--ring:var(--accent);--text-sm:.875rem;--text-base:1rem;--text-lg:2.75rem;--radius:8px}
-*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.tagline{margin:8px 0 0;color:var(--muted);font-size:var(--text-sm)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{padding:16px 20px;background:var(--surface);border:1px dashed var(--accent);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;align-items:center;gap:12px;overflow-x:auto;min-height:72px;white-space:nowrap}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;cursor:grab;white-space:nowrap}#preview button:hover{border-color:var(--border)}#preview button.over{border-left:2px solid var(--accent)}#preview #preview-context{flex:1;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#status{min-height:24px;color:var(--accent)}#status.error{color:var(--destructive)}#retry{margin-left:12px}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}.notice{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:20px 0 0;padding:14px 16px;background:var(--surface);border:1px solid var(--accent);border-left-width:4px;border-radius:var(--radius)}.notice strong{font-size:var(--text-sm)}.notice p{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6;max-width:640px}.notice code{display:block;margin:0 0 8px;padding:8px 10px;background:var(--background);border:1px solid var(--border);border-radius:var(--radius);font:var(--text-sm)/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-width:520px;color:var(--foreground)}#preview{margin-top:12px}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}}
+:root{color-scheme:light dark;--background:light-dark(#f4f3ef,#141614);--foreground:light-dark(#1f241f,#eceee8);--surface:light-dark(#fffcf7,#1d211d);--muted:light-dark(#667066,#a8b0a4);--border:light-dark(#e2ddd4,#3a4038);--accent:light-dark(#2f5a3e,#b7d4b0);--destructive:light-dark(#a52c26,#ffafa5);--ring:var(--accent);--preview-bg:light-dark(#f7f7f8,#131217);--preview-text:light-dark(#242127,#f5f5f5);--preview-muted:light-dark(#625f68,#a1a1aa);--preview-accent:light-dark(#2563eb,#5e9cff);--preview-warning:light-dark(#a16207,#facc15);--preview-success:light-dark(#15803d,#4ade80);--preview-error:light-dark(#dc2626,#fb7185);--text-sm:.875rem;--text-base:1rem;--text-lg:2.75rem;--radius:8px}
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--foreground);font:var(--text-base)/1.5 ui-sans-serif,system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:40px 24px 72px}header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font:italic 400 var(--text-lg)/1.05 "Didot","Bodoni 72","Iowan Old Style","Songti SC","STSong",serif;letter-spacing:.04em;margin:0}h2{font-size:var(--text-sm);font-weight:600;margin:0 0 12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}nav{display:flex;gap:8px;align-items:center}.hint{margin:12px 0 0;color:var(--accent);font-weight:600}section{margin:28px 0}button{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;cursor:pointer}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:2px solid var(--ring);outline-offset:3px}#preview{position:relative;padding:16px 20px;background:var(--preview-bg);color:var(--preview-text);border:1px dashed var(--border);border-radius:var(--radius);font:var(--text-sm)/1.8 ui-monospace,monospace;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;height:112px;overflow:auto}#preview button{flex:none;font:inherit;padding:4px 2px;border-color:transparent;background:transparent;color:var(--preview-muted);cursor:grab;white-space:nowrap}#preview button:focus-visible{border-color:var(--accent)}#preview button.over{border-left:2px solid var(--accent)}#preview button.preview-exit{opacity:0;pointer-events:none;transition:opacity 280ms ease-in;position:absolute}#preview .tone-accent{color:var(--preview-accent);font-weight:650}#preview .tone-text{color:var(--preview-text)}#preview .tone-warning{color:var(--preview-warning);font-weight:650}#preview .tone-success{color:var(--preview-success);font-weight:650}#preview .tone-error{color:var(--preview-error);font-weight:650}#preview .tone-muted{color:var(--preview-muted)}#preview #preview-context{flex:1 1 180px;display:flex;align-items:center;gap:8px;min-width:180px}.progress{flex:1;overflow:hidden;text-align:left;color:var(--preview-accent);min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 6px}label{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;-webkit-user-select:none;user-select:none}.grid label{border:1px solid transparent;border-radius:var(--radius);padding:10px}input{accent-color:var(--accent);width:18px;height:18px;flex-shrink:0}.dragging{opacity:.45}#statusbar{position:fixed;top:12px;right:12px;z-index:2;display:flex;align-items:center;gap:10px;max-width:min(520px,calc(100vw - 24px));padding:8px 12px;background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);box-shadow:0 6px 20px rgb(0 0 0/.12);color:var(--accent);font-size:var(--text-sm);opacity:0;transform:translateY(-6px);transition:opacity 150ms ease-out,transform 150ms ease-out;pointer-events:none}#statusbar.on{opacity:1;transform:none}#statusbar.error{border-color:var(--destructive);color:var(--destructive)}#statusbar #retry{pointer-events:auto}[hidden]{display:none!important}nav button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.feature{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}.feature-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.feature-head h3{margin:0;font-size:var(--text-base);font-weight:600}.feature-body{margin:10px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.65}.feature-points{margin:10px 0 0;padding-left:1.15em;font-size:var(--text-sm);line-height:1.7}.feature-points li{margin:2px 0}.feature-points li::marker{color:var(--accent)}.feature-hint{margin:auto 0 0;padding-top:12px;color:var(--muted);font:var(--text-sm)/1.6 ui-monospace,monospace;overflow-wrap:anywhere}.feature-hint::before{content:'› ';color:var(--accent)}.switch{display:flex;align-items:center;gap:8px;padding:0;font-size:var(--text-sm);color:var(--muted)}.notice{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin:20px 0 0;padding:14px 16px;background:var(--surface);border:1px solid var(--accent);border-left-width:4px;border-radius:var(--radius)}.notice strong{font-size:var(--text-sm)}.notice p{margin:6px 0 0;color:var(--muted);font-size:var(--text-sm);line-height:1.6;max-width:640px}.notice code{display:block;margin:0 0 8px;padding:8px 10px;background:var(--background);border:1px solid var(--border);border-radius:var(--radius);font:var(--text-sm)/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-width:520px;color:var(--foreground)}#preview{margin-top:12px;margin-bottom:20px}@media(max-width:450px){h1{font-size:2rem}main{padding:24px 16px}#statusbar{top:8px;right:8px;max-width:calc(100vw - 16px)}}@media(prefers-reduced-motion:reduce){#preview button.preview-exit{transition-duration:80ms}}@media(prefers-reduced-motion:reduce){#statusbar{transform:none;transition:opacity 80ms ease-out}}
+@media(hover:hover) and (pointer:fine){#preview button:hover,.grid label:hover,.feature:hover{border-color:var(--accent)}}
+#preview button.preview-highlight{border-color:var(--accent)}#preview button.preview-placeholder{border-style:dashed;opacity:1}
 </style>
 <main>
+<div id="statusbar" role="status" aria-live="polite"><span id="status"></span><button type="button" id="retry" hidden></button></div>
 <header>
-  <div><h1 id="title"></h1><p class="tagline" id="tagline"></p></div>
+  <h1 id="title"></h1>
   <nav>
     <button type="button" id="lang-zh" aria-pressed="false">中文</button>
     <button type="button" id="lang-en" aria-pressed="false">EN</button>
@@ -19,7 +22,6 @@
   <div><strong id="noticeTitle"></strong><p id="noticeBody"></p></div>
   <div><code id="noticePrompt"></code><button type="button" id="copyPrompt"></button></div>
 </div>
-<div role="status" aria-live="polite"><span id="status"></span><button id="retry" hidden></button></div>
 <section><h2 id="fieldsHeading"></h2><p class="hint" id="dragHint"></p><div id="preview" role="group" tabindex="0"></div><div class="grid" id="fields"></div></section>
 <section><h2 id="optionsHeading"></h2><div class="grid" id="options"></div></section>
 <section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
@@ -30,34 +32,32 @@ history.replaceState(null,'',location.pathname);
 const I18N={
   title:{zh:'Pi Mini Mode',en:'Pi Mini Mode'},
   documentTitle:{zh:'Pi Mini Mode 设置',en:'Pi Mini Mode Settings'},
-  tagline:{zh:'极简状态栏配置',en:'Minimal status bar setup'},
-  dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存',en:'Drag items in the preview to reorder · Auto-saves on drop'},
+  dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存。',en:'Drag preview items to reorder · saves on drop.'},
   featuresHeading:{zh:'功能说明',en:'Features'},
   fieldsHeading:{zh:'状态栏字段与预览',en:'Status bar items & preview'},
   optionsHeading:{zh:'状态栏样式',en:'Status bar style'},
   on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},
   featureList:{
     zh:[
-      {id:'status',title:'状态栏指标',body:'一行看清会话状态，随终端宽度自动取舍，不换行。',points:['模型与思考等级，会话与缓存 Token、缓存命中率、费用估算','上下文用量进度条与百分比','生成速度 tok/s，从第一个输出 token 起算，不含等待首字'],hint:'勾选需要的字段，拖拽预览中的条目即可排序。'},
-      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'把对话收成结论：思考、工具与技能汇成一棵按时间排序的可折叠过程树。',points:['长用户消息默认保留前四行，点击折叠控件展开全文','子代理行可展开活动记录与最终输出','Ctrl+O 展开或收起完整过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记'],hint:'/pi-mini-mode-minimal on|off · /pi-mini-mode-prompts · /pi-mini-mode-history'},
-      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['光标移入图片路径即可预览，全屏编辑器也支持悬停','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能，并在光标处插入','点击图片标签或消息中的文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
-      {id:'themes',title:'明暗主题',body:'内置 cc-dark 与 cc-light 两套主题，Markdown、代码高亮、表格与 Mermaid 图表一并适配明暗。',points:['用户消息使用主题的用户背景色，与正文清晰区分','不支持、不完整或过宽的图表保留源文本'],hint:'/pi-mini-mode-settings 配置所有选项'}
+      {id:'status',title:'状态栏指标',body:'一行看清会话状态，按终端宽度取舍。',points:['模型与思考等级，会话与缓存 Token、命中率、费用','上下文进度条与百分比','生成速度 tok/s，从首个输出 token 起算，不含等待首字']},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'把对话收成结论：思考、工具与技能汇成一棵按时间排序的可折叠过程树。',points:['长用户消息默认保留前四行，点击展开全文','子代理行可展开活动记录与输出','Ctrl+O 展开或收起过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记']},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['光标移入图片路径即可预览，全屏编辑器同样支持','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能并插入光标处','点击图片标签或文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
+      {id:'themes',title:'明暗主题',body:'主题让 Markdown、代码高亮、表格与 Mermaid 图表跟随明暗切换。',points:['用户消息使用主题用户背景色，与正文区分','不支持、不完整或过宽的图表保留源文本'],hint:'回到 Pi，输入 /settings → Theme，选择 cc-dark / cc-light'}
     ],
     en:[
-      {id:'status',title:'Status bar metrics',body:'The whole session state on one line, trimmed to fit narrow terminals instead of wrapping.',points:['Model and thinking level, session and cache tokens, cache hit rate, cost estimate','Context usage bar with percentage','Speed in tok/s, measured from the first output token, excluding time to first token'],hint:'Enable the items you need, then drag entries in the preview to reorder.'},
-      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'Turns the conversation into conclusions: thinking, tools and skills collapse into one chronological, foldable tree.',points:['Long user messages keep four lines; click the fold control to expand','Subagent rows expand to activity and final output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked'],hint:'/pi-mini-mode-minimal on|off · /pi-mini-mode-prompts · /pi-mini-mode-history'},
-      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Preview an image as soon as the cursor enters its path; hovering works in fullscreen','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert one at the cursor','Click image labels or file paths in messages to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
-      {id:'themes',title:'Light and dark themes',body:'Built-in cc-dark and cc-light adapt Markdown, code highlighting, tables and Mermaid diagrams to the color scheme.',points:['User messages use the theme user background to stand apart from the body','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'/pi-mini-mode-settings to configure all options'}
+      {id:'status',title:'Status bar metrics',body:'The whole session state on one line, trimmed to fit narrow terminals.',points:['Model and thinking level, session and cache tokens, hit rate, cost','Context usage bar with percentage','Speed in tok/s, measured from the first output token, excluding time to first token']},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'Turns the conversation into conclusions: thinking, tools and skills collapse into one chronological, foldable tree.',points:['Long user messages keep four lines; click to expand','Subagent rows expand to activity and output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked']},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Preview an image as soon as the cursor enters its path, in fullscreen too','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert at the cursor','Click image labels or file paths to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
+      {id:'themes',title:'Light and dark themes',body:'Themes keep Markdown, code highlighting, tables and Mermaid diagrams in step with light and dark.',points:['User messages use the theme user background to stand out','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'In Pi, enter /settings → Theme and choose cc-dark or cc-light'}
     ]
   },
   reset:{zh:'恢复默认',en:'Reset defaults'},
   retry:{zh:'重试',en:'Retry'},
   confirmReset:{zh:'恢复默认排序与显示设置？',en:'Reset layout and visibility to defaults?'},
   connecting:{zh:'正在同步…',en:'Connecting…'},
-  connected:{zh:'已同步',en:'In sync'},
+  saved:{zh:'设置已完成',en:'Settings saved'},
   unsaved:{zh:'未保存修改',en:'Unsaved changes'},
   saving:{zh:'正在保存…',en:'Saving…'},
-  saved:{zh:'已保存',en:'Saved'},
   saveFailed:{zh:'保存失败',en:'Failed to save'},
   reconnect:{zh:'连接已断开，请从终端重新打开',en:'Disconnected. Please reopen from the terminal.'},
   noticeTitle:{zh:'极简输出需要全屏渲染器',en:'Minimal transcript needs the fullscreen renderer'},
@@ -74,6 +74,7 @@ const I18N={
     branch:{zh:'仅分支',en:'Branch Only'},
     'session-tokens':{zh:'会话 Token',en:'Session Tokens'},
     'cache-tokens':{zh:'缓存 Token',en:'Cache Tokens'},
+    'cache-miss':{zh:'缓存 miss',en:'Cache miss'},
     ch:{zh:'缓存命中率',en:'Cache Hit Rate'},
     cost:{zh:'累计费用',en:'Cost'},
     mcp:{zh:'MCP 服务数',en:'MCP Count'},
@@ -88,16 +89,24 @@ const I18N={
 };
 const FIELD_KEY={minimal:'pi-mini-mode-minimal-show','input-enhancements':'pi-mini-mode-input-enhancements','context-dots':'pi-mini-mode-context-dots-show','speed-unit':'pi-mini-mode-speed-unit-show'};
 let lang=localStorage.piMiniModeLang||(navigator.language.startsWith('zh')?'zh':'en');
-let data,state,order,dragged,saving=false,dirty=false,timer,copyTimer;
+let data,state,order,dragged,hovered,saving=false,dirty=false,timer,copyTimer,statusTimer;
 const key=id=>'pi-mini-mode-'+id+'-show';
 const t=(id,fallback='')=>(I18N[id]?.[lang]??fallback);
 const fieldLabel=id=>I18N.fields[id]?.[lang]||id;
-const examples={'project-branch':'pi-mini-mode(main)',model:'deepseek-v4-flash',thinking:'high',branch:'main','session-tokens':'Total 45K','cache-tokens':'Cached 25K',ch:'CH 40.0%',cost:'$0.012',mcp:'◇ MCP 3',context:'500/1.0M','context-percent':'1%',speed:'120 tok/s'};
-function status(text,error=false){$('status').textContent=text;$('status').className=error?'error':''}
+const examples={'project-branch':'pi-mini-mode(main)',model:'deepseek-v4-flash',thinking:'high',branch:'main','session-tokens':'Total 45K','cache-tokens':'Cached 25K','cache-miss':'Miss 21K',ch:'CH 40.0%',cost:'$0.012',mcp:'◇ MCP 3',context:'500/1.0M','context-percent':'1%',speed:'120 tok/s'};
+const statusHold=2500;
+function status(text,error=false){
+  clearTimeout(statusTimer);
+  const bar=$('statusbar');
+  bar.classList.toggle('error',!!error);bar.classList.toggle('on',!!text);
+  $('status').textContent=text;
+  if(!text||error)return; // 连接/保存中短显，错误留在原地等 retry
+  statusTimer=setTimeout(()=>{$('status').textContent='';bar.classList.remove('on')},statusHold);
+}
 function applyLang(){
   document.documentElement.lang=lang==='zh'?'zh-CN':'en';
   document.title=t('documentTitle');
-  for(const id of ['title','tagline','featuresHeading','fieldsHeading','optionsHeading','dragHint']) $(id).textContent=t(id);
+  for(const id of ['title','featuresHeading','fieldsHeading','optionsHeading','dragHint']) $(id).textContent=t(id);
   $('reset').textContent=t('reset');$('retry').textContent=t('retry');
   $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
   $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
@@ -108,15 +117,48 @@ async function request(method,body){
   if(!response.ok)throw Error(await response.text()||t('saveFailed'));
   return response.json();
 }
+const previewFade=280,previewFadeReduced=80;
+function syncPreviewEmpty(){const panel=$('preview');if(!panel.children.length)panel.textContent=t('emptyPreview')}
+function exitPreview(el){
+  if(el.classList.contains('preview-exit'))return;
+  const fade=matchMedia('(prefers-reduced-motion: reduce)').matches?previewFadeReduced:previewFade;
+  el.style.left=el.offsetLeft+'px';el.style.top=el.offsetTop+'px';
+  el.classList.add('preview-exit');el.setAttribute('aria-hidden','true');
+  el.disabled=true;el.draggable=false;el.tabIndex=-1;
+  setTimeout(()=>{el.remove();syncPreviewEmpty()},fade+60);
+}
+// A hidden field fades out in place; its timer removes only that node, so a stale fade can never delete a newer button.
+function nextPreview(el){let node=el.nextSibling;while(node&&!(node.dataset?.field&&!node.classList.contains('preview-exit')))node=node.nextSibling;return node}
+function hoverField(id){return {'context-dots':'context','speed-unit':'speed'}[id]||id}
 function preview(){
   const panel=$('preview'),scroll=panel.scrollLeft;
-  panel.replaceChildren();
-  const visible=order.filter(id=>state[key(id)]);
-  const values={...examples,speed:state['pi-mini-mode-speed-unit-show']?'120 tok/s':'120'};
-  for(const id of visible){
-    const button=document.createElement('button');
-    button.id='preview-'+id;button.type='button';button.textContent=values[id];button.draggable=true;
-    if(id==='context'){const bar=document.createElement('span');bar.className='progress';bar.setAttribute('aria-hidden','true');bar.textContent=state['pi-mini-mode-context-dots-show']?'⣿'+'⣀'.repeat(300):'█'+'░'.repeat(300);button.append(bar)}
+  const highlighted=hoverField(hovered);
+  const visible=order.filter(id=>state[key(id)]||id===highlighted);
+  const sample={...state};
+  if(hovered)sample[FIELD_KEY[hovered]||key(hovered)]=true;
+  const values=Object.fromEntries(Object.entries(examples).map(([id,value])=>[id,typeof value==='function'?value():value]));
+  values.speed=sample['pi-mini-mode-speed-unit-show']?'120 tok/s':'120';
+  for(const node of [...panel.childNodes])if(node.nodeType===3)node.remove();
+  const live=new Map();
+  for(const el of [...panel.children]){
+    const field=el.dataset.field;
+    if(!field){el.remove();continue}
+    if(!visible.includes(field)){if(el.dataset.ghost==='true')el.remove();else exitPreview(el);continue}
+    if(el.classList.contains('preview-exit')){el.remove();continue}
+    live.set(field,el);
+  }
+  let next=null;
+  for(let index=visible.length-1;index>=0;index--){
+    const id=visible[index];
+    const button=live.get(id)??document.createElement('button');
+    button.id='preview-'+id;button.type='button';button.textContent=values[id];button.draggable=true;button.dataset.field=id;
+    const fast=Number.parseFloat(values.speed)>=100;
+    button.className='tone-'+(id==='model'||id==='context-percent'?'accent':id==='cache-miss'?'warning':id==='session-tokens'||id==='cache-tokens'||id==='ch'?'text':id==='speed'?(fast?'success':values.speed.startsWith('0')?'error':'warning'):'muted');
+    const ghost=!state[key(id)];
+    button.dataset.ghost=String(ghost);button.disabled=ghost;button.draggable=!ghost;button.tabIndex=ghost?-1:0;
+    if(ghost)button.setAttribute('aria-hidden','true');else button.removeAttribute('aria-hidden');
+    if(id===highlighted){button.classList.add('preview-highlight');if(ghost||!state[FIELD_KEY[hovered]||key(hovered)])button.classList.add('preview-placeholder')}
+    if(id==='context'){const bar=document.createElement('span');bar.className='progress';bar.setAttribute('aria-hidden','true');bar.textContent=sample['pi-mini-mode-context-dots-show']?'⣿'+'⣀'.repeat(199):'█'+'░'.repeat(199);button.append(bar)}
     button.setAttribute('aria-label',fieldLabel(id)+' · '+t('dragHint'));
     button.ondragstart=event=>{dragged=id;event.dataTransfer.setData('text/plain',id);event.dataTransfer.effectAllowed='move';button.classList.add('dragging')};
     button.ondragend=()=>{dragged=undefined;button.classList.remove('dragging');document.querySelectorAll('.over').forEach(el=>el.classList.remove('over'))};
@@ -124,15 +166,17 @@ function preview(){
     button.ondragleave=()=>button.classList.remove('over');
     button.ondrop=event=>{event.preventDefault();const source=dragged;dragged=undefined;if(source){move(order.indexOf(source),order.indexOf(id));$('preview-'+source)?.focus()}};
     button.onkeydown=event=>{if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();const target=visible[visible.indexOf(id)+(event.key==='ArrowLeft'?-1:1)];if(target){move(order.indexOf(id),order.indexOf(target));$('preview-'+id)?.focus()}};
-    panel.append(button);
+    if(button.parentNode!==panel||nextPreview(button)!==next)panel.insertBefore(button,next);
+    next=button;
   }
-  if(!visible.length)panel.textContent=t('emptyPreview');
+  if(!visible.length)syncPreviewEmpty();
   panel.scrollLeft=scroll;
 }
-function change(){dirty=true;state.footerOrder=[...order];preview();renderNotice();status(t('unsaved'));clearTimeout(timer);timer=setTimeout(save,250)}
+function change(){hovered=undefined;dirty=true;state.footerOrder=[...order];preview();renderNotice();status(t('unsaved'));clearTimeout(timer);timer=setTimeout(save,250)}
 async function save(){
   if(saving)return;saving=true;$('retry').hidden=true;
-  try{while(dirty){dirty=false;const body=structuredClone(state);status(t('saving'));await request('PUT',body)}status(t('saved'))}
+  let wrote=false;
+  try{while(dirty){dirty=false;const body=structuredClone(state);status(t('saving'));await request('PUT',body);wrote=true}status(wrote?t('saved'):'')}
   catch(error){dirty=true;status(t('saveFailed')+'：'+error.message,true);$('retry').hidden=false}
   finally{saving=false}
 }
@@ -155,8 +199,8 @@ function feature(item){
   const body=document.createElement('p');body.className='feature-body';body.textContent=item.body;
   const points=document.createElement('ul');points.className='feature-points';
   points.append(...item.points.map(point=>{const li=document.createElement('li');li.textContent=point;return li}));
-  const hint=document.createElement('p');hint.className='feature-hint';hint.textContent=item.hint;
-  card.append(head,body,points,hint);
+  card.append(head,body,points);
+  if(item.hint){const hint=document.createElement('p');hint.className='feature-hint';hint.textContent=item.hint;card.append(hint)}
   return card;
 }
 function checkbox(id,settingId){
@@ -165,15 +209,18 @@ function checkbox(id,settingId){
     change();
   });
   label.append(input,document.createTextNode(fieldLabel(id)));
+  label.onmouseenter=()=>{if(matchMedia('(hover: hover) and (pointer: fine)').matches){hovered=id;preview()}};
+  label.onmouseleave=()=>{if(hovered===id){hovered=undefined;preview()}};
   return label;
 }
 function move(from,to){if(from===to||from<0||to<0||to>=order.length)return;const [id]=order.splice(from,1);order.splice(to,0,id);preview();change()}
 function render(){
+  hovered=undefined;
   applyLang();
   renderNotice();
-  $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))));
+  $('fields').replaceChildren(...order.map(id=>checkbox(id,key(id))),...(data.options||[]).map(id=>checkbox(id,FIELD_KEY[id]||key(id))));
   $('features').replaceChildren(...t('featureList').map(feature));
-  $('options').replaceChildren(...(data.options||[]).map(id=>checkbox(id,FIELD_KEY[id]||key(id))));
+  $('options').replaceChildren();$('optionsHeading').hidden=true;$('options').hidden=true;
   preview();
 }
 function renderNotice(){
@@ -205,6 +252,6 @@ function mergeOrder(base,all){const next=[...new Set((base||[]).filter(id=>(all|
 $('reset').onclick=()=>{if(!confirm(t('confirmReset')))return;state={...data.defaults};order=mergeOrder(data.order,data.order);render();change()};
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue=''}});
 applyLang();status(t('connecting'));
-request('GET').then(value=>{data=value;state={...data.settings};order=mergeOrder(state.footerOrder||data.order,data.order);render();$('reset').disabled=false;status(t('connected'))}).catch(()=>status(t('reconnect'),true));
+request('GET').then(value=>{data=value;state={...data.settings};order=mergeOrder(state.footerOrder||data.order,data.order);render();$('reset').disabled=false;status('')}).catch(()=>status(t('reconnect'),true));
 </script>
 </html>

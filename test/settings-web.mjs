@@ -15,8 +15,11 @@ try {
   const page = await fetch(url.origin);
   assert.equal(page.status, 200);
   const html = await page.text();
+  assert.match(html, /flex-wrap:wrap/);
+  assert.match(html, /tone-warning/);
+  assert.match(html, /data\.options\|\|\[\]/);
   assert.match(html, /button.draggable=true/);
-  assert.match(html, /Drag items in the preview to reorder/);
+  assert.match(html, /Drag preview items to reorder/);
   assert.match(html, /拖拽预览中的字段可调整顺序/);
   assert.match(html, /id="features"/);
   assert.match(html, /feature-body/);

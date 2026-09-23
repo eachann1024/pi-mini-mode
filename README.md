@@ -53,15 +53,15 @@ Paste images with `Ctrl+V` (`Alt+V` on Windows/WSL). Disabling input enhancement
 
 ### 02 / Process, quieter
 
-Enable **Minimal output** in settings, or run `/pi-mini-mode-minimal on`.
+Enable **Minimal output** in `/pi-mini-mode-settings`.
 
-- **Long prompts, folded.** In fullscreen minimal mode, long user messages show the first four rendered rows. Click the fold control to reveal the rest, or select a message with `/pi-mini-mode-prompts`. Complete fenced code blocks stay intact.
+- **Long prompts, folded.** In fullscreen minimal mode, long user messages show the first four rendered rows. Click the fold control to reveal the rest. Complete fenced code blocks stay intact.
 - **Subagents, in plain sight.** Click a subagent row to expand its available activity and message/final output. A dispatch receipt or returned tool call is not a completed background task.
-- **A process tree, not a wall of output.** Thinking, tools and skill reads share one chronological tree. The latest ten summaries stay visible; `Ctrl+O` expands or collapses the full process. New questions start collapsed.
-- **Tool details on demand.** Expand a tool/thinking entry using its fold control or `/pi-mini-mode-tools`. Tool details show saved text, not the original custom renderer or image output.
+- **A process tree, not a wall of output.** Thinking, tools and skill reads share one chronological tree. The latest summaries stay visible, including the latest thinking; `Ctrl+O` expands or collapses the full process. New questions start collapsed.
+- **Tool details on demand.** Expand a tool or thinking entry, including the latest thinking, using its fold control. Thinking starts collapsed and only expands or collapses manually, including while running. Tool details show saved text, not the original custom renderer or image output.
 - **Room for the answer.** Final Markdown streams without extra headings or backgrounds. Failures and interruptions stay explicit. Folding changes presentation, not stored session messages.
 
-`/pi-mini-mode-history` opens complete process entries, five at a time. `/pi-mini-mode-minimal off` restores native Pi history.
+Turn **Minimal output** off in settings to restore native Pi history.
 
 ### 03 / Session, in focus
 
@@ -85,16 +85,11 @@ This earlier screenshot and recording show footer configuration, not the newer i
 | Command / shortcut | Purpose |
 | --- | --- |
 | `/pi-mini-mode-settings` | Configure fields, input enhancements and minimal output |
-| `/pi-mini-mode-setup` | Show the first-run setup prompt again |
-| `/pi-mini-mode-minimal on` / `off` | Enable minimal output / restore native history |
 | `Ctrl+O` | Expand or collapse the complete process tree |
 | `Ctrl+S` | Expand or collapse completed subagent rows; yields to Pi `/model`, `/thinking`, and other selectors |
-| `/pi-mini-mode-prompts` | Select and expand/collapse a user message¹ |
-| `/pi-mini-mode-tools` | Select and expand/collapse saved tool text or thinking¹ |
-| `/pi-mini-mode-history` | Browse full process entries, five at a time |
 | `/reload` | Reload the extension after installation or source changes |
 
-¹ Requires fullscreen minimal output. Subagent rows have their own click-to-expand control; supported third-party widgets retain native detail shortcuts.
+Subagent rows have their own click-to-expand control; supported third-party widgets retain native detail shortcuts.
 
 ## Compatibility
 
@@ -115,7 +110,7 @@ On the first interactive TUI session, Pi Mini Mode shows a preview. Almost every
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
 ```
 
-The first-run picker offers **Keep defaults**, **Configure now**, and **Apply recommended setup**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Applying the recommendation asks you to choose the bundled `cc-dark` or `cc-light` theme, saves that theme and global `tuiMode=fullscreen` through Pi's settings API, applies the theme immediately, and asks you to restart Pi because the fullscreen renderer is chosen at startup. Project settings and CLI flags may override these global values. Escape/cancel leaves onboarding incomplete; retry with `/pi-mini-mode-setup`. Print, JSON, and other non-interactive modes never prompt.
+The first-run picker offers **Keep defaults**, **Configure now**, and **Apply recommended setup**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Applying the recommendation asks you to choose the bundled `cc-dark` or `cc-light` theme, saves that theme and global `tuiMode=fullscreen` through Pi's settings API, applies the theme immediately, and asks you to restart Pi because the fullscreen renderer is chosen at startup. Project settings and CLI flags may override these global values. Escape/cancel leaves onboarding incomplete; it runs again on the next interactive session. Print, JSON, and other non-interactive modes never prompt.
 
 Open that settings UI any time with:
 
@@ -206,9 +201,9 @@ For a real terminal smoke test, run `python3 test/minimal-pty.py`. It needs Pyth
 <details>
 <summary><strong>Publishing</strong></summary>
 
-Pushes to `main` automatically publish to npm after `npm ci`, `npm run check`, and `npm test`; the workflow also supports manual dispatch on `main`. Each release uses the higher of the local version baseline and npm's latest stable version plus one patch. Versions change only in the runner, with no version commits or tags; raise the baseline in `package.json` and the lockfile for a major/minor release. Already-published commits are skipped. Actions concurrency can replace pending pushes, so not every push (or every commit within a push) is guaranteed a separate package release.
+Normal releases are published from this machine with the npm token in `.npmrc` (`npm publish --access public`). `publish.yml` is only a manual backup (`workflow_dispatch` on `main`): it runs `npm ci`, `npm run check`, and `npm test`, then `scripts/publish.mjs`. That script publishes the higher of the local version baseline and npm's latest stable version plus one patch, changes the version only in the runner (no version commit or tag), and skips commits that are already published. Raise the baseline in `package.json` and the lockfile for a major or minor release.
 
-Releases require the package’s npm Trusted Publisher to be configured for this GitHub repository and `publish.yml`. Subsequent publishing uses OIDC and provenance without an npm token.
+The backup workflow needs the package’s npm Trusted Publisher configured for this GitHub repository and `publish.yml`. It uses OIDC and provenance and does not use an npm token.
 
 </details>
 

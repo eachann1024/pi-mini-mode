@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { Container, Text, ScrollView, visibleWidth } from '@earendil-works/pi-tui';
 import { initTheme } from '../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js';
 initTheme('dark', false);
-const { attachTranscript, compactSupervisorNotice, supervisorNotice, supervisorNoticeBody } = await import('../lib/transcript-adapter.ts');
+const { attachTranscript, cacheMissLine, compactSupervisorNotice, supervisorNotice, supervisorNoticeBody } = await import('../lib/transcript-adapter.ts');
+assert.deepEqual(cacheMissLine('Cache miss: 21k tokens re-billed'), { label: 'Cache miss', tokens: 21000 });
+assert.deepEqual(cacheMissLine('Cache miss after 6m idle: 1,024 tokens re-billed (~$0.02)'), { label: 'Cache miss after 6m idle', tokens: 1024 });
+assert.equal(cacheMissLine('not a miss'), undefined);
 const { CustomEntryComponent } = await import('../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/custom-entry.js');
 
 // Standalone failures retain their identity and error, including multiline directory metadata.

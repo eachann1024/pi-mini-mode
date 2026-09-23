@@ -28,6 +28,16 @@ assert.deepEqual(document.render(80).map(row => row.trim()), ['HEADER', 'EARLIER
 restore();
 // Real rebuild order: summary first, then only the retained user suffix.
 const fullTurns = ['OLD', 'REPEATED', 'REPEATED'];
+const unfolded = attachTranscript(tui, {
+  invalidate() {},
+  render(_width, notices) {
+    return ['TURN', ...(notices.get(0) ?? [])];
+  },
+}, { turnCount: () => 1, foldCacheMiss: () => false });
+chat.clear();
+chat.addChild(new Text('Cache miss: 59k tokens re-billed', 0, 0));
+assert.match(document.render(80).join('\n'), /59k tokens re-billed/, 'turning the setting off restores the transcript line');
+unfolded();
 const restoreCompacted = attachTranscript(tui, {
   invalidate() {},
   render(_width, notices) {
@@ -39,13 +49,15 @@ for (const retained of [1, 0]) {
   chat.addChild(new CompactionSummaryMessageComponent('COMPACTED', 0, 0));
   if (retained) chat.addChild(new UserMessageComponent('REPEATED', 0, 0));
   chat.addChild(new Text('Execution aborted', 0, 0));
-  chat.addChild(new Text('Cache miss: 117k tokens re-billed', 0, 0));
+  chat.addChild(new Text('Cache miss: 21k tokens re-billed', 0, 0));
+  chat.addChild(new Text('Cache miss after 6m idle: 96k tokens re-billed', 0, 0));
   chat.addChild(new Text('Session Info\nMessages: 3', 0, 0));
   for (const width of [80, 40]) {
     assert.deepEqual(document.render(width).map(row => row.trim()), [
       'HEADER', 'OLD', 'REPEATED', ...(retained ? ['COMPACTED'] : []),
       'REPEATED', ...(!retained ? ['COMPACTED'] : []),
-      'Execution aborted', 'Cache miss: 117k tokens re-billed', 'Session Info', 'Messages: 3',
+      'Execution aborted', 'Session Info', 'Messages: 3',
+      'Cache miss: 2 misses, 117k tokens re-billed',
     ]);
   }
 }

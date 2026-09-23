@@ -304,6 +304,22 @@ function supervisorEnvelope(child: Component): unknown {
 /** Pi 0.85.x private layout adapter. Never mutates the stored messages or child tree. */
 export type NoticeRows = string[] & { handleMouse?: Component["handleMouse"] };
 export type TurnNotices = ReadonlyMap<number, NoticeRows>;
+
+/** Pi writes one warning line per miss (`Cache miss…: N tokens re-billed`). */
+export function cacheMissLine(text: string): { label: string; tokens: number } | undefined {
+  const plain = stripVTControlCharacters(text).replace(/\s+/g, " ").trim();
+  const match = plain.match(/^(Cache miss\b.*?):\s*([\d,.]+)\s*([kKmM])?\s*tokens re-billed\b/);
+  if (!match) return;
+  const scale = match[3]?.toLowerCase() === "m" ? 1_000_000 : match[3]?.toLowerCase() === "k" ? 1_000 : 1;
+  const tokens = Math.round(Number(match[2].replace(/,/g, "")) * scale);
+  return Number.isFinite(tokens) ? { label: match[1], tokens } : undefined;
+}
+
+function formatCacheTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
+  return String(value);
+}
 interface TranscriptView extends Component {
   render(width: number, notices?: TurnNotices): string[];
   clearHover?(): boolean;
@@ -325,6 +341,8 @@ interface NoticeOptions {
   /** Blocking extension prompts are native UI, never auto-expiring notices. */
   isPrompt?: (text: string) => boolean;
   isTransient?: (text: string) => boolean;
+  /** When false, Pi's per-turn cache-miss lines stay in the transcript. Default: fold them. */
+  foldCacheMiss?: () => boolean;
   now?: () => number;
   schedule?: (callback: () => void, delay: number) => () => void;
 }
@@ -411,7 +429,21 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
     let turn = totalTurns - nativeTurns - 1;
     let nextExpiry = Infinity;
     const time = now();
+    const cacheMisses = new Map<number, { label: string; tokens: number; count: number; rows: string[] }>();
+    const flushCache = (index: number) => {
+      const miss = cacheMisses.get(index);
+      if (!miss) return;
+      cacheMisses.delete(index);
+      const rows = notices.get(index) ?? [];
+      // ponytail: first styled line carries the color; token text is plain digits so one replace is enough.
+      const summary = miss.count === 1
+        ? miss.rows[0]
+        : miss.rows[0].replace(/[\d,.]+\s*[kKmM]?\s*tokens re-billed/, `${miss.count} misses, ${formatCacheTokens(miss.tokens)} tokens re-billed`);
+      rows.push(summary);
+      notices.set(index, rows);
+    };
     for (const child of chat.children) {
+      if (child.constructor.name === "UserMessageComponent") flushCache(turn);
       if (child.constructor.name === "UserMessageComponent") turn++;
       // Goal state is stored as a custom entry, not a user message. Adapt only
       // the known pi-codex-goal envelope so ordinary extension cards stay native.
@@ -468,6 +500,15 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
       // Pi 0.85 Text stores the unwrapped styled source in text. Width changes
       // must not restart the timeout; setText updates must restart it.
       const source = (child as unknown as { text?: unknown }).text;
+      const miss = options.foldCacheMiss?.() !== false && typeof source === "string" ? cacheMissLine(source) : undefined;
+      if (miss) {
+        const current = cacheMisses.get(turn) ?? { label: miss.label, tokens: 0, count: 0, rows: [] as string[] };
+        current.tokens += miss.tokens;
+        current.count++;
+        current.rows.push(...child.render(width));
+        cacheMisses.set(turn, current);
+        continue;
+      }
       if (typeof source === "string" && !options.isPrompt?.(source) && options.isTransient?.(source)) {
         let state = noticeTimes.get(child);
         if (!state || state.text !== source) {
@@ -481,6 +522,7 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
       rows.push(...child.render(width));
       notices.set(turn, rows);
     }
+    flushCache(turn);
     if (Number.isFinite(nextExpiry)) {
       cancelExpiry = schedule(() => {
         cancelExpiry = undefined;

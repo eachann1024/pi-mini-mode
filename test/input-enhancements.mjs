@@ -11,7 +11,11 @@ import { filePaths, inputCapabilities, linkMessageFiles } from '../lib/file-link
 setCapabilities({ images: null, hyperlinks: false, trueColor: false });
 assert.deepEqual(inputCapabilities({ TERM_PROGRAM: 'otty' }), { images: 'kitty', hyperlinks: true, trueColor: false });
 assert.equal(inputCapabilities({ TERM_PROGRAM: 'otty', PI_HYPERLINKS: '0' }).hyperlinks, false);
+assert.equal(inputCapabilities({ HERDR_PANE_ID: 'w1:p1', TERM: 'xterm-256color' }).images, 'kitty');
+assert.equal(inputCapabilities({ HERDR_PANE_ID: 'w1:p1', PI_IMAGE_PROTOCOL: 'none' }).images, null);
 process.env.TERM_PROGRAM = 'test-terminal';
+const herdrPaneId = process.env.HERDR_PANE_ID;
+delete process.env.HERDR_PANE_ID;
 setCapabilities({ images: null, hyperlinks: true, trueColor: false });
 const dir = await mkdtemp(join(tmpdir(), 'pi-input-'));
 try {
@@ -30,6 +34,17 @@ try {
   }
   const existing = `[file](${pathToFileURL(file).href})`;
   assert.equal(linkMessageFiles(existing, dir), existing);
+  const html = join(dir, 'HANDOVER.html');
+  await writeFile(html, '<html></html>');
+  for (const target of [html, './HANDOVER.html']) {
+    const linked = linkMessageFiles(`[${html}](${target})`, dir);
+    assert.equal(linked, `[${html}](<${pathToFileURL(html).href}>)`);
+    const theme = Object.fromEntries(['heading','link','linkUrl','code','codeBlock','codeBlockBorder','quote','quoteBorder','hr','listBullet','bold','italic','strikethrough','underline'].map(k => [k, t => t]));
+    const rendered = new Markdown(linked, 0, 0, theme).render(200).join('');
+    assert.equal(getOsc8LinkAtColumn(rendered, 0), pathToFileURL(html).href, 'local Markdown links render a file URI for terminal clicks');
+  }
+  assert.equal(linkMessageFiles('[site](https://example.com)', dir), '[site](https://example.com)');
+  assert.equal(linkMessageFiles('[missing](/missing/file.html)', dir), '[missing](/missing/file.html)');
   assert.equal(linkMessageFiles('https://example.com/a.png /missing/file.txt', dir), 'https://example.com/a.png /missing/file.txt');
   const separators = '派发子代理 / executor / 其他 agent';
 assert.deepEqual(filePaths(separators), [], 'standalone slashes are prose separators, not paths');
@@ -109,6 +124,17 @@ const fencedPath = '```text\nsee "' + file + '"\n```';
   assert.ok(editor.render(100).join('\n').includes('skill:alpha'), 'typing a whitespace slash opens the real editor menu');
   editor.handleInput('\t');
   assert.equal(editor.getText(), '123 /skill:alpha ', 'completion preserves text before the cursor');
+  const webUrl = 'https://example.com/a/long/path?query=value';
+  editor.setText(webUrl);
+  const webRows = editor.render(25).filter(line => line.includes(`\x1b]8;;${webUrl}\x07`));
+  assert.ok(webRows.length >= 2, 'wrapped URLs retain the complete browser target on each row');
+  editor.setText('[website](https://example.com)');
+  assert.ok(editor.render(80).join('\n').includes('\x1b]8;;https://example.com\x07'), 'Markdown links in the editor expose their browser target');
+  editor.setText('');
+  editor.insertTextAtCursorInternal(`"${image}"`);
+  assert.ok(stripTerminalSequences(editor.render(80).join('\n')).includes('[image1]'), 'Pi 0.87 image paste compacts the private insertion');
+  assert.ok(!stripTerminalSequences(editor.render(80).join('\n')).includes('pi-clipboard'), 'render does not read the submit path back onto screen');
+  assert.equal(editor.getText(), `"${image}"`, 'private insertion still submits the original path');
   editor.setText(`"${image}" tail`);
   for (let i = 0; i < 6; i++) editor.handleInput('\x1b[D');
   await delay(30);
@@ -116,7 +142,7 @@ const fencedPath = '```text\nsee "' + file + '"\n```';
   assert.ok(rows.join('\n').includes(pathToFileURL(image).href), 'image chip links to actual file');
   assert.ok(stripTerminalSequences(rows.join('\n')).includes('[image1]'));
   assert.equal(editor.getText(), `"${image}" tail`, 'external reads and reload retain the real attachment');
-  assert.ok(rows.join('\n').includes('\x1b[4m'), 'link is underlined');
+  assert.ok(!rows.join('\n').includes('\x1b[4m'), 'image chip is not underlined');
   assert.ok(rows.join('\n').includes('\x1b_pi:c\x07'), 'IME cursor marker retained');
   assert.equal(overlays.length, 1);
   assert.equal(overlays[0].options.nonCapturing, true);
@@ -220,6 +246,24 @@ const fencedPath = '```text\nsee "' + file + '"\n```';
   assert.ok(!live.previousScreen.some(line => stripTerminalSequences(line).includes('╭')), 'late shutdown must not tear down the new session hook');
   next();
   assert.equal(live.handleViewportInput, originalViewport, 'replacement cleanup restores native mouse dispatch');
+
+  // /reload reports the saved factory while the focused editor is the unwrapped one Pi restores after the reload box.
+  const reloadCtx = { mode: 'tui', hasUI: true, cwd: dir, sessionManager: {}, ui: {
+    theme, notify() {}, addAutocompleteProvider() {}, getEditorComponent: () => undefined,
+    setEditorComponent(value) { this.factory = value; }, onTerminalInput() { return () => {}; },
+  } };
+  const reload = installInputEnhancements({ ...pi }, reloadCtx, true);
+  reloadCtx.ui.getEditorComponent = () => reloadCtx.ui.factory;
+  const bare = reloadCtx.ui.factory(live, { borderColor: t => t, selectList: {} }, { matches: () => false });
+  installInputEnhancements({ ...pi }, reloadCtx, true);
+  const restored = reloadCtx.ui.factory(live, { borderColor: t => t, selectList: {} }, { matches: () => false });
+  restored.insertTextAtCursor(image);
+  assert.notEqual(restored, bare, 'reload creates a fresh wrapped editor');
+  assert.ok(stripTerminalSequences(restored.render(80).join('\n')).includes('[image1]'), 'editor restored after reload compacts pasted images');
+  reload();
   live.stop();
-} finally { await rm(dir, { recursive: true, force: true }); }
+} finally {
+  if (herdrPaneId !== undefined) process.env.HERDR_PANE_ID = herdrPaneId;
+  await rm(dir, { recursive: true, force: true });
+}
 console.log('input enhancements self-check passed');
