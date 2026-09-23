@@ -1,6 +1,6 @@
 {
   "name": "@each1024/pi-mini-mode",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A compact Pi footer with live usage metrics, theme-aware settings previews, and configurable progress bars.",
   "type": "module",
   "scripts": {
