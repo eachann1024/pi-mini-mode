@@ -47,6 +47,9 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 Paste images with `Ctrl+V` (`Alt+V` on Windows/WSL). Disabling input enhancements preserves Pi’s native clipboard behavior.
 
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
+
+
 ### 02 / Process, quieter
 
 Enable **Minimal output** in `/pi-mini-mode-settings`.
@@ -58,6 +61,12 @@ Enable **Minimal output** in `/pi-mini-mode-settings`.
 - **Room for the answer.** Final Markdown streams without extra headings or backgrounds. Failures and interruptions stay explicit. Folding changes presentation, not stored session messages.
 
 Turn **Minimal output** off in settings to restore native Pi history.
+
+
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
+<img width="1092" height="764" alt="image" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
+
+
 
 ### 03 / Session, in focus
 
