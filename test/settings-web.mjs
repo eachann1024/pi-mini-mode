@@ -24,9 +24,10 @@ try {
   assert.match(html, /id="features"/);
   assert.match(html, /feature-body/);
   assert.match(html, /极简输出/);
-  assert.match(html, /Status bar metrics/);
-  assert.ok(html.indexOf('id="fieldsHeading"') < html.indexOf('id="optionsHeading"'), 'status bar fields come first');
-  assert.ok(html.indexOf('id="optionsHeading"') < html.indexOf('id="featuresHeading"'), 'style options come before feature docs');
+  assert.ok(!html.includes('Status bar metrics'), 'status metrics are covered by the preview above');
+  assert.match(html, /Could not save — the connection closed/);
+  assert.ok(!html.includes("t('saveFailed')+'"), 'status never appends the raw error');
+  assert.ok(html.indexOf('id="fieldsHeading"') < html.indexOf('id="featuresHeading"'), 'status bar fields come before feature docs');
   assert.match(html, /function mergeOrder\(/);
   assert.match(html, /data\.options/);
   assert.ok(!html.includes('previewHeading'), 'preview is grouped with the status bar fields');
