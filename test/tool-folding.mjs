@@ -82,21 +82,21 @@ const thinkingView = minimalOutputComponent(theme, () => [thinkingTurn]);
 thinkingView.render(40);
 const thinkingControl = thinkingView.toolChoices().find(choice => choice.id.startsWith('thinking:'));
 assert.ok(thinkingControl, 'live thinking exposes a glyph control');
-assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/);
+assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'in-progress thinking starts collapsed');
 for (const changes of [{ shift: true }, { ctrl: true }, { alt: true }, { button: 'right' }]) {
   assert.equal(thinkingView.handleMouse(event(thinkingControl, changes)), undefined);
 }
-assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/);
 thinkingView.handleMouse(event(thinkingControl));
-assert.match(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/);
+assert.match(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'only clicking expands in-progress thinking');
 thinkingView.handleMouse(event(thinkingView.toolChoices().find(choice => choice.id.startsWith('thinking:')), { clickCount: 2 }));
-assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'rapid second click collapses');
+assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'rapid second click collapses it again');
 thinkingView.handleMouse(event(thinkingView.toolChoices().find(choice => choice.id.startsWith('thinking:'))));
 thinkingTurn.running = false;
 thinkingTurn.thinking = undefined;
 assert.match(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'expanded thinking stays after it finishes');
 thinkingView.handleMouse(event(thinkingView.toolChoices().find(choice => choice.id.startsWith('thinking:'))));
-assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH|Thinking First paragraph/);
+assert.doesNotMatch(plain(thinkingView.render(40).join('\n')), /SECOND_PARAGRAPH/, 'the latest finished thinking collapses to its summary');
+assert.match(plain(thinkingView.render(80).join('\n')), /Thinking First paragraph/);
 const placeholder = minimalOutputComponent(theme, () => [{ question: 'q', process: [], running: true, awaitingResponse: true }]);
 placeholder.render(80);
 assert.equal(placeholder.toolChoices().length, 0, 'empty Thinking placeholder is not expandable');
@@ -109,7 +109,7 @@ const bandTurn = { question: 'q', process: ['call call-a', `thinking ${thought}`
   agentCalls: [{ id: 'call-a', name: 'bash', task: 'band-命令 中文👩‍💻', state: 'done', output: 'BAND_RESULT' }] };
 const bandView = minimalOutputComponent(bandTheme, () => [bandTurn]);
 const rowOf = text => bandView.render(80).findIndex(row => plain(row).includes(text));
-assert.ok(bandView.render(80).every(row => !row.includes(band)), 'collapsed headings carry no band');
+assert.ok(bandView.render(80).filter(row => plain(row).includes('bash')).every(row => !row.includes(band)), 'collapsed tool headings carry no band');
 bandView.toggleTool('call-a');
 const openToolRow = bandView.render(80)[rowOf('bash')];
 assert.ok(openToolRow.includes(band), 'expanded tool heading wears the selectedBg band');
@@ -337,15 +337,7 @@ try {
     }
   };
   await checkMountedDocks();
-  await commands.get('pi-mini-mode-tools').handler('', ctx);
-  assert.match(content(), /KEYBOARD_RESULT/, 'keyboard Enter expands one tool');
-  cancel = true;
-  await commands.get('pi-mini-mode-tools').handler('', ctx);
-  assert.match(content(), /KEYBOARD_RESULT/, 'keyboard Escape preserves state');
-  cancel = false;
-  await commands.get('pi-mini-mode-tools').handler('', ctx);
-  assert.doesNotMatch(content(), /KEYBOARD_RESULT/, 'keyboard Enter collapses tool');
-  await commands.get('pi-mini-mode-tools').handler('', ctx);
+  assert.equal(commands.has('pi-mini-mode-tools'), false, 'tool picker is not a slash command');
   await handlers.get('session_tree')({}, ctx);
   assert.doesNotMatch(content(), /KEYBOARD_RESULT/, 'session branch remount resets local state');
   await paint(); scroll.scrollTo(0); await paint();
@@ -366,8 +358,7 @@ try {
   await handlers.get('session_tree')({}, ctx);
   await paint(); scroll.scrollTo(0); await paint();
   await checkMountedDocks();
-  await commands.get('pi-mini-mode-tools').handler('', { ...ctx, mode: 'print' });
-  assert.match(notice, /requires fullscreen/);
+
 } finally {
   await handlers.get('session_shutdown')?.({}, ctx);
   tui.stop();

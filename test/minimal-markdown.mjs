@@ -245,9 +245,10 @@ for (const name of ['dark', 'light']) {
   assert.match(plain(usageView.render(100).join('\n')), /S 40 \/ C 0/);
   assert.match(plain(usageView.render(100).join('\n')), /S 40 \/ C 0/, 'repeated renders must not accumulate streaming usage');
   for (const width of [1, 12, 30, 40]) assert.ok(usageView.render(width).every(line => visibleWidth(line) <= width));
-  const styled = minimalOutputComponent(theme, () => [{ question: '', process: ['thinking **bold** *italic* [link](https://example.com)'], running: true, thinking: 0 }]).render(100).find(line => plain(line).includes('Thinking'));
+  const styledRows = minimalOutputComponent(theme, () => [{ question: '', process: ['thinking **bold** *italic* [link](https://example.com)'], running: true, thinking: 0 }]).render(100);
+  const styled = styledRows.find(line => plain(line).includes('bold'));
   assert.doesNotMatch(plain(styled), /\*\*|\*italic\*/);
-  assert.ok(styled.includes(theme.fg('text', theme.bold('Thinking'))));
+  assert.ok(styledRows.some(line => line.includes(theme.fg('accent', theme.bold('Thinking')))), 'expanded in-progress Thinking uses the accent heading');
   const toolRow = minimalOutputComponent(theme, () => [{ question: '', process: ['call t'], agentCalls: [{ id: 't', name: 'subagent', task: 'Requesting exact model IDs', state: 'running' }] }]).render(100).find(line => plain(line).includes('subagent'));
   assert.equal(toolRow, undefined, 'management calls are hidden from compact progress');
   if (theme.bold("probe").includes("\x1b[1m")) {

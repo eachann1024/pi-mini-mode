@@ -85,7 +85,7 @@ assert.equal(banded.promptChoices().length, 1);
 assert.ok(!bandedControl().includes(band), 'collapsed control keeps the user surface');
 banded.togglePrompt(0, question);
 assert.ok(bandedControl().includes(band), 'expanded control wears the band');
-assert.match(plain(bandedControl()), /▴ 收起 · \/pi-mini-mode-prompts/);
+assert.match(plain(bandedControl()), /▴ 收起/);
 assert.equal(visibleWidth(bandedControl()), 80, 'the band fills the render width');
 banded.togglePrompt(0, question);
 assert.ok(!bandedControl().includes(band), 'collapsing restores the user surface');
@@ -233,16 +233,8 @@ try {
     await paint();
     assert.match(document.render(80).join('\n'), /是否继续执行/, 'turn-relative notice target opens');
     assert.doesNotMatch(document.render(80).join('\n'), /INTERNAL_RUN/);
-    // Restore all details with keyboard before exercising the old prompt selector.
     input('\x0f'); await paint(); input('\x0f'); await paint();
-    await commands.get('pi-mini-mode-prompts').handler('', ctx);
-    assert.match(document.render(80).join('\n'), /END_OF_PROMPT/);
-    cancel = true;
-    await commands.get('pi-mini-mode-prompts').handler('', ctx);
-    assert.match(document.render(80).join('\n'), /END_OF_PROMPT/, 'Escape preserves expansion');
-    cancel = false;
-    await commands.get('pi-mini-mode-prompts').handler('', ctx);
-    assert.doesNotMatch(document.render(80).join('\n'), /END_OF_PROMPT/, 'keyboard can collapse again');
+    assert.equal(commands.has('pi-mini-mode-prompts'), false, 'prompt picker is not a slash command');
     await handlers.get('session_tree')({}, ctx);
     assert.doesNotMatch(document.render(80).join('\n'), /END_OF_PROMPT/, 'branch remount starts collapsed');
   } finally {

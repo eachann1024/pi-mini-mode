@@ -16,7 +16,7 @@ import {
   allocateImageId, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, matchesKey, stripTerminalSequences, truncateToWidth, visibleWidth,
   type AutocompleteItem, type AutocompleteProvider, type EditorComponent, type TuiMouseEvent, type TUI, type OverlayHandle, type OverlayOptions,
 } from "@earendil-works/pi-tui";
-import { filePaths, inputCapabilities, linkRenderedPath, localPath } from "./file-links.ts";
+import { filePaths, inputCapabilities, linkRenderedPath, localPath, webPaths } from "./file-links.ts";
 import { open, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, extname, isAbsolute, join, resolve } from "node:path";
@@ -335,10 +335,13 @@ function wrapEditor(inner: EditorComponent, cwd: string, isEnabled: () => boolea
     for (const match of replacements.reverse()) text = text.slice(0, match.start) + match.label + text.slice(match.end);
     return text;
   };
-  // ponytail: reuse Pi 0.85's editor segmentation/submit hooks; replace with a public attachment API when available.
-  const core = inner as EditorComponent & { expandPasteMarkers?(text: string): string; segment?(text: string, mode?: string): Array<{ segment: string; index: number; input: string }>; imageAttachments?: Map<string, string> };
+  // ponytail: Pi 0.87 image paste calls the private inserter, bypassing the public proxy; replace with a public attachment API when available.
+  const core = inner as EditorComponent & { expandPasteMarkers?(text: string): string; insertTextAtCursorInternal?(text: string): void; segment?(text: string, mode?: string): Array<{ segment: string; index: number; input: string }>; imageAttachments?: Map<string, string>; state?: { lines: string[] } };
   core.imageAttachments = attachments;
+  // Rendering reads the stored lines directly, so the submit expansion must not put the temp path back on screen.
+  if (core.state) core.state.lines = compact(core.state.lines.join("\n")).split("\n");
   if (core.expandPasteMarkers) { const original = core.expandPasteMarkers.bind(core); core.expandPasteMarkers = text => expand(original(text)); }
+  if (core.insertTextAtCursorInternal) { const insert = core.insertTextAtCursorInternal.bind(core); core.insertTextAtCursorInternal = text => insert(compact(text)); }
   const pasteEditor = inner as EditorComponent & { handlePaste?(text: string): void };
   if (pasteEditor.handlePaste) { const paste = pasteEditor.handlePaste.bind(inner); pasteEditor.handlePaste = text => paste(compact(text)); }
   if (core.segment) {
@@ -355,7 +358,7 @@ function wrapEditor(inner: EditorComponent, cwd: string, isEnabled: () => boolea
   return new Proxy(inner, {
     get(target, property, receiver) {
       if (property === "getText") return () => expand(target.getText());
-      if (property === "setText" || property === "insertTextAtCursor") return (text: string) => target[property]?.(compact(text));
+      if (property === "setText" || property === "insertTextAtCursor" || property === "insertTextAtCursorInternal") return (text: string) => { const insert = (target as EditorComponent & { insertTextAtCursorInternal?(value: string): void })[property] as ((value: string) => void) | undefined; insert?.call(target, compact(text)); };
       if (property === "render") {
         return (width: number) => {
           const lines = target.render(width);
@@ -408,7 +411,7 @@ function editorImagePaths(editor: EditorComponent, text: string): ImagePathMatch
   return paths.sort((a, b) => a.start - b.start);
 }
 
-function editorPaths(editor: EditorComponent, row: number, width: number) {
+function editorPaths(editor: EditorComponent, row: number, width: number, includeWeb = false) {
   const core = editor as EditorComponent & { lastWidth?: number; scrollOffset?: number; renderedVisibleLineCount?: number; getPaddingX?(): number; buildVisualLineMap?(width: number): Array<{ logicalLine: number; startCol: number; length: number }> };
   if (!core.buildVisualLineMap || !core.lastWidth) return imagePathsInLine(editor.render(width)[row] ?? "");
   if (row < 1 || row > (core.renderedVisibleLineCount ?? 0)) return [];
@@ -416,7 +419,7 @@ function editorPaths(editor: EditorComponent, row: number, width: number) {
   if (!chunk) return [];
   const source = editor.getText().split("\n")[chunk.logicalLine] ?? "";
   const padding = Math.min(core.getPaddingX?.() ?? 0, Math.max(0, Math.floor((width - 1) / 2)));
-  return editorImagePaths(editor, source).filter(match => match.end > chunk.startCol && match.start < chunk.startCol + chunk.length).map(match => ({
+  return [...editorImagePaths(editor, source), ...(includeWeb ? webPaths(source) : [])].filter(match => match.end > chunk.startCol && match.start < chunk.startCol + chunk.length).map(match => ({
     ...match,
     startCol: padding + visibleWidth(source.slice(chunk.startCol, Math.max(chunk.startCol, match.start))),
     endCol: padding + visibleWidth(source.slice(chunk.startCol, Math.min(chunk.startCol + chunk.length, match.end))),
@@ -426,7 +429,7 @@ function editorPaths(editor: EditorComponent, row: number, width: number) {
 function linkImagePaths(lines: string[], editor: EditorComponent, cwd: string, width: number): string[] {
   if (!inputCapabilities().hyperlinks) return lines;
   return lines.map((line, row) => {
-    for (const match of editorPaths(editor, row, width).reverse()) line = linkRenderedPath(line, match.startCol, match.endCol, localPath(match.path, cwd));
+    for (const match of editorPaths(editor, row, width, true).reverse()) line = linkRenderedPath(line, match.startCol, match.endCol, /^https?:\/\//i.test(match.path) ? match.path : localPath(match.path, cwd));
     // Isolate editor rows from inherited terminal link/color state.
     const reset = "\x1b]8;;\x07\x1b[0m";
     return reset + line + reset;
@@ -434,7 +437,7 @@ function linkImagePaths(lines: string[], editor: EditorComponent, cwd: string, w
 }
 
 export function installInputEnhancements(pi: ExtensionAPI, ctx: ExtensionContext, isEnabled: boolean | (() => boolean)): InputEnhancementsCleanup {
-  if (process.env.TERM_PROGRAM?.toLowerCase() === "otty") setCapabilities(inputCapabilities());
+  if (process.env.TERM_PROGRAM?.toLowerCase() === "otty" || process.env.HERDR_PANE_ID) setCapabilities(inputCapabilities());
   const enabled = typeof isEnabled === "function" ? isEnabled : () => isEnabled;
   if (installed && installed.pi !== pi) installed.cleanup();
   const state = installed?.pi === pi ? installed : (installed = createEnhancements(pi));
@@ -450,8 +453,9 @@ export function installInputEnhancements(pi: ExtensionAPI, ctx: ExtensionContext
       state.unsubscribeInput = ctx.ui.onTerminalInput?.((data) => handleTerminalInput(state, data)) ?? undefined;
       ctx.ui.addAutocompleteProvider((current) => createSkillAutocompleteProvider(current, () => readSkillCommands(pi), () => state.enabled()));
     }
+    // /reload clears the editor before session_start, so the saved factory can still be current while the live editor is unwrapped.
     const active = ctx.ui.getEditorComponent();
-    if (active !== state.editorFactory || !state.editor) installEditor(ctx, state, active);
+    if (active !== state.editorFactory || !state.editor) installEditor(ctx, state, active === state.editorFactory ? state.baseFactory : active);
   }
   return state.cleanup;
 }
