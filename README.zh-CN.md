@@ -27,6 +27,14 @@ pi install npm:@each1024/pi-mini-mode
 
 **需要 Pi ≥ 0.84.0。** 输入增强和极简输出默认开启。极简模式使用私有 **Pi 0.85.x** 布局适配器，启用前请查看[兼容性](#兼容性)。
 
+### 更新已安装的 npm 版本
+
+```bash
+pi update npm:@each1024/pi-mini-mode
+```
+
+然后在 Pi 中运行 `/reload`，重新打开 `/pi-mini-mode-settings`（或重启 Pi）。HTML 设置页随扩展一起更新，不需要另外执行 npm 命令或启动开发服务器。发布本身不会自动更新用户已安装的副本或已打开的浏览器标签页。固定版本用户需先用上面的不带版本号安装命令替换安装；本地开发安装仍读取本地文件。
+
 <details>
 <summary>也可以从 GitHub 安装</summary>
 

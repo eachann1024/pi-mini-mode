@@ -1,11 +1,12 @@
 {
   "name": "@each1024/pi-mini-mode",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A compact Pi footer with live usage metrics, theme-aware settings previews, and configurable progress bars.",
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node test/settings-web.mjs && node test/footer-tidy.mjs && node test/footer-status-self-check.mjs && node test/settings-interaction.mjs && node test/transcript-adapter.mjs && node test/prompt-folding.mjs && node test/tool-folding.mjs && node test/sticky-tool.mjs && node test/minimal-markdown.mjs && node test/agent-view.mjs && node test/publish-self-check.mjs && node test/compaction-transcript.mjs && node test/input-enhancements.mjs && node test/user-message-surface.mjs"
+    "test": "node test/settings-web.mjs && node test/footer-tidy.mjs && node test/footer-status-self-check.mjs && node test/settings-interaction.mjs && node test/transcript-adapter.mjs && node test/prompt-folding.mjs && node test/tool-folding.mjs && node test/sticky-tool.mjs && node test/minimal-markdown.mjs && node test/agent-view.mjs && node test/publish-self-check.mjs && node test/compaction-transcript.mjs && node test/input-enhancements.mjs && node test/user-message-surface.mjs && node test/settings-package.mjs",
+    "prepublishOnly": "npm run check && npm test"
   },
   "license": "MIT",
   "author": "eachann1024",
