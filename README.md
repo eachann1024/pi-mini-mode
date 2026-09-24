@@ -27,6 +27,14 @@ In an open Pi session, run Pi's built-in `/reload` command. On first use, choose
 
 **Pi ≥ 0.84.0.** Input enhancements and minimal output are on by default. Minimal mode uses a private **Pi 0.85.x** layout adapter—see [compatibility](#compatibility) before enabling it.
 
+### Update an existing npm installation
+
+```bash
+pi update npm:@each1024/pi-mini-mode
+```
+
+Then run `/reload` in Pi and reopen `/pi-mini-mode-settings` (or restart Pi). The HTML settings page ships with the extension; no separate npm command or development server is needed. Publishing does not update users' installed copies or already-open browser tabs automatically. Pinned versions must first be replaced with the unversioned install command above; local development installs continue to use local files.
+
 <details>
 <summary>Install from GitHub instead</summary>
 

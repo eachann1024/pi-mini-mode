@@ -26,7 +26,6 @@ function configuredIdleTimeout(override: number | undefined): number {
 /** On-demand, loopback-only settings bridge; no polling or third-party runtime. */
 export async function startSettingsWeb(snapshot: () => unknown, update: (value: unknown) => Promise<void>, options: SettingsWebOptions = {}) {
   const token = randomBytes(24).toString("hex");
-  const html = await readFile(new URL("./settings.html", import.meta.url));
   const idleTimeoutMs = configuredIdleTimeout(options.idleTimeoutMs);
   let origin = "";
   let queue = Promise.resolve();
@@ -63,7 +62,13 @@ export async function startSettingsWeb(snapshot: () => unknown, update: (value: 
       res.writeHead(403).end(); return;
     }
     if (req.url === "/" && req.method === "GET") {
-      res.setHeader("Content-Type", "text/html; charset=utf-8"); res.end(html); return;
+      try {
+        const html = await readFile(new URL("./settings.html", import.meta.url));
+        res.setHeader("Content-Type", "text/html; charset=utf-8"); res.end(html);
+      } catch {
+        res.writeHead(503).end("Settings page unavailable. Reload Pi and reopen settings.");
+      }
+      return;
     }
     if (req.url !== "/settings" || req.headers.authorization !== `Bearer ${token}`) {
       res.writeHead(403).end(); return;
