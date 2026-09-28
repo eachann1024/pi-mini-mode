@@ -15,6 +15,7 @@ export const getSettingsListTheme = () => ({
   hint: (text) => text, description: (text) => text,
 });
 export class CustomEditor { constructor() {} }
+export const resizeImage = () => { throw new Error("Unexpected image resize in settings test"); };
 export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 export const SettingsManager = { create: () => ({
   drainErrors: () => [], getProjectSettings: () => ({}), setTheme() {}, setTuiMode() {},

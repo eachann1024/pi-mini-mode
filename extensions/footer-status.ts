@@ -6,6 +6,7 @@ import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
 import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { installInputEnhancements, type InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
+import { installTerminalCapabilities } from "../lib/terminal-capabilities.ts";
 import { linkMessageFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
@@ -33,6 +34,7 @@ export interface MiniLensSettings {
   "pi-mini-mode-speed-unit-show": boolean;
   "pi-mini-mode-minimal-show": boolean;
   "pi-mini-mode-input-enhancements": boolean;
+  "pi-mini-mode-image-preview": "hover" | "inline";
   "pi-mini-mode-minimal-thinking-show": boolean;
   "pi-mini-mode-minimal-tools-show": boolean;
   "pi-mini-mode-minimal-output-show": boolean;
@@ -61,6 +63,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-speed-unit-show": true,
   "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-input-enhancements": true,
+  "pi-mini-mode-image-preview": "inline",
   "pi-mini-mode-minimal-thinking-show": true,
   "pi-mini-mode-minimal-tools-show": true,
   "pi-mini-mode-minimal-output-show": true,
@@ -98,7 +101,9 @@ export function parseSettings(value: unknown): MiniLensSettings {
   const candidate = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const settings = { ...DEFAULT_SETTINGS };
   for (const id of SETTING_IDS) {
-    if (isBoolean(candidate[id])) settings[id] = candidate[id];
+    if (id === "pi-mini-mode-image-preview") {
+      if (candidate[id] === "hover" || candidate[id] === "inline") settings[id] = candidate[id];
+    } else if (isBoolean(candidate[id])) settings[id] = candidate[id];
   }
   if (Array.isArray(candidate.footerOrder)) {
     settings.footerOrder = [...new Set(candidate.footerOrder.filter((id): id is typeof FOOTER_FIELDS[number] =>
@@ -487,7 +492,7 @@ export function isCollapsedReplyChildSetting(id: string): boolean {
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
-  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder">, string> = {
+  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder" | "pi-mini-mode-image-preview">, string> = {
     "pi-mini-mode-project-branch-show": "显示项目名称和分支（互斥）",
     "pi-mini-mode-branch-show": "仅显示分支（思考等级后，互斥）",
     "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-cache-miss-show": COPY.miss, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
@@ -1005,6 +1010,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
 }
 
 export default function (pi: ExtensionAPI) {
+  const restoreTerminalCapabilities = installTerminalCapabilities();
+  pi.on("session_shutdown", restoreTerminalCapabilities);
   attachFooterTidy(pi);
   attachTitlePlain(pi);
   let refreshFooter: (() => void) | undefined;
@@ -1292,6 +1299,8 @@ export default function (pi: ExtensionAPI) {
             if (key === "footerOrder") {
               if (!Array.isArray(entry) || new Set(entry).size !== entry.length
                 || entry.some(id => typeof id !== "string" || !(FOOTER_FIELDS as readonly string[]).includes(id))) throw new TypeError("Invalid order");
+            } else if (key === "pi-mini-mode-image-preview") {
+              if (entry !== "hover" && entry !== "inline") throw new TypeError("Invalid preview mode");
             } else if (!SETTING_IDS.includes(key as typeof SETTING_IDS[number]) || typeof entry !== "boolean") throw new TypeError("Invalid setting");
           }
           const next = parseSettings({ ...settings, ...input, onboardingCompleted: true });
@@ -1367,7 +1376,7 @@ export default function (pi: ExtensionAPI) {
     if (loaded.exists && loaded.backfilled) await persistSettings(ctx);
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
-    cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"]);
+    cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"], () => settings["pi-mini-mode-image-preview"]);
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
