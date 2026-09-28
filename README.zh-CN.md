@@ -93,7 +93,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ## 兼容性
 
-- **图片：** 预览依赖终端图片协议，不支持时显示提示。读取上限 **20 MB**，文件被清理后无法重新打开。点击手势由终端决定：macOS 通常使用 `Cmd+点击`，Windows/Linux 通常使用 `Ctrl+点击`；Ghostty 全屏可能需要 `Shift+Cmd` / `Shift+Ctrl`。Pi 全屏也支持直接点击链接。参见 [Pi 终端设置](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md)。
+- **图片：** 预览依赖终端图片协议，不支持时显示提示。大图仅对终端预览副本缩放（不超过 1200 × 800 像素、编码后 1 MB）；原文件和提交路径不变。读取上限 **20 MB**，文件被清理后无法重新打开。点击手势由终端决定：macOS 通常使用 `Cmd+点击`，Windows/Linux 通常使用 `Ctrl+点击`；Ghostty 全屏可能需要 `Shift+Cmd` / `Shift+Ctrl`。Pi 全屏也支持直接点击链接。参见 [Pi 终端设置](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md)。
 - **极简输出：** 使用私有 Pi 0.85.x 布局适配器，不修改 Pi 安装目录。未知布局会拒绝启用并保留原生输出；升级 Pi 后需重新检查，其他替换 transcript 的扩展可能冲突。
 - **子代理：** pi-subagents 小组件适配仅在极简模式启用，关闭后恢复原状，未知格式原样交给原生处理。可用详情取决于集成提供的状态／输出数据，不是完整子代理会话查看器。
 - **历史：** `/reload` 会重新挂载 transcript，包含原生模式中产生的历史。空进度事件不覆盖已有内容；无输出的工具显示等待时间。旧的极简输出细项不再单独过滤内容。

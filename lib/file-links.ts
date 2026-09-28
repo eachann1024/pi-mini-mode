@@ -16,17 +16,8 @@ export function webPaths(text: string) {
   });
 }
 
-/** Pi 0.85's allowlist predates Otty; preserve explicit opt-outs and multiplexer detection. */
-export function inputCapabilities(env = process.env) {
-  const caps = getCapabilities();
-  if (env.TMUX || /^(screen|tmux)/.test(env.TERM ?? "")) return caps;
-  // Herdr panes advertise xterm-256color; the user's Kitty-capable fork renders images.
-  if (env.HERDR_PANE_ID) return { ...caps, hyperlinks: env.PI_HYPERLINKS !== "0",
-    images: env.PI_IMAGE_PROTOCOL === "0" || env.PI_IMAGE_PROTOCOL === "none" ? null : caps.images ?? "kitty" as const };
-  if (env.TERM_PROGRAM?.toLowerCase() !== "otty") return caps;
-  return { ...caps, hyperlinks: env.PI_HYPERLINKS === "0" ? false : true,
-    images: env.PI_IMAGE_PROTOCOL === "0" || env.PI_IMAGE_PROTOCOL === "none" ? null : caps.images ?? "kitty" as const };
-}
+/** Use Pi's effective capabilities, including user overrides and renderer restrictions. */
+export const inputCapabilities = getCapabilities;
 
 export function localPath(path: string, cwd: string): string {
   return path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : isAbsolute(path) ? path : resolve(cwd, path);
@@ -52,17 +43,19 @@ function fenceRanges(text: string): Array<[number, number]> {
   return ranges;
 }
 
-/** Quoted paths may contain spaces; unquoted paths end at prose delimiters. */
+/** Quoted or shell-escaped paths may contain spaces; spans refer to the original text. */
 export function filePaths(text: string) {
   const matches: Array<{ path: string; start: number; end: number }> = [];
   const fences = fenceRanges(text);
-  const pattern = /(["'`])([^\r\n]*?)\1|[^\s"'`<>()[\]{}，。；！？]+/g;
+  const pattern = /(["'`])([^\r\n]*?)\1|(?:\\[^\r\n]|[^\s"'`<>()[\]{}，。；！？])+/g;
   for (const match of text.matchAll(pattern)) {
-    const path = (match[2] ?? match[0]).replace(/[.,;:!?]+$/, "");
+    const raw = (match[2] ?? match[0]).replace(/[.,;:!?]+$/, "");
+    const path = !match[1] && /^(?:\/|~\/|\.\.?\/)/.test(raw)
+      ? raw.replace(/\\([ \t"'`()\[\]{}!#$&;<>?|*\\])/g, "$1") : raw;
     if (!path || /^[\\/]+$/.test(path) || /[\x00-\x1f\x7f]/.test(path) || /^[a-z][\w+.-]*:\/\//i.test(path)) continue;
     if (!/^(?:\/|~\/|\.{1,2}\/|[a-z]:[\\/])|[\\/]|\.[a-z\d]{1,12}$/i.test(path)) continue;
     const start = match.index + (match[1] ? 1 : 0);
-    const end = start + path.length;
+    const end = start + raw.length;
     if (fences.some(([from, to]) => start < to && end > from)) continue;
     matches.push({ path, start, end });
   }
@@ -85,11 +78,12 @@ export function linkMessageFiles(text: string, cwd: string): string {
         return existsSync(path) ? `${prefix}<${pathToFileURL(path).href}>${suffix}` : original;
       });
     }
-    const matches = filePaths(part).map(match => ({ ...match, label: /\.(png|jpe?g|gif|webp)$/i.test(match.path) && existsSync(localPath(match.path, cwd)) ? `[image${++imageNumber}]` : match.path }));
+    const matches = filePaths(part).map(match => ({ ...match, image: /\.(png|jpe?g|gif|webp)$/i.test(match.path) && existsSync(localPath(match.path, cwd)), number: 0 }));
+    for (const match of matches) if (match.image) match.number = ++imageNumber;
     for (const match of matches.reverse()) {
       const path = localPath(match.path, cwd);
       if (!existsSync(path)) continue;
-      part = part.slice(0, match.start) + fileLink(match.label, path, !/^\[image\d+\]$/.test(match.label)) + part.slice(match.end);
+      part = part.slice(0, match.start) + fileLink(match.image ? `  #${match.number}` : match.path, path, !match.image) + part.slice(match.end);
     }
     return part;
   }).join("");

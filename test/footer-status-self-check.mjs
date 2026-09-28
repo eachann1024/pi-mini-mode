@@ -31,13 +31,14 @@ class FakeSettingsManager {
 }
 export const getSettingsListTheme = () => ({});
 export class CustomEditor { constructor() {} }
+export const resizeImage = () => { throw new Error("Unexpected image resize in footer test"); };
 export const stripFrontmatter = (text) => String(text).replace(/^---\\r?\\n[\\s\\S]*?\\r?\\n---\\r?\\n?/, "");
 export class Container { addChild() {} render() { return []; } invalidate() {} }
 export class Text { constructor() {} }
 export {};
 `;
 const tuiModule = `
-export { Image, allocateImageId, getCellDimensions, setCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
+export { Image, CURSOR_MARKER, allocateImageId, deleteKittyImage, encodeKitty, getCellDimensions, setCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
 export const visibleWidth = (text) => String(text).replace(/\\x1b\\[[0-9;]*m/g, "").length;
 export const truncateToWidth = (text, width, suffix = "…") => {
   const plain = String(text).replace(/\\x1b\\[[0-9;]*m/g, "");
@@ -95,6 +96,9 @@ for (const key of ['pi-mini-mode-minimal-thinking-show', 'pi-mini-mode-minimal-t
   assert.equal(extension.isCollapsedReplyChildSetting(key), true);
 }
 assert.equal(extension.parseSettings({ "pi-mini-mode-input-enhancements": false })["pi-mini-mode-input-enhancements"], false);
+assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-image-preview"], "inline");
+assert.equal(extension.parseSettings({ "pi-mini-mode-image-preview": "inline" })["pi-mini-mode-image-preview"], "inline");
+assert.equal(extension.parseSettings({ "pi-mini-mode-image-preview": "unknown" })["pi-mini-mode-image-preview"], "inline");
 const minimalTheme = { bg: (_token, text) => `\x1b[48;2;20;40;30m${text}\x1b[49m`, fg: (_token, text) => text, bold: (text) => text };
 const minimalTurn = { question: "测试问题", process: Array.from({ length: 13 }, (_, i) => `tool entry-${i}`), running: true, final: "secret final" };
 const minimalView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn]);
