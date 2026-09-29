@@ -1,6 +1,4 @@
-<p>
-  <img src="https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/readme-cover.en.svg" alt="Pi Mini Mode — Less noise. More focus. Image input, foldable conversations, subagents, themes and a live footer." width="100%">
-</p>
+![Pi Mini Mode — Less noise. More focus. Image input, foldable conversations, subagents, themes and a live footer.](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/readme-cover.en.svg)
 
 [中文](https://github.com/eachann1024/pi-mini-mode/blob/main/README.zh-CN.md) · [Install](#install) · [Features](#features) · [Reference](#reference)
 
@@ -13,7 +11,7 @@ An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview imag
 <details>
 <summary>See the full interface</summary>
 
-<img width="1698" height="1588" alt="Pi Mini Mode interface" src="https://github.com/user-attachments/assets/9990b080-f82b-4dd0-bc7b-a0cdded72181" />
+![Pi Mini Mode interface](https://github.com/user-attachments/assets/9990b080-f82b-4dd0-bc7b-a0cdded72181)
 
 </details>
 
@@ -52,7 +50,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ### 01 / Input, refined
 
-<img width="1092" height="764" alt="Image previews and compact labels in Pi Mini Mode" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
+![Image previews and compact labels in Pi Mini Mode](https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445)
 
 **Images at your cursor.** Move the editing cursor into an image path or compact label to preview it. Fullscreen also supports editor hover. Press `Esc` to dismiss.
 
@@ -66,7 +64,7 @@ Paste images with `Ctrl+V` (`Alt+V` on Windows/WSL). Disabling input enhancement
 
 Enable **Minimal output** in `/pi-mini-mode-settings`.
 
-<img width="1092" height="764" alt="Folded process tree in minimal output" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
+![Folded process tree in minimal output](https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66)
 
 - **Long prompts, folded.** In fullscreen minimal mode, long user messages show the first four rendered rows. Click the fold control to reveal the rest. Complete fenced code blocks stay intact.
 - **Subagents, in plain sight.** Click a subagent row to expand its available activity and message/final output. In minimal mode, this extension uses `Ctrl+S` to expand or collapse completed subagent summaries; Pi's focused selectors keep their own keys. A dispatch receipt or returned tool call is not a completed background task.
@@ -76,7 +74,7 @@ Enable **Minimal output** in `/pi-mini-mode-settings`.
 
 Turn **Minimal output** off in settings to restore native Pi history.
 
-<img width="1092" height="764" alt="Expanded process details" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
+![Expanded process details](https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc)
 
 ### 03 / Session, in focus
 

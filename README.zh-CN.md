@@ -1,6 +1,4 @@
-<p>
-  <img src="https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/readme-cover.zh-CN.svg" alt="Pi Mini Mode — 少一点干扰，多一点专注。图片输入、可折叠对话、子代理、明暗主题与实时页脚。" width="100%">
-</p>
+![Pi Mini Mode — 少一点干扰，多一点专注。图片输入、可折叠对话、子代理、明暗主题与实时页脚。](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/readme-cover.zh-CN.svg)
 
 [English](https://github.com/eachann1024/pi-mini-mode/blob/main/README.md) · [安装](#安装) · [功能](#功能) · [参考](#参考)
 
@@ -13,7 +11,7 @@
 <details>
 <summary>查看完整界面</summary>
 
-<img width="892" height="797" alt="Pi Mini Mode 完整界面" src="https://github.com/user-attachments/assets/8f7abdc8-646e-4ded-8009-b58d2833c1f4" />
+![Pi Mini Mode 完整界面](https://github.com/user-attachments/assets/8f7abdc8-646e-4ded-8009-b58d2833c1f4)
 
 </details>
 
@@ -52,7 +50,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ### 01 / 输入，更顺手
 
-<img width="1092" height="764" alt="图片预览与紧凑标签" src="https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445" />
+![图片预览与紧凑标签](https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445)
 
 **图片，随光标浮现。** 编辑光标移入图片路径或紧凑标签，即可预览。全屏编辑器也支持悬停，按 `Esc` 关闭。
 
@@ -66,7 +64,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 在 `/pi-mini-mode-settings` 中开启 **极简输出**。
 
-<img width="1092" height="764" alt="极简输出中的过程树" src="https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66" />
+![极简输出中的过程树](https://github.com/user-attachments/assets/eb8c88f6-84af-499e-b105-5395b4f02e66)
 
 - **长消息，自动折叠。** 全屏极简模式下，长用户消息默认保留前四个显示行。点击折叠控件展开全文。完整代码围栏保持完整。
 - **子代理，清晰可查。** 点击子代理行，展开可用的活动记录与消息／最终输出。极简模式下，本扩展用 `Ctrl+S` 展开／收起已完成的子代理摘要；Pi 当前聚焦的选择器保留自己的快捷键。任务派发回执或工具调用返回，不等于后台任务已完成。
@@ -76,7 +74,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 在设置中关闭 **极简输出** 即恢复 Pi 原生历史。
 
-<img width="1092" height="764" alt="展开后的过程详情" src="https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc" />
+![展开后的过程详情](https://github.com/user-attachments/assets/53f5aa28-4b96-45db-b02e-0108aa9e68bc)
 
 ### 03 / 状态，更清晰
 
