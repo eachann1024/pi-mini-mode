@@ -23,11 +23,18 @@ export async function registryMetadata(response) {
   return metadata;
 }
 
-export function selectVersion(localVersion, metadata, gitHead) {
-  const local = stableVersion(localVersion);
-  if (metadata === null) return localVersion;
+function compareVersions(a, b) {
+  const left = stableVersion(a);
+  const right = stableVersion(b);
+  for (let i = 0; i < 3; i++) {
+    if (left[i] !== right[i]) return left[i] > right[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+function highestPublishedStable(metadata) {
   const latest = metadata['dist-tags']?.latest;
-  const remote = stableVersion(latest);
+  stableVersion(latest);
   const versions = metadata.versions;
   if (!versions || typeof versions !== 'object' || Array.isArray(versions) || !Object.hasOwn(versions, latest)) {
     throw new Error('Invalid registry versions');
@@ -38,30 +45,58 @@ export function selectVersion(localVersion, metadata, gitHead) {
       throw new Error('Invalid registry version metadata');
     }
   }
-  if (Object.values(versions).some(version => version.gitHead === gitHead)) return null;
+  let highest = latest;
+  for (const version of Object.keys(versions)) {
+    if (!/^\d+\.\d+\.\d+$/.test(version)) continue;
+    if (compareVersions(version, highest) > 0) highest = version;
+  }
+  return highest;
+}
+
+/** Direct npm publishes must not strand users on a numerically higher old release. */
+export function assertPublishableVersion(localVersion, metadata) {
+  stableVersion(localVersion);
+  if (metadata === null) return;
+  const highest = highestPublishedStable(metadata);
+  if (compareVersions(localVersion, highest) <= 0) {
+    throw new Error(`Refusing to publish ${localVersion}: version must exceed highest published stable ${highest}, not just dist-tags.latest. Pi skips updates and notifications when the target is not newer.`);
+  }
+}
+
+export function selectVersion(localVersion, metadata, gitHead) {
+  stableVersion(localVersion);
+  if (metadata === null) return localVersion;
+  const remote = stableVersion(highestPublishedStable(metadata));
+  if (typeof gitHead === 'string' && gitHead.length > 0 &&
+      Object.values(metadata.versions).some(version => version.gitHead === gitHead)) return null;
   remote[2] += 1;
   const next = remote.join('.');
   stableVersion(next);
-  for (let i = 0; i < 3; i++) {
-    if (local[i] !== remote[i]) return local[i] > remote[i] ? localVersion : next;
-  }
-  return localVersion;
+  return compareVersions(localVersion, next) > 0 ? localVersion : next;
 }
 
 if (import.meta.main) {
   const cwd = fileURLToPath(new URL('../', import.meta.url));
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   if (typeof manifest.name !== 'string' || !manifest.name.trim()) throw new Error('Missing package name');
-  const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
+  const checkOnly = process.argv.length === 3 && process.argv[2] === '--check';
+  if (process.argv.length > 2 && !checkOnly) throw new Error('Usage: node scripts/publish.mjs [--check]');
   const response = await fetch(`${registry}/${encodeURIComponent(manifest.name)}`, {
     redirect: 'error',
     signal: AbortSignal.timeout(30_000),
   });
-  const version = selectVersion(manifest.version, await registryMetadata(response), gitHead);
-  if (version === null) {
-    console.log(`Commit ${gitHead} is already published; skipping.`);
+  const metadata = await registryMetadata(response);
+  if (checkOnly) {
+    assertPublishableVersion(manifest.version, metadata);
+    console.log(`Release version ${manifest.version} exceeds all published stable versions.`);
   } else {
-    execFileSync('npm', ['version', version, '--no-git-tag-version', '--ignore-scripts', '--allow-same-version'], { cwd, stdio: 'inherit' });
-    execFileSync('npm', ['publish', '--access', 'public', '--provenance', `--registry=${registry}`], { cwd, stdio: 'inherit' });
+    const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
+    const version = selectVersion(manifest.version, metadata, gitHead);
+    if (version === null) {
+      console.log(`Commit ${gitHead} is already published; skipping.`);
+    } else {
+      execFileSync('npm', ['version', version, '--no-git-tag-version', '--ignore-scripts', '--allow-same-version'], { cwd, stdio: 'inherit' });
+      execFileSync('npm', ['publish', '--access', 'public', '--provenance', `--registry=${registry}`], { cwd, stdio: 'inherit' });
+    }
   }
 }
