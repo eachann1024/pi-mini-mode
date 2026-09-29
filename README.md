@@ -33,7 +33,11 @@ In an open Pi session, run Pi's built-in `/reload` command. On first use, choose
 pi update npm:@each1024/pi-mini-mode
 ```
 
-Then run `/reload` in Pi and reopen `/pi-mini-mode-settings` (or restart Pi). The HTML settings page ships with the extension; no separate npm command or development server is needed. Publishing does not update users' installed copies or already-open browser tabs automatically. Pinned versions must first be replaced with the unversioned install command above; local development installs continue to use local files.
+Then run `/reload` in Pi and reopen `/pi-mini-mode-settings` (or restart Pi). The HTML settings page ships with the extension; no separate npm command or development server is needed. Publishing does not update users' installed copies or already-open browser tabs automatically. Pinned versions must first be replaced with `pi install npm:@each1024/pi-mini-mode@latest`; local development installs continue to use local files.
+
+**`pi update` updates Pi itself by default, not its plugins.** Use `pi update --extensions` for all plugins, or `pi update --all` for both. `/reload` reloads files already on disk; it does not download updates.
+
+**Older `1.3.x` installations:** this package's version was previously reset to `0.9.x` / `1.0.x`. Pi treats the installed `1.3.x` as newer than npm `latest`, skipping both updates and update notifications. Version **2.0.0** restores a version higher than the historical stable maximum `1.3.15`, so normal plugin updates can resume. If an installation is still stuck, explicitly reinstall the current `latest` with `pi install npm:@each1024/pi-mini-mode@latest`, then `/reload` and reopen settings. First check `pi list` to confirm Pi loads the npm source, not a local path or another copy. Use the `@latest` tag rather than an exact version; an install without a tag may retain the saved dependency range.
 
 <details>
 <summary>Install from GitHub instead</summary>
@@ -209,7 +213,7 @@ For a real terminal smoke test, run `python3 test/minimal-pty.py`. It needs Pyth
 <details>
 <summary><strong>Publishing</strong></summary>
 
-Normal releases are published from this machine with the npm token in `.npmrc` (`npm publish --access public`). `publish.yml` is only a manual backup (`workflow_dispatch` on `main`): it runs `npm ci`, `npm run check`, and `npm test`, then `scripts/publish.mjs`. That script publishes the higher of the local version baseline and npm's latest stable version plus one patch, changes the version only in the runner (no version commit or tag), and skips commits that are already published. Raise the baseline in `package.json` and the lockfile for a major or minor release.
+Normal releases are published from this machine with the npm token in `.npmrc` (`npm publish --access public`). `publish.yml` is only a manual backup (`workflow_dispatch` on `main`): it runs `npm ci`, `npm run check`, and `npm test`, then `scripts/publish.mjs`. That script publishes the higher of the local version baseline and npm's highest historically published stable version plus one patch, changes the version only in the runner (no version commit or tag), and skips commits that are already published. Raise the baseline in `package.json` and the lockfile for a major or minor release.
 
 The backup workflow needs the package’s npm Trusted Publisher configured for this GitHub repository and `publish.yml`. It uses OIDC and provenance and does not use an npm token.
 

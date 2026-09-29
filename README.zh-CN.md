@@ -33,7 +33,11 @@ pi install npm:@each1024/pi-mini-mode
 pi update npm:@each1024/pi-mini-mode
 ```
 
-然后在 Pi 中运行 `/reload`，重新打开 `/pi-mini-mode-settings`（或重启 Pi）。HTML 设置页随扩展一起更新，不需要另外执行 npm 命令或启动开发服务器。发布本身不会自动更新用户已安装的副本或已打开的浏览器标签页。固定版本用户需先用上面的不带版本号安装命令替换安装；本地开发安装仍读取本地文件。
+然后在 Pi 中运行 `/reload`，重新打开 `/pi-mini-mode-settings`（或重启 Pi）。HTML 设置页随扩展一起更新，不需要另外执行 npm 命令或启动开发服务器。发布本身不会自动更新用户已安装的副本或已打开的浏览器标签页。固定版本用户需先用 `pi install npm:@each1024/pi-mini-mode@latest` 替换安装；本地开发安装仍读取本地文件。
+
+**注意：`pi update` 默认只更新 Pi 本体。** 更新全部插件用 `pi update --extensions`，同时更新 Pi 和插件用 `pi update --all`。`/reload` 只重新加载磁盘上的代码，不下载新版本。
+
+**旧版 `1.3.x` 用户：** 本包曾把版本号回退到 `0.9.x` / `1.0.x`，Pi 会认为 `1.3.x` 已比 npm `latest` 更新，因而跳过更新和更新提醒。**2.0.0** 已恢复高于历史最高稳定版 `1.3.15` 的版本号，正常插件更新可以继续。若仍停留在旧版，可用 `pi install npm:@each1024/pi-mini-mode@latest` 显式重装当前 `latest`，再 `/reload` 并重新打开设置页。先运行 `pi list` 确认加载的是 npm 源，而非本地路径或另一份副本；固定版本源需改成 `@latest` 标签；不带标签的安装可能沿用之前保存的依赖范围。
 
 <details>
 <summary>也可以从 GitHub 安装</summary>

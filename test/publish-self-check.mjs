@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { registryMetadata, selectVersion } from '../scripts/publish.mjs';
+import { readFileSync } from 'node:fs';
+import { registryMetadata, selectVersion, assertPublishableVersion } from '../scripts/publish.mjs';
 
 const metadata = (latest, gitHead = 'previous') => ({
   'dist-tags': { latest },
@@ -16,6 +17,27 @@ assert.equal(selectVersion('1.3.1', metadata('1.3.1', 'current'), 'current'), nu
 const history = metadata('1.3.9');
 history.versions['1.3.2'] = { gitHead: 'current' };
 assert.equal(selectVersion('2.0.0', history, 'current'), null);
+
+// latest is a mutable tag, not the highest version users may already have.
+const rollback = metadata('1.0.4');
+rollback.versions['1.3.8'] = {};
+rollback.versions['1.3.15'] = {};
+assert.equal(selectVersion('1.0.4', rollback, 'current'), '1.3.16');
+assert.equal(selectVersion('1.3.15', rollback, 'current'), '1.3.16');
+assert.equal(selectVersion('1.3.16', rollback, 'current'), '1.3.16');
+assert.equal(selectVersion('2.0.0', rollback, 'current'), '2.0.0');
+rollback.versions['2.0.0-beta.1'] = {};
+assert.equal(selectVersion('1.0.4', rollback, 'current'), '1.3.16', 'prereleases do not raise the stable baseline');
+assert.equal(selectVersion('1.0.4', rollback, undefined), '1.3.16', 'missing npm gitHead is not an already-published commit');
+for (const version of ['0.9.2', '1.0.4', '1.0.5', '1.3.8', '1.3.15']) {
+  assert.throws(() => assertPublishableVersion(version, rollback), /highest published stable 1\.3\.15/);
+}
+assert.doesNotThrow(() => assertPublishableVersion('1.3.16', rollback));
+assert.doesNotThrow(() => assertPublishableVersion('2.0.0', rollback));
+assert.doesNotThrow(() => assertPublishableVersion('0.1.0', null));
+assert.throws(() => assertPublishableVersion('1.3.16', {}));
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+assert.ok(manifest.scripts.prepublishOnly.startsWith('node scripts/publish.mjs --check && '), 'manual npm publish must run the version guard too');
 
 for (const version of ['1.3', '01.3.0', '1.3.0-beta.1', '1.3.0+build', 'v1.3.0', '1.3.9007199254740992', null]) {
   assert.throws(() => selectVersion(version, null, 'current'), /version|range/i);
