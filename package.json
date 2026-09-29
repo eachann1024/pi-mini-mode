@@ -1,6 +1,6 @@
 {
   "name": "@each1024/pi-mini-mode",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A compact Pi footer with live usage metrics, theme-aware settings previews, and configurable progress bars.",
   "type": "module",
   "scripts": {
@@ -33,7 +33,8 @@
     "themes": [
       "./themes/cc-dark.json",
       "./themes/cc-light.json"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/package-cover.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.84.0",
