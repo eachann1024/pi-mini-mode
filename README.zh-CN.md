@@ -10,9 +10,9 @@
 
 ## 演示视频
 
-<video src="https://github.com/eachann1024/pi-mini-mode/raw/main/assets/pi-mini-mode-demo-zh.mp4" controls muted playsinline width="100%"></video>
+<video src="https://github.com/user-attachments/assets/cf66fae3-d289-422a-9e2e-636d197ec514" controls muted playsinline width="100%"></video>
 
-▶ 87 秒演示（中文旁白）：[观看视频](https://github.com/eachann1024/pi-mini-mode/blob/main/assets/pi-mini-mode-demo-zh.mp4)。页脚画面中的数字来自脚本化的演示会话，价格为估算值，不是服务商账单。
+▶ 87 秒演示（中文旁白）：[观看视频](https://github.com/eachann1024/pi-mini-mode/blob/main/assets/pi-mini-mode-demo-zh.mp4) · [English version](https://github.com/eachann1024/pi-mini-mode/blob/main/assets/pi-mini-mode-demo-en.mp4)。页脚画面中的数字来自脚本化的演示会话，价格为估算值，不是服务商账单。
 
 <details>
 <summary>查看完整界面</summary>
