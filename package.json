@@ -1,6 +1,6 @@
 {
   "name": "@each1024/pi-mini-mode",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "A compact Pi footer with live usage metrics, theme-aware settings previews, and configurable progress bars.",
   "type": "module",
   "scripts": {
@@ -26,7 +26,7 @@
     "tui"
   ],
   "pi": {
-    "video": "https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-demo-zh.mp4",
+    "video": "https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-demo.mp4",
     "extensions": [
       "./extensions/footer-status.ts"
     ],
