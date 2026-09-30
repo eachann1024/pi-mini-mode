@@ -8,6 +8,12 @@
 
 为 [Pi](https://pi.dev) 的日常工作做一点精细的改进，不止于页脚。光标处预览图片，折叠长消息和过程详情，展开子代理工作，让重要的会话状态始终清晰。
 
+## 演示视频
+
+<video src="https://github.com/eachann1024/pi-mini-mode/raw/main/assets/pi-mini-mode-demo-zh.mp4" controls muted playsinline width="100%"></video>
+
+▶ 87 秒演示（中文旁白）：[观看视频](https://github.com/eachann1024/pi-mini-mode/blob/main/assets/pi-mini-mode-demo-zh.mp4)。页脚画面中的数字来自脚本化的演示会话，价格为估算值，不是服务商账单。
+
 <details>
 <summary>查看完整界面</summary>
 
