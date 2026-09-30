@@ -16,10 +16,11 @@ try {
   assert.equal(await readFile(pagePath, 'utf8'), source, 'npm must ship the development settings page');
   assert.ok(!pack.files.some(({ path }) => path.endsWith('.npmrc')), 'never package npm credentials');
   const manifest = JSON.parse(await readFile(join(temp, 'package/package.json'), 'utf8'));
-  assert.equal(manifest.pi.image, 'https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/package-cover.png', 'gallery cover must be declared separately from README media');
-  const cover = await readFile(join(root, 'assets/package-cover.png'));
-  assert.equal(cover.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'gallery cover must use a supported raster format, not SVG');
-  assert.ok(cover.readUInt32BE(16) >= 1200 && cover.readUInt32BE(20) >= 440, 'cover export must retain its readable dimensions');
+  assert.equal(manifest.pi.video, 'https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-demo-zh.mp4', 'gallery preview uses the demo video');
+  assert.equal(manifest.pi.image, undefined, 'gallery preview relies on the video; no separate image');
+  assert.ok(manifest.description && manifest.description.length > 30, 'package description must stay complete for the gallery');
+  const video = await readFile(join(root, 'assets/pi-mini-mode-demo-zh.mp4'));
+  assert.equal(video.subarray(4, 8).toString('latin1'), 'ftyp', 'gallery video must be an MP4 file');
   for (const name of ['README.md', 'README.zh-CN.md']) {
     const readme = await readFile(join(temp, 'package', name), 'utf8');
     assert.equal(readme, await readFile(join(root, name), 'utf8'));
