@@ -4,7 +4,7 @@
 
 - 新增中、英文 87 / 81 秒演示视频，Pi 插件目录预览（`pi.video`）使用中文版。
 - 移除单独的目录封面图，目录页以视频预览为准；包描述保持不变。
-- 双语 README 在介绍之后加入「演示视频」：GitHub 内联播放使用 user-attachments 视频（英文 README 用英文版，中文 README 用中文版），并附仓库 mp4 文字链接兜底。
+- 双语 README 在介绍之后加入「演示视频」：GitHub 内联播放使用 user-attachments 视频（英文 README 用英文版，中文 README 用中文版）。
 - 打包检查改为校验预览视频、包描述完整、不再声明封面图，以及 README 不使用会被 GitHub 过滤的 raw/blob 视频直链。
 
 ## 2.0.1

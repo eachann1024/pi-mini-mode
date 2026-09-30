@@ -27,6 +27,8 @@ try {
     assert.doesNotMatch(readme, /<img\b/i, 'gallery README rendering drops raw HTML images; use Markdown images');
     assert.match(readme, /<video src="https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+" controls/, 'GitHub only plays user-attachments videos inline; raw/blob mp4 links are stripped');
     assert.doesNotMatch(readme, /<video src="https:\/\/github\.com\/[^"]*\/(?:raw|blob)\//, 'repository mp4 links must not be used as inline video sources');
+    assert.doesNotMatch(readme, /https:\/\/(?:github\.com\/[^\s)"]*\/(?:raw|blob)|raw\.githubusercontent\.com)\/[^\s)"]*\.mp4/i, 'README must not link repository mp4 files; keep only the user-attachments inline video');
+    assert.doesNotMatch(readme, /Watch the video|观看视频|中文配音版|English version/, 'README must not carry extra demo text links');
     assert.ok([...readme.matchAll(/!\[[^\]]*\]\(https:\/\/[^)]+\)/g)].length >= 6, 'cover and feature screenshots must survive Markdown-only rendering');
   }
   const { startSettingsWeb } = await import(pathToFileURL(join(temp, 'package/lib/settings-web.ts')));
