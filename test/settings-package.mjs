@@ -25,6 +25,8 @@ try {
     const readme = await readFile(join(temp, 'package', name), 'utf8');
     assert.equal(readme, await readFile(join(root, name), 'utf8'));
     assert.doesNotMatch(readme, /<img\b/i, 'gallery README rendering drops raw HTML images; use Markdown images');
+    assert.match(readme, /<video src="https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+" controls/, 'GitHub only plays user-attachments videos inline; raw/blob mp4 links are stripped');
+    assert.doesNotMatch(readme, /<video src="https:\/\/github\.com\/[^"]*\/(?:raw|blob)\//, 'repository mp4 links must not be used as inline video sources');
     assert.ok([...readme.matchAll(/!\[[^\]]*\]\(https:\/\/[^)]+\)/g)].length >= 6, 'cover and feature screenshots must survive Markdown-only rendering');
   }
   const { startSettingsWeb } = await import(pathToFileURL(join(temp, 'package/lib/settings-web.ts')));
