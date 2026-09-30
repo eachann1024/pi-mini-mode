@@ -25,8 +25,8 @@ try {
     const readme = await readFile(join(temp, 'package', name), 'utf8');
     assert.equal(readme, await readFile(join(root, name), 'utf8'));
     assert.doesNotMatch(readme, /<img\b/i, 'gallery README rendering drops raw HTML images; use Markdown images');
-    assert.equal([...readme.matchAll(/<video src="https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+" controls/g)].length, 2, 'two inline user-attachments videos, English first');
-    assert.match(readme, /<video src="https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]+" controls/, 'GitHub only plays user-attachments videos inline; raw/blob mp4 links are stripped');
+    assert.equal([...readme.matchAll(/^https:\/\/github\.com\/user-attachments\/assets\/[0-9a-f-]{36}$/gm)].length, 2, 'two bare user-attachments video URLs on their own lines, English first');
+    assert.doesNotMatch(readme, /<video\b/i, 'anonymous visitors get 404 for <video src=user-attachments>; use bare URLs');
     assert.doesNotMatch(readme, /<video src="https:\/\/github\.com\/[^"]*\/(?:raw|blob)\//, 'repository mp4 links must not be used as inline video sources');
     assert.doesNotMatch(readme, /https:\/\/(?:github\.com\/[^\s)"]*\/(?:raw|blob)|raw\.githubusercontent\.com)\/[^\s)"]*\.mp4/i, 'README must not link repository mp4 files; keep only the user-attachments inline video');
     assert.doesNotMatch(readme, /Watch the video|观看视频|中文配音版|English version/, 'README must not carry extra demo text links');

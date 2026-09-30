@@ -15,5 +15,5 @@
 
 ## 演示视频与仓库文件
 
-- README 只保留两条 GitHub user-attachments 内联视频（英文在前、中文在后，各自单独一行的裸链接或 `<video>`）；禁止添加「演示视频 / Watch the video / 旁白版」等文字链接，禁止链接仓库内 raw/blob 的 mp4。
+- README 只保留两条 GitHub user-attachments 内联视频（英文在前、中文在后，各自为单独一行的裸 URL，不要写 `<video src=user-attachments...>`，匿名访客会 404）；禁止添加「演示视频 / Watch the video / 旁白版」等文字链接，禁止链接仓库内 raw/blob 的 mp4。
 - 仓库内只允许保留 `pi.video` 必需的那一个 mp4；禁止提交视频副本、封面图、poster、contact sheet、临时脚本，以及 package.json / CHANGELOG / 文档里的相关描述。

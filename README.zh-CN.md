@@ -10,9 +10,9 @@
 
 ## 演示视频
 
-<video src="https://github.com/user-attachments/assets/bcd1b6db-7401-46a5-a537-7a9ad9f4df73" controls muted playsinline width="100%"></video>
+https://github.com/user-attachments/assets/1ad90757-ecea-4901-afd8-f33a68176ae2
 
-<video src="https://github.com/user-attachments/assets/5c3f2d9f-20ca-4174-9095-9324f8df397e" controls muted playsinline width="100%"></video>
+https://github.com/user-attachments/assets/53c1bcd8-9f0b-42d7-a424-a407dcf666e8
 
 页脚画面中的数字来自脚本化的演示会话，价格为估算值，不是服务商账单。
 
@@ -91,13 +91,11 @@ pi install git:github.com/eachann1024/pi-mini-mode
 **重要指标，一行看清。** 模型与思考级别、会话令牌、缓存总量与命中率、费用估算、上下文用量与生成速度。在 `/pi-mini-mode-settings` 中选择显示字段，即时生效，页脚自动适配窄终端。
 
 <details>
-<summary>查看页脚设置截图与演示</summary>
+<summary>查看页脚设置截图</summary>
 
 [![已有的页脚设置截图](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)
 
-[观看页脚设置演示](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
-
-这份已有截图和录屏展示页脚配置，不代表新增图片、折叠与子代理功能的当前界面。设置预览使用示例数据。
+这张已有截图展示页脚配置，不代表新增图片、折叠与子代理功能的当前界面。设置预览使用示例数据。
 
 </details>
 
