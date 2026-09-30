@@ -12,3 +12,8 @@
 凭证放在项目根 `.npmrc`（`//registry.npmjs.org/:_authToken`，已在 `.gitignore`），也可用全局 `~/.npmrc`；**不得把 token 写进任何会被提交的文件**。
 
 `.github/workflows/publish.yml` 只保留 `workflow_dispatch` 手动触发，作为本机不可用时的备份，避免与上一步重复发布同一版本。
+
+## 演示视频与仓库文件
+
+- README 只保留一处 GitHub user-attachments 内联视频（单独一行的裸链接或 `<video>`）；禁止添加「演示视频 / Watch the video / 旁白版」等文字链接，禁止链接仓库内 raw/blob 的 mp4。
+- 仓库内只允许保留 `pi.video` 必需的那一个 mp4；禁止提交视频副本、封面图、poster、contact sheet、临时脚本，以及 package.json / CHANGELOG / 文档里的相关描述。
