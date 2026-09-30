@@ -10,7 +10,9 @@ An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview imag
 
 ## Demo video
 
-<video src="https://github.com/user-attachments/assets/e8a011e1-e61c-44c7-b577-ae41d3a17945" controls muted playsinline width="100%"></video>
+<video src="https://github.com/user-attachments/assets/bcd1b6db-7401-46a5-a537-7a9ad9f4df73" controls muted playsinline width="100%"></video>
+
+<video src="https://github.com/user-attachments/assets/5c3f2d9f-20ca-4174-9095-9324f8df397e" controls muted playsinline width="100%"></video>
 
 Numbers in the footer shots come from a scripted demo session; prices are estimates, not provider bills.
 

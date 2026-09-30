@@ -10,7 +10,9 @@
 
 ## 演示视频
 
-<video src="https://github.com/user-attachments/assets/cf66fae3-d289-422a-9e2e-636d197ec514" controls muted playsinline width="100%"></video>
+<video src="https://github.com/user-attachments/assets/bcd1b6db-7401-46a5-a537-7a9ad9f4df73" controls muted playsinline width="100%"></video>
+
+<video src="https://github.com/user-attachments/assets/5c3f2d9f-20ca-4174-9095-9324f8df397e" controls muted playsinline width="100%"></video>
 
 页脚画面中的数字来自脚本化的演示会话，价格为估算值，不是服务商账单。
 
