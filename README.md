@@ -8,6 +8,12 @@
 
 An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview images at the cursor, fold long messages and process details, inspect subagent work, and keep your session’s essential signals in view.
 
+## Demo video
+
+<video src="https://github.com/eachann1024/pi-mini-mode/raw/main/assets/pi-mini-mode-demo-zh.mp4" controls muted playsinline width="100%"></video>
+
+▶ 87-second demo (Chinese narration): [Watch the video](https://github.com/eachann1024/pi-mini-mode/blob/main/assets/pi-mini-mode-demo-zh.mp4). Numbers in the footer shots come from a scripted demo session; prices are estimates, not provider bills.
+
 <details>
 <summary>See the full interface</summary>
 
