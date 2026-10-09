@@ -496,6 +496,13 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         notices.set(turn, rows);
         continue;
       }
+      // Pi 1.x renders command information (/session, /hotkeys) lazily for theme changes.
+      if (child.constructor.name === "ThemedText") {
+        const rows = notices.get(turn) ?? [];
+        rows.push(...child.render(width));
+        notices.set(turn, rows);
+        continue;
+      }
       if (child.constructor.name !== "Text") continue;
       // Pi 0.85 Text stores the unwrapped styled source in text. Width changes
       // must not restart the timeout; setText updates must restart it.
