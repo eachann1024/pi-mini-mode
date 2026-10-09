@@ -503,6 +503,21 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         notices.set(turn, rows);
         continue;
       }
+      // The compact view reconstructs tool text, but image payloads belong to
+      // Pi's native components (including conversion, IDs and display settings).
+      // Keep their rows intact: adding text prefixes would corrupt image escapes.
+      if (child.constructor.name === "ToolExecutionComponent") {
+        const tool = child as Component & { imageComponents?: Component[]; hideComponent?: boolean };
+        if (!tool.hideComponent && Array.isArray(tool.imageComponents)) {
+          const images = tool.imageComponents.flatMap(image => image.render(width));
+          if (images.length) {
+            const rows = notices.get(turn) ?? [];
+            rows.push("", ...images);
+            notices.set(turn, rows);
+          }
+        }
+        continue;
+      }
       if (child.constructor.name !== "Text") continue;
       // Pi 0.85 Text stores the unwrapped styled source in text. Width changes
       // must not restart the timeout; setText updates must restart it.
