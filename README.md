@@ -8,6 +8,14 @@
 
 An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview images at the cursor, fold long messages and process details, inspect subagent work, and keep your session’s essential signals in view.
 
+## Demo video
+
+https://github.com/user-attachments/assets/1ad90757-ecea-4901-afd8-f33a68176ae2
+
+https://github.com/user-attachments/assets/53c1bcd8-9f0b-42d7-a424-a407dcf666e8
+
+Numbers in the footer shots come from a scripted demo session; prices are estimates, not provider bills.
+
 <details>
 <summary>See the full interface</summary>
 
@@ -83,13 +91,11 @@ Turn **Minimal output** off in settings to restore native Pi history.
 **The useful signals, in one line.** Model and thinking level, session tokens, cache totals and hit rate, estimated cost, context usage and generation speed. Choose your fields in `/pi-mini-mode-settings`; changes take effect immediately, and the footer adapts to narrow terminals.
 
 <details>
-<summary>See the footer settings and demo</summary>
+<summary>See the footer settings</summary>
 
 [![Existing footer settings screenshot](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)](https://raw.githubusercontent.com/eachann1024/pi-mini-mode/main/assets/pi-mini-mode-settings.jpg)
 
-[Watch the footer settings demo](https://github.com/user-attachments/assets/5f2f4816-45ed-4759-b035-d9ee59e8a763)
-
-This earlier screenshot and recording show footer configuration, not the newer image, folding or subagent features. Settings previews use sample data.
+This earlier screenshot shows footer configuration, not the newer image, folding or subagent features. Settings previews use sample data.
 
 </details>
 
