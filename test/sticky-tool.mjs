@@ -29,7 +29,8 @@ const theme = { bg: (_, text) => text, fg: (_, text) => text, bold: text => text
 const calls = ['first', 'second'].map(id => ({ id, name: 'bash', task: `${id}-command`, state: 'done', output: Array.from({ length: 70 }, (_, i) => `${id}_${i} 中文 👩‍💻`).join('\n') }));
 const turn = { question: 'question\n\n' + 'prompt '.repeat(100), process: ['call first', 'call second'], agentCalls: calls,
   subAgents: [{ runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'worker', status: 'completed', recentOutput: ['UNSAFE_ACTIVITY'], finalOutput: 'CHILD_DETAIL\n'.repeat(30) }] }], final: '' };
-const view = minimalOutputComponent(theme, () => [turn], () => true);
+let processExpanded = true;
+const view = minimalOutputComponent(theme, () => [turn], () => processExpanded);
 const document = new Container();
 const header = new Container(); header.addChild(new Text('HEADER\nRESOURCE', 0, 0));
 for (const c of [header, new Container(), new Container()]) document.addChild(c);
@@ -37,7 +38,8 @@ const docks = Array.from({ length: 6 }, () => new Container());
 const editor = new Text('EDITOR\nEDITOR', 0, 0); docks[3].addChild(editor);
 let input, copied, opened;
 const terminal = { columns: 80, rows: 24, start(fn) { input = fn; }, stop() {}, write() {}, hideCursor() {}, showCursor() {} };
-const tui = new TuiAltScreen(terminal, false, undefined, { copySelection: async text => { copied = text; return true; }, openUrl: url => { opened = url; } });
+const jumpIndicator = () => 'Jump to latest message';
+const tui = new TuiAltScreen(terminal, false, undefined, { scrollToEndIndicator: jumpIndicator, copySelection: async text => { copied = text; return true; }, openUrl: url => { opened = url; } });
 for (const c of [document, ...docks]) tui.addChild(c);
 const scroll = new ScrollView(document, { follow: 'end', primary: true, scrollbar: 'always' });
 const dockLayout = new VStack(docks.map(component => ({ component, shrink: 1, minSize: 0 })));
@@ -62,6 +64,7 @@ try {
   click(3, toolY('first') - openingTop); await paint();
   assert.equal(scroll.scrollTop, openingTop, 'opening at follow-end keeps the clicked viewport');
   assert.equal(scroll.isFollowingEnd, false, 'opening disables follow-end before content grows');
+  assert.match(screen().join('\n'), /Jump to latest message/, 'expanded content below the viewport keeps the jump hint');
   assert.doesNotMatch(screen()[0], /▼ bash/, 'no premature sticky row');
   assert.match(docRows().join('\n'), /first_69/, 'full detail expanded inline');
   scroll.scrollTo(toolY('first') + 1); await paint(); pinned('first');
@@ -143,7 +146,9 @@ try {
   assert.equal(scroll.scrollTop, shortTop, 'short result opens without alignment or padding');
   assert.match(docRows().join('\n'), /SHORT_RESULT/);
   assert.ok(docRows().length < terminal.rows, 'no artificial terminal-height tail');
+  assert.doesNotMatch(screen().join('\n'), /Jump to latest message/, 'a fully visible short result needs no jump hint');
   calls[1].output += '\nLIVE_B\n'.repeat(40); await paint();
+  assert.match(screen().join('\n'), /Jump to latest message/, 'stream growth below the viewport reveals the jump hint');
   assert.equal(scroll.scrollTop, shortTop, 'short result streaming does not steal viewport');
   scroll.scrollTo(toolY('second') + 1); await paint(); pinned('second');
   click(12, 0); await paint();
@@ -152,7 +157,20 @@ try {
   turn.final = 'NORMAL_STREAM\n'.repeat(60); await paint();
   assert.equal(scroll.isFollowingEnd, true);
   assert.ok(scroll.scrollTop > oldEnd, 'ordinary streaming follow-end remains intact');
+  turn.final = ''; terminal.rows = 80; processExpanded = false; view.resetProcessView(); await paint();
+  scroll.scrollToEnd(); await paint();
+  const agentY = () => docRows().findIndex(row => row.includes('Agent ·'));
+  click(8, agentY() - scroll.scrollTop); await paint();
+  assert.equal(scroll.isFollowingEnd, false, 'Agent expansion still preserves the reading position');
+  assert.doesNotMatch(screen().join('\n'), /Jump to latest message/, 'fully visible Agent expansion needs no jump hint');
+  turn.process = Array.from({ length: 100 }, (_, i) => `tool step-${i}`); await paint();
+  assert.match(screen().join('\n'), /Jump to latest message/, 'an expanded Agent with hidden rows shows the jump hint');
+  await wait(550); // Send a separate single click, not Pi's ignored double click.
+  click(8, agentY() - scroll.scrollTop); await paint();
+  assert.doesNotMatch(screen().join('\n'), /Jump to latest message/, 'collapsing Agent removes the hint when all remaining rows fit');
+  turn.process = ['call first', 'call second']; processExpanded = true;
 } finally { restore(); restoreWidgets(); tui.stop(); }
+assert.equal(tui.scrollToEndIndicator, jumpIndicator, 'cleanup restores the original jump indicator');
 assert.equal(tui.layoutRoot, originalRoot);
 for (const dock of docks) assert.equal(Object.hasOwn(dock, 'handleMouse'), false);
 for (const root of [new HStack([scroll]), new VStack([scroll, new ScrollView(new Text('other'), { primary: true })])]) {
