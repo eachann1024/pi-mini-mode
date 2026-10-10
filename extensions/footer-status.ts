@@ -1039,7 +1039,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const title = entry.title;
             const text = title.split(/\r?\n/).find(line => line.trim())?.replace(/\s+/g, " ").trim() ?? "";
             const split = text.indexOf(" ");
-            const label = split < 0 ? text : text.slice(0, split);
+            const noThinkingBody = entry.thinking && !stripVTControlCharacters(entry.detail).trim();
+            const label = noThinkingBody ? "Progress" : split < 0 ? text : text.slice(0, split);
             const body = split < 0 ? "" : text.slice(split + 1);
             const activeThinking = !!entry.activeThinking;
             const elapsed = entry.thinking ? formatThinkingElapsed(turn, entry.processIndex, activeThinking) : "";
@@ -1076,7 +1077,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
                 const reuse = activeThinking && cached?.text && cached.width === available && cached.rows === previewRows && now - cached.updatedAt < 350;
                 const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows);
                 if (!reuse) thinkingPreviews.set(entry.id, { text: display, width: available, rows: previewRows, updatedAt: now });
-                const fallback = activeThinking ? "等待模型返回思考内容" : "模型未提供可显示的思考内容";
+                const recent = entries.slice(0, entries.indexOf(entry)).reverse().find(candidate => !candidate.thinking && candidate.title.trim());
+                const activity = recent ? recent.title.startsWith("Output ") ? `最近说明：${recent.detail}` : `最近操作：${recent.title}` : "";
+                const fallback = activity ? thinkingPreview(activity, available, previewRows)
+                  : activeThinking ? "模型已开始推理，尚未返回可显示摘要" : "推理已结束，本次未返回可显示摘要";
                 const rows = new Text(display || fallback, 0, 0).render(Math.max(1, available)).slice(0, open ? 1 : 2);
                 const color = activeThinking ? "accent" : "muted";
                 lines.push(bandHeading(truncateToWidth(prefix + theme.fg(color, rows[0] ?? ""), width, ""), open));
