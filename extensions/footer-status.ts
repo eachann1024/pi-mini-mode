@@ -1097,12 +1097,6 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               lines.push(...markdown(entry.detail, detailWidth, true).map(line => truncateToWidth(rail + line, width, "")));
-            } else if (expanded && entry.state === "error" && entry.detail) {
-              const rail = last ? "   " : theme.fg("dim", "│  ");
-              const details = entry.detail.split(/\r?\n/).filter(line => line.trim());
-              // ponytail: four diagnostic lines; full output remains in the native transcript.
-              lines.push(...details.slice(1, 5).map(line => truncateToWidth(rail + theme.fg("muted", line), width)));
-              if (details.length > 5) lines.push(truncateToWidth(rail + theme.fg("muted", `… +${details.length - 5} lines`), width));
             }
           });
           if (showAgentRows) {

@@ -279,10 +279,8 @@ for (const name of ['dark', 'light']) {
   const compact = minimalOutputComponent(theme, () => [compactTurn], () => true).render(120).map(plain).join('\n');
   assert.equal(compact.split('Checking fixtures').length - 1, 1);
   assert.match(compact, /read src\/example.ts/);
-  assert.doesNotMatch(compact, /SOURCE_NOISE|line 5|line 6/);
+  assert.doesNotMatch(compact, /SOURCE_NOISE|line [1-6]|\+\d+ lines/);
   assert.equal(compact.split('Test failed').length - 1, 1);
-  assert.match(compact, /line 4/);
-  assert.match(compact, /\+2 lines/);
   const rendered = plain(view.render(100).join('\n'));
   assert.match(rendered, /Answer/);
   assert.match(rendered, /const value = 42/);
