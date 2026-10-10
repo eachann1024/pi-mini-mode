@@ -584,6 +584,17 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
 }
 
+/** Compact tool duration; sub-second calls leave the summary uncluttered. */
+export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.now()): string {
+  if (startedAt === undefined) return "";
+  const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1_000));
+  if (!seconds) return "";
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor(seconds / 60) % 60;
+  const remainder = seconds % 60;
+  return `${hours ? `${hours}h` : ""}${minutes ? `${minutes}m` : ""}${remainder ? `${remainder}s` : ""}`;
+}
+
 function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt = Date.now()): ThinkingClock {
   const clocks = turn.thinkingClocks ??= [];
   return clocks[index] ??= { startedAt: turn.startedAt ?? startedAt };
@@ -741,6 +752,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedSubagents = new Set<string>();
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
+  const expandedAgents = new Map<number, boolean>();
+  let globalExpanded = isExpanded();
+  let agentControls: Array<{ index: number; y: number; width: number; expanded: boolean }> = [];
   let pinnedToolId: string | undefined;
   let pinnedTool: { id: string; y: number; line: string } | undefined;
   let pinnedSubagentId: string | undefined;
@@ -820,6 +834,14 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         }
       }
       if (event.button !== "left" || event.shift || event.ctrl || event.alt) return;
+      const agent = agentControls.find(control => event.y === control.y && event.x >= 0 && event.x < control.width);
+      if (agent && (event.clickCount ?? 1) === 1) {
+        if (event.type === "press") return { handled: true };
+        if (event.type === "click") {
+          expandedAgents.set(agent.index, !agent.expanded);
+          return { handled: true, render: true };
+        }
+      }
       const control = promptControls.find(control => event.y === control.y && event.x >= control.x && event.x < control.x + control.width);
       if (control && (event.clickCount ?? 1) === 1) {
         if (event.type === "press") return { handled: true };
@@ -843,6 +865,11 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     render(width: number, notices?: TurnNotices): string[] {
       promptControls = [];
       toolControls = [];
+      agentControls = [];
+      if (globalExpanded !== isExpanded()) {
+        globalExpanded = isExpanded();
+        expandedAgents.clear();
+      }
       pinnedTool = undefined;
       pinnedSubagent = undefined;
       subagentControls = [];
@@ -882,10 +909,11 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           controlIndex = userRows.length;
         }
         lines.push(...surface(userRows, width, true, controlIndex, expanded));
+        const processOpen = expandedAgents.get(index) ?? globalExpanded;
         const entries = turn.process.flatMap((entry, processIndex) => {
           if (entry.startsWith("call ")) {
             const call = turn.agentCalls?.find(call => call.id === entry.slice(5));
-            if (call && isAgentTool(call.tool ?? call.name) && !isExpanded()) return [];
+            if (call && isAgentTool(call.tool ?? call.name) && !processOpen) return [];
             const display = call && agentCallDisplay(call);
             return call && display ? [{ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`.trim(), detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex, activeThinking: false }] : [];
           }
@@ -897,25 +925,24 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         });
         // Older in-memory turns may predate call markers.
         for (const call of turn.agentCalls ?? []) {
-          if (isAgentTool(call.tool ?? call.name) && !isExpanded()) continue;
+          if (isAgentTool(call.tool ?? call.name) && !processOpen) continue;
           const display = agentCallDisplay(call);
           if (!entries.some(entry => entry.id === call.id)) entries.push({ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`, detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex: -1, activeThinking: false });
         }
         const agentTurnControls: Array<{ runId: string; y: number; width: number; line: string }> = [];
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
         if (entries.length || turn.running || turn.usage || agents.total) {
-          const expanded = isExpanded();
-          const latestThinking = !expanded ? [...entries].reverse().find(entry => entry.thinking) : undefined;
+          const expanded = processOpen;
           const busy = entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
           const working = turn.running && !busy && !turn.final;
-          const limit = expanded ? entries.length : Math.max(0, 6 - (working ? 1 : 0));
-          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || entry === latestThinking || expandedThinking.has(entry.id)).slice(-limit);
-          if (latestThinking && !shown.includes(latestThinking)) shown.splice(Math.min(shown.length, entries.indexOf(latestThinking)), 0, latestThinking);
+          const shown = expanded ? entries : entries.slice(-6);
           const done = entries.filter(entry => entry.state === "done").length;
           const progressHeader = theme.bold(theme.fg("text", "Agent")) + (entries.length ? theme.fg("muted", ` · ${done}/${entries.length}`) : "")
             + (agents.total ? theme.bold(theme.fg("text", "     Subagent")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
               + (agents.errors ? theme.fg("error", ` · ${agents.errors} failed`) : "") : "");
-          const header = progressHeader + theme.fg("muted", showShortcut(turn) ? " · Ctrl+O" : "");
+          const heading = progressHeader + theme.fg("muted", expanded ? " ▾" : " ▸");
+          agentControls.push({ index, y: lines.length + 1, width: Math.min(width, visibleWidth(heading)), expanded });
+          const header = heading + theme.fg("muted", showShortcut(turn) ? " · Ctrl+O" : "");
           const usage = addUsage({ ...EMPTY_USAGE, ...turn.usage, cost: turn.usage?.cost ?? 0 }, turn.pendingUsage);
           const hasUsage = usage.totalTokens > 0 || usage.cacheRead > 0;
           const totals = hasUsage
@@ -930,8 +957,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             lines.push("", truncateToWidth(header, width));
           }
           shown.forEach((entry, row) => {
-            const waiting = turn.waitingTools?.find(tool => tool.id === entry.id);
-            const title = waiting && !entry.title.startsWith("Control ") ? `${waiting.name} running · waiting ${Math.max(0, Math.floor((Date.now() - waiting.startedAt) / 1000))}s` : entry.title;
+            const title = entry.title;
             const text = title.split(/\r?\n/).find(line => line.trim())?.replace(/\s+/g, " ").trim() ?? "";
             const split = text.indexOf(" ");
             const label = split < 0 ? text : text.slice(0, split);
@@ -943,7 +969,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
-            const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + " ";
+            const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
+            const toolElapsed = duration ? theme.fg(call?.state === "running" ? "success" : open ? "accent" : "muted", ` ${duration}`) : "";
+            const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
             const status = entry.state === "error" ? "✕" : entry.state === "running" ? runningGlyph() : "●";
@@ -961,7 +989,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", body)), width, controlId ? "" : "…"), open));
+              const available = Math.max(0, width - visibleWidth(prefix));
+              const thinkingBody = activeThinking
+                ? stripVTControlCharacters(entry.detail).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim()
+                : body;
+              const fittedBody = activeThinking && visibleWidth(thinkingBody) > available && available > 1
+                ? "…" + sliceByColumn(thinkingBody, visibleWidth(thinkingBody) - available + 1, available - 1)
+                : truncateToWidth(thinkingBody, available, "…");
+              const styledBody = activeThinking ? theme.fg("accent", fittedBody)
+                : entry.thinking ? markdown(fittedBody, Math.max(1, visibleWidth(fittedBody) + 1), true).join(" ").replace(/\s+/g, " ").trim()
+                  : theme.fg(open ? "accent" : "muted", fittedBody);
+              lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
@@ -990,7 +1028,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             if (c.runId === pinnedSubagentId) pinnedSubagent = { id: c.runId, y: control.y, line: c.line, autoScroll: false };
           }
           lines.push(...agents.rows);
-          if (working) {
+          if (working && (expanded || !shown.length)) {
             const label = turn.awaitingResponse && !shown.length ? "Thinking" : "Working";
             const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + theme.fg("success", ` ${formatElapsed(turn.startedAt)}`) + " ";
             lines.push(truncateToWidth(prefix + theme.fg("text", "…"), width, ""));
@@ -1578,7 +1616,7 @@ export default function (pi: ExtensionAPI) {
       freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
       activeMinimalTurn.thinking = undefined;
       activeMinimalTurn.awaitingResponse = false;
-      (activeMinimalTurn.agentCalls ??= []).push(agentCall(event.toolCallId, event.toolName, event.args));
+      (activeMinimalTurn.agentCalls ??= []).push({ ...agentCall(event.toolCallId, event.toolName, event.args), startedAt: toolStarts.get(event.toolCallId) });
       pushProcess(activeMinimalTurn, "call", event.toolCallId);
       (activeMinimalTurn.waitingTools ??= []).push({ id: event.toolCallId, name: event.toolName, startedAt: Date.now() });
     }
@@ -1620,6 +1658,7 @@ export default function (pi: ExtensionAPI) {
     const call = activeMinimalTurn?.agentCalls?.find(call => call.id === event.toolCallId);
     if (call) {
       if (activeMinimalTurn) activeMinimalTurn.waitingTools = activeMinimalTurn.waitingTools?.filter(tool => tool.id !== event.toolCallId);
+      call.endedAt = Date.now();
       call.state = event.isError ? "error" : "done";
       call.output = contentText(event.result) || (event.isError ? "Call failed (no text details)" : "Call returned (background task status below)");
       refresh();
