@@ -1,5 +1,6 @@
 import { agentCall, type AgentCall } from "./agent-view.ts";
 import { addUsage, EMPTY_USAGE, type SessionUsage, type UsageLike } from "./usage.ts";
+import { stripVTControlCharacters } from "node:util";
 
 export interface MinimalTurn {
   question: string;
@@ -17,6 +18,7 @@ export interface MinimalTurn {
   thinking?: number;
   /** Per-process-index Thinking clocks. Live rows count; completed rows keep endedAt. */
   thinkingClocks?: Array<ThinkingClock | undefined>;
+  thinkingOutcomes?: Array<ThinkingOutcome | undefined>;
   awaitingResponse?: boolean;
   waitingTools?: Array<{ id: string; name: string; startedAt: number }>;
 }
@@ -25,6 +27,8 @@ export interface ThinkingClock {
   startedAt: number;
   endedAt?: number;
 }
+
+export type ThinkingOutcome = "done" | "error" | "aborted";
 
 export function contentText(content: unknown): string {
   if (typeof content === "string") return content.trim();
@@ -66,16 +70,17 @@ export function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt 
   return clocks[index] ??= { startedAt };
 }
 
-export function freezeThinkingClock(turn: MinimalTurn | undefined, index: number | undefined, endedAt = Date.now()): void {
+export function freezeThinkingClock(turn: MinimalTurn | undefined, index: number | undefined, endedAt = Date.now(), outcome: ThinkingOutcome = "done"): void {
   if (!turn || index === undefined) return;
   const clock = turn.thinkingClocks?.[index];
   if (clock && clock.endedAt === undefined) clock.endedAt = endedAt;
+  (turn.thinkingOutcomes ??= [])[index] ??= outcome;
 }
 
-export function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt = Date.now()): void {
+export function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt = Date.now(), outcome: ThinkingOutcome = "done"): void {
   if (!turn?.thinkingClocks) return;
-  for (const clock of turn.thinkingClocks) {
-    if (clock && clock.endedAt === undefined) clock.endedAt = endedAt;
+  for (const [index, clock] of turn.thinkingClocks.entries()) {
+    if (clock && clock.endedAt === undefined) freezeThinkingClock(turn, index, endedAt, outcome);
   }
 }
 
@@ -101,17 +106,19 @@ export function pushProcess(turn: MinimalTurn | undefined, kind: string, value: 
 }
 
 export function thinkingText(item: Record<string, unknown>): string {
-  const value = item.thinking ?? item.text;
-  return typeof value === "string" ? (value.trim() ? value : "") : processText(value);
-}
-
-/** Only adjacent empty blocks in the same assistant content share a row. */
-export function continuesEmptyThinking(content: Array<Record<string, unknown>>, blockIndex: number): boolean {
-  const item = content[blockIndex];
-  const previous = content[blockIndex - 1];
-  return item?.type === "thinking" && previous?.type === "thinking"
-    && !thinkingText(item)
-    && !thinkingText(previous);
+  const readable = (value: unknown) => typeof value === "string"
+    ? stripVTControlCharacters(value).replace(/\r\n?/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").trim() : "";
+  const body = readable(item.thinking) || readable(item.text);
+  if (body) return body;
+  // Recover only the explicitly readable summary. Encrypted/signature data is never prose.
+  try {
+    const signature = typeof item.thinkingSignature === "string" ? JSON.parse(item.thinkingSignature) : undefined;
+    if (signature?.type === "reasoning" && Array.isArray(signature.summary)) {
+      return signature.summary.filter((part: { type?: unknown }) => part?.type === "summary_text")
+        .map((part: { text?: unknown }) => readable(part.text)).filter(Boolean).join("\n\n");
+    }
+  } catch { /* Other providers use opaque signatures. */ }
+  return "";
 }
 
 export function skillNames(text: string): string[] {
@@ -164,9 +171,9 @@ export function minimalTurnsFromBranch(branch: readonly unknown[]): MinimalTurn[
     for (const [blockIndex, item] of (content as Array<Record<string, unknown>>).entries()) {
       if (!item || typeof item !== "object") continue;
       if (item.type === "thinking") {
-        if (!continuesEmptyThinking(content as Array<Record<string, unknown>>, blockIndex)) {
-          turn.process.push(`thinking ${thinkingText(item)}`);
-        }
+        const index = turn.process.push(`thinking ${thinkingText(item)}`) - 1;
+        (turn.thinkingOutcomes ??= [])[index] = blockIndex === content.length - 1
+          && (entry.message.stopReason === "error" || entry.message.stopReason === "aborted") ? entry.message.stopReason : "done";
       } else if (item.type === "toolCall") {
         if (item.name) {
           (turn.agentCalls ??= []).push(agentCall(String(item.id), String(item.name), item.arguments ?? item.input));
