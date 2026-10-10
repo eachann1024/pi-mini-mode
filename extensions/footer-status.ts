@@ -609,7 +609,7 @@ export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.
 
 function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt = Date.now()): ThinkingClock {
   const clocks = turn.thinkingClocks ??= [];
-  return clocks[index] ??= { startedAt: turn.startedAt ?? startedAt };
+  return clocks[index] ??= { startedAt };
 }
 
 function freezeThinkingClock(turn: MinimalTurn | undefined, index: number | undefined, endedAt = Date.now()): void {
@@ -625,7 +625,7 @@ function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt = Date.
   }
 }
 
-/** Active Thinking counts from the turn start; completed Thinking keeps the frozen stop time. */
+/** Each Thinking row counts from its own start and keeps its frozen stop time. */
 export function formatThinkingElapsed(
   turn: Pick<MinimalTurn, "startedAt" | "thinkingClocks">,
   processIndex: number,
@@ -633,7 +633,7 @@ export function formatThinkingElapsed(
   now = Date.now(),
 ): string {
   const clock = turn.thinkingClocks?.[processIndex];
-  const startedAt = clock?.startedAt ?? turn.startedAt;
+  const startedAt = clock?.startedAt;
   if (active && startedAt != null) return `${(Math.max(0, now - startedAt) / 1_000).toFixed(1)}s`;
   if (clock?.endedAt != null) return `${(Math.max(0, clock.endedAt - clock.startedAt) / 1_000).toFixed(1)}s`;
   return "";
