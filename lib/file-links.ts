@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Marked, getCapabilities, sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 
@@ -21,6 +21,21 @@ export const inputCapabilities = getCapabilities;
 
 export function localPath(path: string, cwd: string): string {
   return path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : isAbsolute(path) ? path : resolve(cwd, path);
+}
+
+/** Otty always underlines OSC 8; ordinary paths use its Cmd-only detection instead. */
+function nativePathLinks(): boolean {
+  return process.env.TERM_PROGRAM?.toLowerCase() === "otty"
+    && !process.env.TMUX && !process.env.STY && !/^(tmux|screen)/i.test(process.env.TERM ?? "");
+}
+
+/** Short forms must remain real paths that Otty can resolve from the pane's cwd. */
+function nativePathLabel(path: string, cwd: string): string {
+  const fromCwd = relative(cwd, path);
+  if (fromCwd && fromCwd !== ".." && !fromCwd.startsWith("../") && !isAbsolute(fromCwd)) return `./${fromCwd}`;
+  const fromHome = relative(homedir(), path);
+  if (fromHome && fromHome !== ".." && !fromHome.startsWith("../") && !isAbsolute(fromHome)) return `~/${fromHome}`;
+  return path;
 }
 
 /** Opening/closing fences must stay intact; quoted paths inside them are not links. */
@@ -67,14 +82,15 @@ export const fileLink = (text: string, path: string, underline = true) => `\x1b]
 
 /** Shorten only visible tool labels; OSC 8 targets retain the complete original path. */
 export function linkToolFiles(text: string, cwd: string, compact: boolean): string {
-  const shorten = (label: string) => compact ? label
+  const native = nativePathLinks();
+  const shorten = (label: string) => compact && !native ? label
     .replace(/\/var\/folders\/[^\s]*\/otty-paste\//g, "…/otty-paste/")
     .replace(/node_modules\/@earendil-works\//g, "…/") : label;
   const hyperlinks = inputCapabilities().hyperlinks;
   // Image chips already carry a complete target; never shorten or relink it.
   return text.split(/(\x1b\]8;[^\x07]*\x07[\s\S]*?\x1b\]8;;\x07)/g).map((part, index) => {
     if (index % 2) return part;
-    if (!hyperlinks) return shorten(part);
+    if (!hyperlinks && !native) return shorten(part);
     // A path tool's entire argument can contain spaces or punctuation without quotes.
     const matches = part && !/[\x00-\x1f\x7f]/.test(part) && existsSync(localPath(part, cwd))
       ? [{ path: part, start: 0, end: part.length }] : filePaths(part);
@@ -82,8 +98,9 @@ export function linkToolFiles(text: string, cwd: string, compact: boolean): stri
     for (const match of matches) {
       const path = localPath(match.path, cwd);
       result += shorten(part.slice(offset, match.start));
-      const label = shorten(part.slice(match.start, match.end));
-      result += existsSync(path) ? fileLink(label, path, false) : label;
+      const exists = existsSync(path);
+      const label = native && compact && exists ? nativePathLabel(path, cwd) : shorten(part.slice(match.start, match.end));
+      result += exists && !native ? fileLink(label, path, false) : label;
       offset = match.end;
     }
     return result + shorten(part.slice(offset));
@@ -93,6 +110,7 @@ export function linkToolFiles(text: string, cwd: string, compact: boolean): stri
 /** Display-only: normalize local targets without changing persisted messages or remote URLs. */
 export function linkMessageFiles(text: string, cwd: string): string {
   if (!inputCapabilities().hyperlinks) return text;
+  const native = nativePathLinks();
   let imageNumber = 0;
   return text.split(/(\x1b\]8;[^\x07]*(?:\x07)[\s\S]*?\x1b\]8;;\x07|\[[^\]\n]*\]\([^\n]*?\))/g).map((part, index) => {
     if (index % 2) {
@@ -108,7 +126,9 @@ export function linkMessageFiles(text: string, cwd: string): string {
     for (const match of matches.reverse()) {
       const path = localPath(match.path, cwd);
       if (!existsSync(path)) continue;
-      part = part.slice(0, match.start) + fileLink(match.image ? `  #${match.number}` : match.path, path, !match.image) + part.slice(match.end);
+      const label = native && !match.image ? part.slice(match.start, match.end)
+        : fileLink(match.image ? `  #${match.number}` : match.path, path, !match.image);
+      part = part.slice(0, match.start) + label + part.slice(match.end);
     }
     return part;
   }).join("");
