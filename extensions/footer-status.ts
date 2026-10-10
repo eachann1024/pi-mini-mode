@@ -943,6 +943,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
+            const toolElapsed = call?.startedAt == null ? "" : theme.fg(call.state === "running" ? "success" : open ? "accent" : "muted", ` ${Math.max(0, Math.floor(((call.endedAt ?? Date.now()) - call.startedAt) / 1_000))}s`);
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
@@ -952,7 +953,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
             const last = row === shown.length - 1 && !working && !agents.rows.length;
-            const prefix = theme.fg(open ? "accent" : "dim", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
+            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || entry.state === "error" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
             if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
               const indent = visibleWidth(prefix);
@@ -961,7 +962,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", body)), width, controlId ? "" : "…"), open));
+              const compactBody = open || entry.thinking ? body : body
+                .replace(/\/var\/folders\/[^\s]*\/otty-paste\//g, "…/otty-paste/")
+                .replace(/node_modules\/@earendil-works\//g, "…/");
+              const available = Math.max(0, width - visibleWidth(prefix) - visibleWidth(toolElapsed));
+              const fittedBody = visibleWidth(compactBody) > available && !entry.thinking && !open && available > 1
+                ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1)
+                : truncateToWidth(compactBody, available, "…");
+              const styledBody = entry.thinking
+                ? markdown(fittedBody, Math.max(1, visibleWidth(fittedBody) + 1), true).join(" ").replace(/\s+/g, " ").trim()
+                : theme.fg(open ? "accent" : "muted", fittedBody);
+              lines.push(bandHeading(truncateToWidth(prefix + styledBody + toolElapsed, width, "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
