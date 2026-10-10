@@ -55,7 +55,7 @@ try {
   const turn = { question: 'QUESTION', process: ['call photo', 'output AFTER IMAGE'], final: `BEFORE\n![result](${path})\nFINAL`, agentCalls: [{ id: 'photo', name: 'read', task: path, state: 'done' }] };
   let ready;
   const loaded = new Promise(resolve => { ready = resolve; });
-  const view = minimalOutputComponent(getThemeByName('dark'), () => [turn], undefined, undefined, undefined, undefined, undefined, undefined, { cwd: () => process.cwd(), requestRender: () => { tui.requestRender(); ready(); } });
+  const view = minimalOutputComponent(getThemeByName('dark'), () => [turn], undefined, undefined, undefined, undefined, undefined, { cwd: () => process.cwd(), requestRender: () => { tui.requestRender(); ready(); } });
   tui.children = [document, ...Array.from({ length: 6 }, () => new Container())];
   restore = attachTranscript(tui, view, { turnCount: () => 1 });
   const scroll = new ScrollView(document, { primary: true, follow: 'start' });

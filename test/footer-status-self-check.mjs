@@ -92,9 +92,8 @@ assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-input-enhancements"], true
 assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*消息文件路径，用系统默认应用打开/);
 assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
 for (const key of ['pi-mini-mode-minimal-thinking-show', 'pi-mini-mode-minimal-tools-show', 'pi-mini-mode-minimal-output-show', 'pi-mini-mode-minimal-skills-show', 'pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
-  assert.equal(extension.DEFAULT_SETTINGS[key], true);
-  assert.equal(extension.parseSettings({ [key]: false })[key], true, `${key} legacy false no longer gates minimal output`);
-  assert.equal(extension.isCollapsedReplyChildSetting(key), true);
+  assert.equal(key in extension.DEFAULT_SETTINGS, false);
+  assert.equal(key in extension.parseSettings({ [key]: false }), false, `${key} is removed during legacy migration`);
 }
 assert.equal(extension.parseSettings({ "pi-mini-mode-input-enhancements": false })["pi-mini-mode-input-enhancements"], false);
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-image-preview"], "inline");
@@ -114,11 +113,9 @@ assert.match(minimalText, /secret final/);
 minimalTurn.running = false;
 minimalText = minimalView.render(100).join("\n");
 assert.match(minimalText, /secret final/);
-let hintVisible = true;
 const hintTurn = { ...minimalTurn };
-const hintView = extension.minimalOutputComponent(minimalTheme, () => [hintTurn], () => false, () => hintVisible);
+const hintView = extension.minimalOutputComponent(minimalTheme, () => [hintTurn]);
 assert.match(hintView.render(100).join("\n"), /Agent · 13/);
-hintVisible = false;
 assert.doesNotMatch(hintView.render(100).join("\n"), /Ctrl\+O/);
 assert.match(hintView.render(100).join("\n"), /Agent · 13/);
 assert.equal((hintView.render(100).join("\n").match(/entry-/g) ?? []).length, 6, "a settled turn keeps the six most recent records");
@@ -254,7 +251,7 @@ const integratedTurn = { question: 'Integrated', process: Array.from({ length: 1
   })) }],
 };
 let expandIntegrated = false;
-const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => false, () => true, () => expandIntegrated);
+const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => true, () => expandIntegrated);
 let integratedRows = integratedView.render(120).map(stripAnsi);
 assert.match(integratedRows.find(row => row.startsWith('✦') || row.startsWith('✧')), /Agent · 13/);
 assert.match(integratedRows.find(row => row.includes('会话')), /320K/);
@@ -646,7 +643,7 @@ assert.deepEqual(shortSaved.slice(0, 2), ["model", "thinking"], "PUT keeps the s
 assert.deepEqual([...shortSaved].sort(), [...extension.FOOTER_FIELDS].sort(), "PUT backfills missing footer fields");
 const settingsItems = new Map(servedSettings.items.map((item) => [item.id, item]));
 assert.ok([...settingsItems.values()].every((item) => !item.submenu), "极简输出不再有子菜单");
-assert.ok([...settingsItems.values()].every((item) => !extension.isCollapsedReplyChildSetting(item.id)), "旧细项不再展示");
+assert.ok([...settingsItems.values()].every((item) => !/pi-mini-mode-(?:minimal-(?:thinking|tools|output|skills)|agent-(?:usage|shortcut))-show/.test(item.id)), "旧细项不再展示");
 assert.equal(settingsItems.get("pi-mini-mode-minimal-show")?.currentValue, "on", "极简输出总开关默认打开");
 assert.equal(settingsItems.get("pi-mini-mode-input-enhancements")?.currentValue, "on", "输入增强总开关默认打开");
 await updateSettings({ "pi-mini-mode-minimal-show": false });
