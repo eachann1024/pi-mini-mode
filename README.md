@@ -60,7 +60,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 ![Image previews and compact labels in Pi Mini Mode](https://github.com/user-attachments/assets/2ea6d037-d3f0-423c-8588-17992a49d445)
 
-**Images at your cursor.** Move the editing cursor into an image path or compact label to preview it. Fullscreen also supports editor hover. Press `Esc` to dismiss.
+**Images where you write.** Images appear as inline cards above the editor by default; you can switch to cursor popups in settings. Press `Esc` to dismiss a popup.
 
 **Less path clutter. Same image.** Image paths become underlined `[image1]` labels in the editor and messages, preserving the original path when submitted. Open the original image or another linked file in its default app using your terminal’s link gesture.
 
@@ -120,17 +120,15 @@ Example with optional Cached and MCP fields enabled:
 deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500/1.0M  ⣿⣀⣀⣀⣀⣀⣀⣀⣀⣀  1%  120 tok/s
 ```
 
-The first-run picker offers **Keep defaults**, **Configure now**, and **Apply recommended setup**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the same settings list immediately. Applying the recommendation asks you to choose the bundled `cc-dark` or `cc-light` theme, saves that theme and global `tuiMode=fullscreen` through Pi's settings API, applies the theme immediately, and asks you to restart Pi because the fullscreen renderer is chosen at startup. Project settings and CLI flags may override these global values. Escape/cancel leaves onboarding incomplete; it runs again on the next interactive session. Print, JSON, and other non-interactive modes never prompt.
+The first-run picker offers **Keep defaults (保留默认)**, **Open browser settings (打开浏览器设置)**, and **Apply recommended setup (应用推荐配置)**. Keeping defaults saves the default field selection, leaves minimal output on, and prevents the prompt from appearing again; configuring opens the HTML settings page in your browser immediately. Applying the recommendation asks you to choose the bundled `cc-dark` or `cc-light` theme, saves that theme and global `tuiMode=fullscreen` through Pi's settings API, applies the theme immediately, and asks you to restart Pi because the fullscreen renderer is chosen at startup. Project settings and CLI flags may override these global values. Escape/cancel leaves onboarding incomplete; it runs again on the next interactive session. Print, JSON, and other non-interactive modes never prompt.
 
-Open that settings UI any time with:
+Open settings any time in your browser with:
 
 ```text
 /pi-mini-mode-settings
 ```
 
-The focused option and its corresponding preview field use bold theme `accent` text with a `selectedBg` background. Fullscreen Pi supports hover to focus and click to toggle; regular terminal mode uses keyboard navigation. Hovering never changes a setting.
-
-Changes take effect immediately. The command requires Pi's TUI mode. Its preview always uses fixed example data rather than your current session, while reflecting every setting toggle immediately.
+The command requires an interactive Pi session and opens settings in your browser. Changes save automatically and apply immediately where the current renderer supports them. Focus a preview item and use the left/right arrow keys, or drag it, to change the footer order. The preview uses fixed sample data. Resetting defaults restores feature switches, image preview mode, and footer visibility and order.
 
 Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-mini-mode.json`; installations with a different Pi config directory use that directory). A malformed or missing file safely falls back to the defaults.
 

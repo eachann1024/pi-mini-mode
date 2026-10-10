@@ -35,30 +35,30 @@ const $=id=>document.getElementById(id),token=location.hash.slice(1);
 history.replaceState(null,'',location.pathname);
 const I18N={
   title:{zh:'Pi Mini Mode',en:'Pi Mini Mode'},
-  subtitle:{zh:'轻一点，读得更远。',en:'A quieter way to think.'},
+  subtitle:{zh:'调整状态栏、图片预览和对话折叠。',en:'Adjust your footer, image previews, and conversation folding.'},
   documentTitle:{zh:'Pi Mini Mode 设置',en:'Pi Mini Mode Settings'},
-  dragHint:{zh:'拖拽预览中的字段可调整顺序，松手自动保存。',en:'Drag preview items to reorder · saves on drop.'},
+  dragHint:{zh:'拖拽或左右方向键调整预览字段顺序，改动自动保存。',en:'Drag or use Arrow Left/Right to reorder preview items · saves automatically.'},
   featuresHeading:{zh:'功能说明',en:'Features'},
-  fieldsHeading:{zh:'状态栏字段与预览',en:'Status bar items & preview'},
+  fieldsHeading:{zh:'状态栏字段与预览（示例数据）',en:'Status bar items & preview (sample data)'},
   optionsHeading:{zh:'状态栏样式',en:'Status bar style'},
   on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},previewModeLabel:{zh:'图片预览方式',en:'Image preview mode'},previewHover:{zh:'光标浮窗',en:'Cursor popup'},previewInline:{zh:'内联卡片（多图排列）',en:'Inline cards (multiple images)'},previewModeHint:{zh:'卡片显示在输入框上方；终端不支持图片时显示占位。',en:'Cards appear above the editor; unsupported terminals show placeholders.'},
   recordLimitLabel:{zh:'折叠时记录数',en:'Collapsed record limit'},
   recordLimitHint:{zh:'默认 6 条。子代理始终显示，每个占一条；剩余额度显示最新执行记录。子代理超过上限时，仅显示全部子代理。',en:'Defaults to 6. Every subagent stays visible and uses one record; remaining slots show the latest execution records. When subagents exceed the limit, only their rows remain.'},
   featureList:{
     zh:[
-      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'把对话收成结论：思考、工具与技能汇成一棵按时间排序的可折叠过程树。',points:['长用户消息默认保留前四行，点击展开全文','子代理始终显示，可展开活动记录与输出','Ctrl+O 展开或收起过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记']},
-      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['光标移入图片路径即可预览，全屏编辑器同样支持','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能并插入光标处','点击图片标签或文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'在全屏模式下，把思考、工具与技能记录收进一棵可折叠过程树，保留完整回复。',points:['长用户消息显示前四行，点击展开全文','子代理始终显示，可展开活动记录与输出','Ctrl+O 展开或收起过程树，新问题默认收起','最终 Markdown 流畅呈现，失败与中断明确标记']},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['图片默认以内联卡片陈列于输入框上方，亦可切换光标悬停','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能并插入光标处','点击图片标签或文件路径，用系统默认应用打开'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
       {id:'themes',title:'明暗主题',body:'主题让 Markdown、代码高亮、表格与 Mermaid 图表跟随明暗切换。',points:['用户消息使用主题用户背景色，与正文区分','不支持、不完整或过宽的图表保留源文本'],hint:'回到 Pi，输入 /settings → Theme，选择 cc-dark / cc-light'}
     ],
     en:[
-      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'Turns the conversation into conclusions: thinking, tools and skills collapse into one chronological, foldable tree.',points:['Long user messages keep four lines; click to expand','Subagents stay visible; click to expand activity and output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked']},
-      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Preview an image as soon as the cursor enters its path, in fullscreen too','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert at the cursor','Click image labels or file paths to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
+      {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'In fullscreen mode, fold thinking, tools and skill reads into one process tree while keeping the full reply.',points:['Long user messages show four rendered rows; click to expand','Subagents stay visible; click to expand activity and output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked']},
+      {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Images appear as inline cards above the editor by default, with optional cursor hover','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert at the cursor','Click image labels or file paths to open them in the default app'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
       {id:'themes',title:'Light and dark themes',body:'Themes keep Markdown, code highlighting, tables and Mermaid diagrams in step with light and dark.',points:['User messages use the theme user background to stand out','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'In Pi, enter /settings → Theme and choose cc-dark or cc-light'}
     ]
   },
   reset:{zh:'恢复默认',en:'Reset defaults'},
   retry:{zh:'重试',en:'Retry'},
-  confirmReset:{zh:'恢复默认排序与显示设置？',en:'Reset layout and visibility to defaults?'},
+  confirmReset:{zh:'恢复默认功能开关、图片预览方式、字段显示与排序？',en:'Reset feature switches, image previews, and footer visibility and order?'},
   connecting:{zh:'正在同步…',en:'Connecting…'},
   saved:{zh:'已保存',en:'Saved'},
   unsaved:{zh:'未保存的修改',en:'Unsaved changes'},
@@ -81,9 +81,9 @@ const I18N={
     branch:{zh:'仅分支',en:'Branch Only'},
     'session-tokens':{zh:'会话 Token',en:'Session Tokens'},
     'cache-tokens':{zh:'缓存 Token',en:'Cache Tokens'},
-    'cache-miss':{zh:'缓存 miss',en:'Cache miss'},
+    'cache-miss':{zh:'缓存未命中估算',en:'Estimated cache misses'},
     ch:{zh:'缓存命中率',en:'Cache Hit Rate'},
-    cost:{zh:'累计费用',en:'Cost'},
+    cost:{zh:'会话费用估算',en:'Estimated session cost'},
     mcp:{zh:'MCP 服务数',en:'MCP Count'},
     context:{zh:'上下文进度条',en:'Context Bar'},
     'context-percent':{zh:'上下文百分比',en:'Context %'},
