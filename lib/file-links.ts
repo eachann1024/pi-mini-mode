@@ -65,6 +65,26 @@ export function filePaths(text: string) {
 // BEL survives Markdown's backslash-escape parsing, unlike the ST terminator.
 export const fileLink = (text: string, path: string, underline = true) => `\x1b]8;;${pathToFileURL(path).href}\x07${underline ? `\x1b[4m${text}\x1b[24m` : text}\x1b]8;;\x07`;
 
+/** Shorten only visible tool labels; OSC 8 targets retain the complete original path. */
+export function linkToolFiles(text: string, cwd: string, compact: boolean): string {
+  const shorten = (label: string) => compact ? label
+    .replace(/\/var\/folders\/[^\s]*\/otty-paste\//g, "…/otty-paste/")
+    .replace(/node_modules\/@earendil-works\//g, "…/") : label;
+  if (!inputCapabilities().hyperlinks) return shorten(text);
+  // A path tool's entire argument can contain spaces or punctuation without quotes.
+  const matches = text && !/[\x00-\x1f\x7f]/.test(text) && existsSync(localPath(text, cwd))
+    ? [{ path: text, start: 0, end: text.length }] : filePaths(text);
+  let result = "", offset = 0;
+  for (const match of matches) {
+    const path = localPath(match.path, cwd);
+    result += shorten(text.slice(offset, match.start));
+    const label = shorten(text.slice(match.start, match.end));
+    result += existsSync(path) ? fileLink(label, path) : label;
+    offset = match.end;
+  }
+  return result + shorten(text.slice(offset));
+}
+
 /** Display-only: normalize local targets without changing persisted messages or remote URLs. */
 export function linkMessageFiles(text: string, cwd: string): string {
   if (!inputCapabilities().hyperlinks) return text;
