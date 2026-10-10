@@ -11,7 +11,7 @@ interface StickyToolView {
 /** ponytail: Pi 0.85 layoutRoot + optional internal layout-node export;
  * replace discovery with a public primary-scroll/layout getter when available. */
 export function attachStickyTool(tui: unknown, document: Component, view: StickyToolView, setMinHeight: (height: number) => void = () => {}): (() => void) | undefined {
-  const host = tui as { mode?: string; terminal?: { rows: number }; layoutRoot?: Component; setLayoutRoot?: (root: Component) => void; requestRender?: () => void };
+  const host = tui as { mode?: string; terminal?: { rows: number }; layoutRoot?: Component; setLayoutRoot?: (root: Component) => void; requestRender?: () => void; scrollToEndIndicator?: () => string };
   if (host.mode !== "fullscreen" || !host.layoutRoot || !host.setLayoutRoot || !host.requestRender) return;
   let getNode: typeof GetLayoutNode;
   try { getNode = createRequire(import.meta.url)("@earendil-works/pi-tui/dist/layout-node.js").getLayoutNode; }
@@ -41,12 +41,20 @@ export function attachStickyTool(tui: unknown, document: Component, view: Sticky
   const transcript = scroll;
   let currentId: string | undefined;
   let shown: { id: string; line: string } | undefined;
+  let contentHeight = 0;
+  // Pi shows this indicator whenever follow-end is suspended, including at the
+  // content end. Keep expansion's reading position but only hint at hidden rows.
+  const indicatorDescriptor = Object.getOwnPropertyDescriptor(host, "scrollToEndIndicator");
+  const originalIndicator = host.scrollToEndIndicator;
+  const indicator = () => transcript.scrollTop + transcript.viewportHeight < contentHeight
+    ? originalIndicator?.call(host) ?? "" : "";
+  if (originalIndicator) host.scrollToEndIndicator = indicator;
   const heading: Component = {
     invalidate() {},
     render(width) {
       // Measure the unchanged document before moving the existing ScrollView.
       setMinHeight(0);
-      document.render(transcript.getContentWidth(width));
+      contentHeight = document.render(transcript.getContentWidth(width)).length;
       const target = view.pinnedTool();
       if (!target) {
         currentId = undefined;
@@ -95,6 +103,10 @@ export function attachStickyTool(tui: unknown, document: Component, view: Sticky
   return () => {
     view.unpinTool();
     setMinHeight(0);
+    if (host.scrollToEndIndicator === indicator) {
+      if (indicatorDescriptor) Object.defineProperty(host, "scrollToEndIndicator", indicatorDescriptor);
+      else delete host.scrollToEndIndicator;
+    }
     if (host.layoutRoot === root) host.setLayoutRoot!(originalRoot);
   };
 }
