@@ -36,6 +36,7 @@ export interface MiniLensSettings {
   "pi-mini-mode-speed-show": boolean;
   "pi-mini-mode-speed-unit-show": boolean;
   "pi-mini-mode-minimal-show": boolean;
+  "pi-mini-mode-minimal-record-limit": number;
   "pi-mini-mode-input-enhancements": boolean;
   "pi-mini-mode-image-preview": "hover" | "inline";
   "pi-mini-mode-minimal-thinking-show": boolean;
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
   "pi-mini-mode-minimal-show": true,
+  "pi-mini-mode-minimal-record-limit": 6,
   "pi-mini-mode-input-enhancements": true,
   "pi-mini-mode-image-preview": "inline",
   "pi-mini-mode-minimal-thinking-show": true,
@@ -100,12 +102,18 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
+function isRecordLimit(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
 export function parseSettings(value: unknown): MiniLensSettings {
   const candidate = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const settings = { ...DEFAULT_SETTINGS };
   for (const id of SETTING_IDS) {
     if (id === "pi-mini-mode-image-preview") {
       if (candidate[id] === "hover" || candidate[id] === "inline") settings[id] = candidate[id];
+    } else if (id === "pi-mini-mode-minimal-record-limit") {
+      if (isRecordLimit(candidate[id])) settings[id] = candidate[id];
     } else if (isBoolean(candidate[id])) settings[id] = candidate[id];
   }
   if (Array.isArray(candidate.footerOrder)) {
@@ -119,7 +127,7 @@ export function parseSettings(value: unknown): MiniLensSettings {
   return settings;
 }
 
-/** True when saved JSON is missing a boolean key or a footer field, so defaults can be written back. */
+/** True when saved JSON is missing a setting or a footer field, so defaults can be written back. */
 export function settingsNeedBackfill(raw: unknown, parsed: MiniLensSettings): boolean {
   if (!raw || typeof raw !== "object") return true;
   const candidate = raw as Record<string, unknown>;
@@ -495,7 +503,7 @@ export function isCollapsedReplyChildSetting(id: string): boolean {
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
-  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder" | "pi-mini-mode-image-preview">, string> = {
+  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder" | "pi-mini-mode-image-preview" | "pi-mini-mode-minimal-record-limit">, string> = {
     "pi-mini-mode-project-branch-show": "显示项目名称和分支（互斥）",
     "pi-mini-mode-branch-show": "仅显示分支（思考等级后，互斥）",
     "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-cache-miss-show": COPY.miss, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements, "pi-mini-mode-minimal-thinking-show": COPY.showThinking, "pi-mini-mode-minimal-tools-show": COPY.tools, "pi-mini-mode-minimal-output-show": COPY.output, "pi-mini-mode-minimal-skills-show": COPY.skills, "pi-mini-mode-agent-usage-show": COPY.agentUsage, "pi-mini-mode-agent-shortcut-show": COPY.shortcut,
@@ -759,7 +767,7 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
   });
 }
 
-export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: { cwd(): string; requestRender(): void; write?(data: string): void }) {
+export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: { cwd(): string; requestRender(): void; write?(data: string): void }, getRecordLimit: () => number = () => DEFAULT_SETTINGS["pi-mini-mode-minimal-record-limit"]) {
   const placeholderText = (text: string) => imageOptions ? imagePlaceholders(text, imageOptions.cwd()) : text;
   const markdown = (text: string, width: number, process = false) => renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
     { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(placeholderText(diagramMarkdown(source, available))));
@@ -778,7 +786,6 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
   const thinkingPreviews = new Map<string, { text: string; width: number; rows: number; updatedAt: number }>();
-  const PROCESS_PREVIEW_ROWS = 6;
   const agentModes = new Map<number, "all" | "preview" | "closed">();
   const runningTurns = new Set<number>();
   let pinnedToolId: string | undefined;
@@ -979,11 +986,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         }
         const agentTurnControls: Array<{ runId: string; y: number; width: number; line: string }> = [];
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
-        if (agents.total && !entries.length) entries.push({ title: `SubAgent ${agents.done + agents.errors}/${agents.total}`, detail: "", state: agents.running ? "running" : agents.errors ? "error" : "done", id: `agents:${index}`, thinking: false, processIndex: -1, activeThinking: false });
         const active = !!turn.running || agents.running > 0 || entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
         if (active) runningTurns.add(index);
         else if (runningTurns.delete(index)) {
-          // Return to the six-row preview once; a later click can expand everything again.
+          // Return to the configured preview once; a later click can expand everything again.
           if (agentModes.get(index) === "all") {
             agentModes.set(index, "preview");
             expandedThinking.clear();
@@ -997,8 +1003,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           const expanded = mode === "all";
           const busy = entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
           const working = turn.running && !busy && !turn.final;
-          // Six recent records stay visible while running and after completion.
-          const shown = mode === "closed" ? [] : expanded ? entries : entries.slice(-PROCESS_PREVIEW_ROWS);
+          // Every child keeps its heading; process records share the remaining preview budget.
+          const processLimit = Math.max(0, getRecordLimit() - agents.total);
+          const shown = mode === "closed" ? [] : expanded ? entries : processLimit ? entries.slice(-processLimit) : [];
+          const showWorking = working && (expanded || (!shown.length && !agents.total));
           const done = entries.filter(entry => entry.state === "done").length;
           // ponytail: two terminal text frames; use Pi's motion preference if it exposes one.
           const sparkle = active ? Math.floor(Date.now() / 360) % 2 ? "✧" : "✦" : "✦";
@@ -1015,9 +1023,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             ? theme.fg("muted", "会话 ") + theme.bold(theme.fg("text", formatTokens(usage.totalTokens)))
               + theme.fg("muted", " · 缓存 ") + theme.bold(theme.fg("text", formatTokens(usage.cacheRead)))
             : "";
-          const recordCount = entries.filter(entry => !entry.title.startsWith("SubAgent ")).length || agents.total;
+          const recordCount = entries.length + agents.total;
           const progressHeader = theme.fg(active ? "accent" : "muted", sparkle + " ") + theme.bold(theme.fg("text", "Agent")) + theme.fg("muted", recordCount ? ` · ${recordCount}` : "");
-          const showAgentRows = mode !== "closed" && expanded;
+          const showAgentRows = agents.total > 0;
           const caret = theme.fg("muted", expanded ? " ▾" : " ▸");
           const elapsedHeader = turn.startedAt == null ? "" : theme.fg("muted", " · ") + theme.fg(active ? "success" : "muted", formatElapsed(turn.startedAt, turn.endedAt ?? Date.now()));
           const left = progressHeader + elapsedHeader + caret;
@@ -1050,7 +1058,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const keepStatus = entry.state === "running" || (open && entry.state === "error");
             const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
-            const last = row === shown.length - 1 && !working && (!showAgentRows || !agents.rows.length);
+            const last = row === shown.length - 1 && !showWorking && !agents.rows.length;
             const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || entry.state === "error" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
             if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
@@ -1108,7 +1116,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             }
             lines.push(...agents.rows);
           }
-          if (working && (expanded || !shown.length)) {
+          if (showWorking) {
             const label = turn.awaitingResponse && !shown.length ? "Thinking" : "Working";
             const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + " ";
             lines.push(truncateToWidth(prefix + theme.fg("muted", turn.awaitingResponse ? "等待模型响应" : "等待下一步执行"), width, ""));
@@ -1260,7 +1268,7 @@ export default function (pi: ExtensionAPI) {
         cwd: () => ctx.cwd,
         requestRender: () => tui.requestRender(),
         write: data => tui.terminal.write(data),
-      });
+      }, () => settings["pi-mini-mode-minimal-record-limit"]);
       const hintRemaining = (activeMinimalTurn?.shortcutHintUntil ?? 0) - Date.now();
       if (hintRemaining > 0) {
         shortcutTimer = setTimeout(() => tui.requestRender(), hintRemaining);
@@ -1432,6 +1440,8 @@ export default function (pi: ExtensionAPI) {
                 || entry.some(id => typeof id !== "string" || !(FOOTER_FIELDS as readonly string[]).includes(id))) throw new TypeError("Invalid order");
             } else if (key === "pi-mini-mode-image-preview") {
               if (entry !== "hover" && entry !== "inline") throw new TypeError("Invalid preview mode");
+            } else if (key === "pi-mini-mode-minimal-record-limit") {
+              if (!isRecordLimit(entry)) throw new TypeError("Invalid record limit");
             } else if (!SETTING_IDS.includes(key as typeof SETTING_IDS[number]) || typeof entry !== "boolean") throw new TypeError("Invalid setting");
           }
           const next = parseSettings({ ...settings, ...input, onboardingCompleted: true });
