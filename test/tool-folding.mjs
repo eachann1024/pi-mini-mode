@@ -54,7 +54,7 @@ view.render(80);
 let control = view.toolChoices()[0];
 view.handleMouse(event(control, { type: 'move', button: 'none' }));
 assert.match(view.render(80)[control.y], /▶ bash/);
-assert.match(view.render(40)[view.toolChoices()[0].y], /● bash/, 'resize clears hover');
+assert.match(view.render(40)[view.toolChoices()[0].y], /│ bash/, 'resize clears hover');
 const errorHover = minimalOutputComponent(theme, () => [{ question: 'q', process: ['call err'], agentCalls: [{ id: 'err', name: 'bash', task: 'fail', state: 'error' }] }]);
 errorHover.render(80);
 const errorControl = errorHover.toolChoices()[0];
@@ -129,7 +129,7 @@ const thinkingChoice = () => bandView.toolChoices().find(choice => choice.id.sta
 bandView.handleMouse(event(thinkingChoice()));
 const openThinkingRow = bandView.render(80)[thinkingChoice().y];
 assert.ok(openThinkingRow.includes(band), 'expanded Thinking heading wears the band');
-assert.match(plain(openThinkingRow), /▼ [\u2800-\u28ff] Thinking 0:00/, 'the running Thinking heading keeps its arrow, glyph and timer');
+assert.match(plain(openThinkingRow), /▼ [\u2800-\u28ff] Thinking 0\.\ds/, 'the running Thinking heading keeps its arrow, glyph and timer');
 assert.equal(visibleWidth(openThinkingRow), 80, 'the Thinking band fills the render width');
 bandView.handleMouse(event(thinkingChoice()));
 assert.ok(bandView.render(80).every(row => !row.includes(band)), 'collapsing removes both bands');
@@ -139,8 +139,8 @@ assert.ok(bandView.render(80).every(row => !row.includes(band)), 'a Skill row is
 // Running SubAgents expand one-line tools; only structured finals enter completed details.
 const child = { agent: 'worker', status: 'running', currentTool: 'bash', currentToolArgs: 'npm test', recentOutput: [] };
 const agentTurn = { question: 'q', process: [], subAgents: [{ runId: 'live-child', mode: 'single', state: 'running', steps: [child] }] };
-const agentView = minimalOutputComponent(theme, () => [agentTurn]);
-const agentHeading = () => agentView.render(80).findIndex(row => row.includes('SubAgent'));
+const agentView = minimalOutputComponent(theme, () => [agentTurn], () => true);
+const agentHeading = () => agentView.render(80).findIndex(row => /[├└]─.*SubAgent/.test(row));
 const agentDetails = () => agentView.render(80).slice(agentHeading() + 1).join('\n');
 assert.equal(agentDetails(), '');
 assert.deepEqual(agentView.handleMouse(event({ y: agentHeading() }, { type: 'press' })), { handled: true });
@@ -280,7 +280,7 @@ for (const state of ['running', 'error', 'done']) {
   const rows = view.render(80).join('\n');
   if (state === 'error') assert.match(rows, /▼ ✕ bash/);
   if (state === 'running') assert.match(rows, /▼ [\u2800-\u28ff] bash/);
-  assert.doesNotMatch(rows, /\x1b\[2J|\x07/, 'terminal controls stripped from saved output');
+  assert.doesNotMatch(rows.replace(/\x1b\]8;;\x07/g, ""), /\x1b\[2J|\x07/, 'terminal controls stripped from saved output');
   if (state === 'done') assert.match(rows, /无文本结果/);
   view.toggleTool('first');
 }

@@ -77,7 +77,7 @@ for (const name of ['dark', 'light']) {
   assert.doesNotMatch(plain(replyView.render(100).join('\n')), /\*\*/);
   const receiptView = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['call workflow'], agentCalls: [{ id: 'workflow', name: 'subagent', task: 'launch', state: 'done', output: 'Run fan-out: 0/64 used\nAsync workflow [run-123]\nThe async run is detached and running in the background.' }] }], () => true);
   const receiptRows = plain(receiptView.render(160).join('\n'));
-  assert.match(receiptRows, /Control subagent · dispatch · returned/);
+  assert.doesNotMatch(receiptRows, /Control subagent|dispatch · returned/, "control receipts stay out of process rows");
   assert.doesNotMatch(receiptRows, /Run fan-out|The async run is detached/);
   const output = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output body'], running: false }]).render(100).join('\n');
   assert.match(plain(output), /Output body/);
@@ -85,7 +85,7 @@ for (const name of ['dark', 'light']) {
   assert.ok(output.includes(theme.fg('muted', 'body')), 'Output body uses neutral gray');
   const neutral = minimalOutputComponent(theme, () => [{ question: '', process: ['call r', 'skill frontend'], agentCalls: [{ id: 'r', name: 'read', task: 'README.md', state: 'done' }] }]).render(100).join('\n');
   for (const label of ['Agent', 'read', 'Skill']) assert.ok(neutral.includes(theme.fg('text', theme.bold(label))), label);
-  for (const body of ['README.md', 'frontend']) assert.ok(neutral.includes(theme.fg('muted', body)), body);
+  for (const body of ['README.md', 'frontend']) assert.ok(neutral.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '').includes(theme.fg('muted', body)), body);
   assert.ok(!neutral.includes(theme.fg('accent', '')), 'settled plain process contains no accent foreground');
   const mdOutput = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output 重点区分 **SAPI 网关** 的职责'], running: false }]).render(100).join('\n');
   assert.doesNotMatch(plain(mdOutput), /\*\*/);
@@ -236,19 +236,19 @@ for (const name of ['dark', 'light']) {
   ]);
   const usageView = minimalOutputComponent(theme, () => usageTurns, () => false, () => false);
   const hiddenUsageView = minimalOutputComponent(theme, () => usageTurns, () => false, () => false, () => false);
-  assert.doesNotMatch(plain(hiddenUsageView.render(100).join('\n')), /S 1.2M|C 90K|Ctrl\+O/);
-  const headers = usageView.render(100).filter(line => plain(line).startsWith('Agent'));
-  assert.match(plain(headers[0]), /S 1.2M \/ C 90K$/);
-  assert.match(plain(headers[1]), /S 30 \/ C 0$/);
+  assert.doesNotMatch(plain(hiddenUsageView.render(100).join('\n')), /会话 1.2M|缓存 90K|Ctrl\+O/);
+  const headers = usageView.render(100).filter(line => plain(line).includes('Agent'));
+  assert.match(plain(headers[0]), /会话 1.2M · 缓存 90K$/);
+  assert.match(plain(headers[1]), /会话 30 · 缓存 0$/);
   assert.ok(headers.every(line => visibleWidth(line) === 100));
   usageTurns[1].pendingUsage = { input: 5, output: 5 };
-  assert.match(plain(usageView.render(100).join('\n')), /S 40 \/ C 0/);
-  assert.match(plain(usageView.render(100).join('\n')), /S 40 \/ C 0/, 'repeated renders must not accumulate streaming usage');
+  assert.match(plain(usageView.render(100).join('\n')), /会话 40 · 缓存 0/);
+  assert.match(plain(usageView.render(100).join('\n')), /会话 40 · 缓存 0/, 'repeated renders must not accumulate streaming usage');
   for (const width of [1, 12, 30, 40]) assert.ok(usageView.render(width).every(line => visibleWidth(line) <= width));
-  const styledRows = minimalOutputComponent(theme, () => [{ question: '', process: ['thinking **bold** *italic* [link](https://example.com)'], running: true, thinking: 0 }]).render(100);
+  const styledRows = minimalOutputComponent(theme, () => [{ question: '', process: ['thinking **bold** *italic* [link](https://example.com)'], running: false }]).render(100);
   const styled = styledRows.find(line => plain(line).includes('bold'));
   assert.doesNotMatch(plain(styled), /\*\*|\*italic\*/);
-  assert.ok(styledRows.some(line => line.includes(theme.fg('accent', theme.bold('Thinking')))), 'expanded in-progress Thinking uses the accent heading');
+  assert.ok(styledRows.some(line => line.includes(theme.fg('text', theme.bold('Thinking')))), 'completed Thinking uses a neutral heading');
   const toolRow = minimalOutputComponent(theme, () => [{ question: '', process: ['call t'], agentCalls: [{ id: 't', name: 'subagent', task: 'Requesting exact model IDs', state: 'running' }] }]).render(100).find(line => plain(line).includes('subagent'));
   assert.equal(toolRow, undefined, 'management calls are hidden from compact progress');
   if (theme.bold("probe").includes("\x1b[1m")) {
@@ -269,8 +269,8 @@ for (const name of ['dark', 'light']) {
   // Expanding reveals more entries, never repeats their full body.
   turn.process.push('skill final-sibling');
   const connected = view.render(100).map(plain);
-  const first = connected.findIndex(row => row.startsWith('├─'));
-  const last = connected.findIndex(row => row.startsWith('└─'));
+  const first = connected.findIndex(row => row.startsWith('│ ') && row.includes('Thinking'));
+  const last = connected.findIndex(row => row.startsWith('│ ') && row.includes('Skill final-sibling'));
   assert.equal(last, first + 1);
   const compactTurn = { question: 'Q', process: ['thinking Checking fixtures', 'call read', 'call failed'], agentCalls: [
     { id: 'read', name: 'read', task: 'src/example.ts', state: 'done', output: 'SOURCE_NOISE\n'.repeat(100) },

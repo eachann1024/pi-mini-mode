@@ -1,6 +1,8 @@
 import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallDisplay, agentStatusesByTurn, attachAgentWidgets, isAgentTool, liveAgentView, readAgentStatuses, runningGlyph, type AgentCall } from "../lib/agent-view.ts";
 import { CONFIG_DIR_NAME, getAgentDir, getMarkdownTheme, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attachTranscript, type NoticeRows, type TurnNotices } from "../lib/transcript-adapter.ts";
+import { imagePlaceholders, createAssistantImages } from "../lib/assistant-images.ts";
+import { installSeamlessScrollbar } from "../lib/seamless-scrollbar.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "../lib/minimal-markdown.ts";
 import { minimalSurface, paintExpandedHeading } from "../lib/minimal-theme.ts";
 import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type SettingItem, Text, type TuiMouseEvent, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
@@ -537,6 +539,7 @@ export interface MinimalTurn {
   running?: boolean;
   /** Wall-clock start of this user-request execution; retained across tool and thinking turns. */
   startedAt?: number;
+  endedAt?: number;
   thinking?: number;
   /** Per-process-index Thinking clocks. Live rows count; completed rows keep endedAt. */
   thinkingClocks?: Array<ThinkingClock | undefined>;
@@ -621,8 +624,9 @@ export function formatThinkingElapsed(
   now = Date.now(),
 ): string {
   const clock = turn.thinkingClocks?.[processIndex];
-  if (active) return formatElapsed(clock?.startedAt ?? turn.startedAt, now);
-  if (clock?.endedAt != null) return formatElapsed(clock.startedAt, clock.endedAt);
+  const startedAt = clock?.startedAt ?? turn.startedAt;
+  if (active && startedAt != null) return `${(Math.max(0, now - startedAt) / 1_000).toFixed(1)}s`;
+  if (clock?.endedAt != null) return `${(Math.max(0, clock.endedAt - clock.startedAt) / 1_000).toFixed(1)}s`;
   return "";
 }
 
@@ -631,6 +635,20 @@ function pushProcess(turn: MinimalTurn | undefined, kind: string, value: unknown
   const text = processText(value);
   const line = text ? `${kind} ${text}` : kind;
   if (turn.process.at(-1) !== line) turn.process.push(line);
+}
+
+function thinkingText(item: Record<string, unknown>): string {
+  const value = item.thinking ?? item.text;
+  return typeof value === "string" ? (value.trim() ? value : "") : processText(value);
+}
+
+/** Only adjacent empty blocks in the same assistant content share a row. */
+function continuesEmptyThinking(content: Array<Record<string, unknown>>, blockIndex: number): boolean {
+  const item = content[blockIndex];
+  const previous = content[blockIndex - 1];
+  return item?.type === "thinking" && previous?.type === "thinking"
+    && !thinkingText(item)
+    && !thinkingText(previous);
 }
 
 function skillNames(text: string): string[] {
@@ -680,10 +698,13 @@ export function minimalTurnsFromBranch(branch: readonly unknown[]): MinimalTurn[
     if (role !== "assistant" || !Array.isArray(content)) continue;
     if (turn.final) (turn.replies ??= []).push(turn.final);
     turn.final = undefined;
-    for (const item of content as Array<Record<string, unknown>>) {
+    for (const [blockIndex, item] of (content as Array<Record<string, unknown>>).entries()) {
       if (!item || typeof item !== "object") continue;
-      if (item.type === "thinking") pushProcess(turn, "thinking", item.thinking ?? item.text);
-      else if (item.type === "toolCall") {
+      if (item.type === "thinking") {
+        if (!continuesEmptyThinking(content as Array<Record<string, unknown>>, blockIndex)) {
+          turn.process.push(`thinking ${thinkingText(item)}`);
+        }
+      } else if (item.type === "toolCall") {
         if (item.name) {
           (turn.agentCalls ??= []).push(agentCall(String(item.id), String(item.name), item.arguments ?? item.input));
           pushProcess(turn, "call", String(item.id));
@@ -737,9 +758,12 @@ function visibleMinimalTurns(settings: MiniLensSettings, turns: MinimalTurn[]): 
   });
 }
 
-export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text) {
+export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showShortcut: (turn: MinimalTurn) => boolean = () => true, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: { cwd(): string; requestRender(): void; write?(data: string): void }) {
+  const placeholderText = (text: string) => imageOptions ? imagePlaceholders(text, imageOptions.cwd()) : text;
   const markdown = (text: string, width: number, process = false) => renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
-    { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(diagramMarkdown(source, available)));
+    { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(placeholderText(diagramMarkdown(source, available))));
+  const assistantImages = imageOptions && createAssistantImages(imageOptions.cwd, imageOptions.requestRender, imageOptions.write);
+  const assistantMarkdown = (text: string, width: number, owner: string) => assistantImages ? assistantImages.render(text, width, markdown, owner) : markdown(text, width);
   const surface = (rows: string[], width: number, user: boolean, selected = -1, expanded = false) => {
     const padding = Math.min(2, Math.floor((width - 1) / 2));
     return ["", ...rows, ""].map((row, index) => {
@@ -752,11 +776,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedSubagents = new Set<string>();
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
+  const PROCESS_PREVIEW_ROWS = 6;
+  const agentModes = new Map<number, "all" | "preview" | "closed">();
+  const runningTurns = new Set<number>();
   let pinnedToolId: string | undefined;
   let pinnedTool: { id: string; y: number; line: string } | undefined;
+  let pinnedAgentIndex: number | undefined;
+  let pinnedAgent: { index: number; y: number; line: string } | undefined;
   let pinnedSubagentId: string | undefined;
   let pinnedSubagent: { id: string; y: number; line: string; autoScroll?: boolean } | undefined;
   let toolControls: Array<{ id: string; y: number; width: number; title: string }> = [];
+  let agentControls: Array<{ index: number; y: number; width: number }> = [];
   let hoveredTool: typeof toolControls[number] | undefined;
   const clearHover = () => { const changed = !!hoveredTool; hoveredTool = undefined; return changed; };
   const toggleTool = (id: string) => {
@@ -766,6 +796,16 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       if (!present) return;
       if (expandedThinking.has(id)) expandedThinking.delete(id);
       else expandedThinking.add(id);
+      clearHover();
+      return;
+    }
+    if (id.startsWith("agents:")) {
+      const index = Number(id.slice(7));
+      if (!Number.isInteger(index) || !getTurns()[index]) return;
+      const all = (agentModes.get(index) ?? (isExpanded() ? "all" : "preview")) === "all";
+      agentModes.set(index, all ? "preview" : "all");
+      if (all) { expandedThinking.clear(); expandedTools.clear(); expandedSubagents.clear(); }
+      pinnedAgentIndex = all ? undefined : index;
       clearHover();
       return;
     }
@@ -800,10 +840,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     else expandedPrompts.set(index, question);
   };
   return {
+    dispose() { assistantImages?.dispose(); },
     invalidate() { clearHover(); },
+    resetProcessView() {
+      agentModes.clear(); expandedThinking.clear(); expandedTools.clear(); expandedSubagents.clear();
+      pinnedToolId = undefined; pinnedAgentIndex = undefined; pinnedSubagentId = undefined;
+    },
     clearHover,
     pinnedTool: () => pinnedTool,
     unpinTool: () => { pinnedToolId = undefined; pinnedTool = undefined; },
+    pinnedAgent: () => pinnedAgent,
+    unpinAgent: () => { pinnedAgentIndex = undefined; pinnedAgent = undefined; },
     pinnedSubagent: () => pinnedSubagent,
     unpinSubagent: () => { pinnedSubagentId = undefined; pinnedSubagent = undefined; },
     toolChoices: () => toolControls.map(control => ({ ...control, expanded: expandedTools.has(control.id) || expandedThinking.has(control.id) })),
@@ -831,6 +878,17 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         }
       }
       if (event.button !== "left" || event.shift || event.ctrl || event.alt) return;
+      const agent = agentControls.find(control => event.y === control.y && event.x >= 0 && event.x < control.width);
+      if (agent && (event.clickCount ?? 1) === 1) {
+        if (event.type === "press") return { handled: true };
+        if (event.type === "click") {
+          const all = (agentModes.get(agent.index) ?? (isExpanded() ? "all" : "preview")) === "all";
+          agentModes.set(agent.index, all ? "preview" : "all");
+          if (all) { expandedThinking.clear(); expandedTools.clear(); expandedSubagents.clear(); }
+          pinnedAgentIndex = all ? undefined : agent.index;
+          return { handled: true, render: true };
+        }
+      }
       const control = promptControls.find(control => event.y === control.y && event.x >= control.x && event.x < control.x + control.width);
       if (control && (event.clickCount ?? 1) === 1) {
         if (event.type === "press") return { handled: true };
@@ -854,7 +912,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     render(width: number, notices?: TurnNotices): string[] {
       promptControls = [];
       toolControls = [];
+      agentControls = [];
       pinnedTool = undefined;
+      pinnedAgent = undefined;
       pinnedSubagent = undefined;
       subagentControls = [];
       noticeRegions = [];
@@ -874,6 +934,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       for (const [index, turn] of turns.entries()) {
         if (index > 0) lines.push("");
         if (expandedPrompts.has(index) && expandedPrompts.get(index) !== turn.question) expandedPrompts.delete(index);
+        const noticeRows = notices?.get(index) ?? [];
         const questionRows = markdown(turn.question, inner);
         const loopSummary = piLoopSummary(turn.question);
         const expanded = expandedPrompts.get(index) === turn.question;
@@ -896,7 +957,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         const entries = turn.process.flatMap((entry, processIndex) => {
           if (entry.startsWith("call ")) {
             const call = turn.agentCalls?.find(call => call.id === entry.slice(5));
-            if (call && isAgentTool(call.tool ?? call.name) && !isExpanded()) return [];
+            if (call && isAgentTool(call.tool ?? call.name)) return [];
             const display = call && agentCallDisplay(call);
             return call && display ? [{ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`.trim(), detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex, activeThinking: false }] : [];
           }
@@ -908,41 +969,62 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         });
         // Older in-memory turns may predate call markers.
         for (const call of turn.agentCalls ?? []) {
-          if (isAgentTool(call.tool ?? call.name) && !isExpanded()) continue;
+          if (isAgentTool(call.tool ?? call.name)) continue;
           const display = agentCallDisplay(call);
           if (!entries.some(entry => entry.id === call.id)) entries.push({ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`, detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex: -1, activeThinking: false });
         }
         const agentTurnControls: Array<{ runId: string; y: number; width: number; line: string }> = [];
         const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
-        if (entries.length || turn.running || turn.usage || agents.total) {
-          const expanded = isExpanded();
-          const latestThinking = !expanded ? [...entries].reverse().find(entry => entry.thinking) : undefined;
+        if (agents.total && !entries.length) entries.push({ title: `SubAgent ${agents.done + agents.errors}/${agents.total}`, detail: "", state: agents.running ? "running" : agents.errors ? "error" : "done", id: `agents:${index}`, thinking: false, processIndex: -1, activeThinking: false });
+        const active = !!turn.running || agents.running > 0 || entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
+        if (active) runningTurns.add(index);
+        else if (runningTurns.delete(index)) {
+          // Return to the six-row preview once; a later click can expand everything again.
+          if (agentModes.get(index) === "all") {
+            agentModes.set(index, "preview");
+            expandedThinking.clear();
+            expandedTools.clear();
+            expandedSubagents.clear();
+            if (pinnedAgentIndex === index) pinnedAgentIndex = undefined;
+          }
+        }
+        if (entries.length || active || turn.usage || agents.total) {
+          const mode = agentModes.get(index) ?? (isExpanded() ? "all" : "preview");
+          const expanded = mode === "all";
           const busy = entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
           const working = turn.running && !busy && !turn.final;
-          const limit = expanded ? entries.length : Math.max(0, 6 - (working ? 1 : 0));
-          const shown = expanded ? entries : entries.filter(entry => !entry.thinking || entry.state === "running" || entry === latestThinking || expandedThinking.has(entry.id)).slice(-limit);
-          if (latestThinking && !shown.includes(latestThinking)) shown.splice(Math.min(shown.length, entries.indexOf(latestThinking)), 0, latestThinking);
+          // Six recent records stay visible while running and after completion.
+          const shown = mode === "closed" ? [] : expanded ? entries : entries.slice(-PROCESS_PREVIEW_ROWS);
           const done = entries.filter(entry => entry.state === "done").length;
-          const progressHeader = theme.bold(theme.fg("text", "Agent")) + (entries.length ? theme.fg("muted", ` · ${done}/${entries.length}`) : "")
-            + (agents.total ? theme.bold(theme.fg("text", "     Subagent")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
-              + (agents.errors ? theme.fg("error", ` · ${agents.errors} failed`) : "") : "");
-          const header = progressHeader + theme.fg("muted", showShortcut(turn) ? " · Ctrl+O" : "");
+          // ponytail: two terminal text frames; use Pi's motion preference if it exposes one.
+          const sparkle = active ? Math.floor(Date.now() / 360) % 2 ? "✧" : "✦" : "✦";
+          const steps = entries.length
+            ? theme.fg("muted", done === entries.length ? ` · 完成 共 ${entries.length} 步` : ` · 第 ${Math.min(entries.length, done + 1)} 步`)
+            : "";
+          const subagents = agents.total
+            ? theme.fg("muted", " · ") + theme.bold(theme.fg("text", "子代理")) + theme.fg("muted", ` ${agents.done + agents.errors}/${agents.total}`)
+              + (agents.errors ? theme.fg("error", ` · ${agents.errors} 失败`) : "")
+            : "";
           const usage = addUsage({ ...EMPTY_USAGE, ...turn.usage, cost: turn.usage?.cost ?? 0 }, turn.pendingUsage);
           const hasUsage = usage.totalTokens > 0 || usage.cacheRead > 0;
           const totals = hasUsage
-            ? theme.fg("text", "S") + theme.fg("muted", ` ${formatTokens(usage.totalTokens)} / `)
-              + theme.fg("text", "C") + theme.fg("muted", ` ${formatTokens(usage.cacheRead)}`)
+            ? theme.fg("muted", "会话 ") + theme.bold(theme.fg("text", formatTokens(usage.totalTokens)))
+              + theme.fg("muted", " · 缓存 ") + theme.bold(theme.fg("text", formatTokens(usage.cacheRead)))
             : "";
-          const totalsWidth = visibleWidth(totals);
-          if (hasUsage && showUsage() && width >= totalsWidth + visibleWidth(agents.total ? progressHeader : "Agent") + 1) {
-            const left = truncateToWidth(header, width - totalsWidth - 1, "");
-            lines.push("", left + " ".repeat(width - visibleWidth(left) - totalsWidth) + totals);
-          } else {
-            lines.push("", truncateToWidth(header, width));
-          }
+          const recordCount = entries.filter(entry => !entry.title.startsWith("SubAgent ")).length || agents.total;
+          const progressHeader = theme.fg(active ? "accent" : "muted", sparkle + " ") + theme.bold(theme.fg("text", "Agent")) + theme.fg("muted", recordCount ? ` · ${recordCount}` : "");
+          const showAgentRows = mode !== "closed" && expanded;
+          const caret = theme.fg("muted", expanded ? " ▾" : " ▸");
+          const elapsedHeader = turn.startedAt == null ? "" : theme.fg("muted", " · ") + theme.fg(active ? "success" : "muted", formatElapsed(turn.startedAt, turn.endedAt ?? Date.now()));
+          const left = progressHeader + elapsedHeader + caret;
+          const showTotals = hasUsage && showUsage() && visibleWidth(left) + 2 + visibleWidth(totals) <= width;
+          agentControls.push({ index, y: lines.length + 1, width: Math.min(width, visibleWidth(left)) });
+          if (expanded && pinnedAgentIndex === index) pinnedAgent = { index, y: lines.length + 1, line: truncateToWidth(left, width) };
+          lines.push("", showTotals
+            ? left + " ".repeat(width - visibleWidth(left) - visibleWidth(totals)) + totals
+            : truncateToWidth(left, width));
           shown.forEach((entry, row) => {
-            const waiting = turn.waitingTools?.find(tool => tool.id === entry.id);
-            const title = waiting && !entry.title.startsWith("Control ") ? `${waiting.name} running · waiting ${Math.max(0, Math.floor((Date.now() - waiting.startedAt) / 1000))}s` : entry.title;
+            const title = entry.title;
             const text = title.split(/\r?\n/).find(line => line.trim())?.replace(/\s+/g, " ").trim() ?? "";
             const split = text.indexOf(" ");
             const label = split < 0 ? text : text.slice(0, split);
@@ -951,7 +1033,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const elapsed = entry.thinking ? formatThinkingElapsed(turn, entry.processIndex, activeThinking) : "";
             const thinkingElapsed = elapsed ? theme.fg(activeThinking ? "success" : "muted", ` ${elapsed}`) : "";
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
-            const controlId = call?.id ?? (entry.thinking ? entry.id : "");
+            const controlId = call?.id ?? (entry.thinking || entry.id.startsWith("agents:") ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
             const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
@@ -964,17 +1046,30 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const keepStatus = entry.state === "running" || (open && entry.state === "error");
             const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
-            const last = row === shown.length - 1 && !working && !agents.rows.length;
-            const prefix = theme.fg(open ? "accent" : "dim", last ? "└─ " : "├─ ") + theme.fg(glyphColor, glyph) + " " + summary;
+            const last = row === shown.length - 1 && !working && (!showAgentRows || !agents.rows.length);
+            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || entry.state === "error" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
             if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
               const indent = visibleWidth(prefix);
-              const wrapped = markdown(body, Math.max(1, width - indent), true);
               const rail = !last && indent > 0 ? theme.fg("dim", "\u2502") + " ".repeat(indent - 1) : " ".repeat(indent);
+              const wrapped = markdown(body, Math.max(1, width - indent), true);
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", linkToolFiles(body, process.cwd(), !open))), width, controlId ? "" : "…"), open));
+              const displayBody = placeholderText(activeThinking ? stripVTControlCharacters(entry.detail).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim() : body);
+              const compactBody = entry.thinking ? displayBody
+                : linkToolFiles(displayBody, imageOptions?.cwd() ?? process.cwd(), !open);
+              const available = Math.max(0, width - visibleWidth(prefix));
+              const fittedBody = visibleWidth(compactBody) > available && (activeThinking || (!entry.thinking && !open)) && available > 1
+                ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1, true)
+                : truncateToWidth(compactBody, available, "…");
+              const styledBody = activeThinking
+                ? theme.fg("accent", fittedBody)
+                : entry.thinking
+                  ? markdown(fittedBody, Math.max(1, visibleWidth(fittedBody) + 1), true).join(" ").replace(/\s+/g, " ").trim()
+                  // sliceByColumn may end before OSC 8's closing sequence.
+                  : theme.fg(open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
+              lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
@@ -996,22 +1091,23 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               if (details.length > 5) lines.push(truncateToWidth(rail + theme.fg("muted", `… +${details.length - 5} lines`), width));
             }
           });
-          const agentStartY = lines.length;
-          for (const c of agentTurnControls) {
-            const control = { ...c, y: agentStartY + c.y };
-            subagentControls.push(control);
-            if (c.runId === pinnedSubagentId) pinnedSubagent = { id: c.runId, y: control.y, line: c.line, autoScroll: false };
+          if (showAgentRows) {
+            const agentStartY = lines.length;
+            for (const c of agentTurnControls) {
+              const control = { ...c, y: agentStartY + c.y };
+              subagentControls.push(control);
+              if (c.runId === pinnedSubagentId) pinnedSubagent = { id: c.runId, y: control.y, line: c.line, autoScroll: false };
+            }
+            lines.push(...agents.rows);
           }
-          lines.push(...agents.rows);
-          if (working) {
+          if (working && (expanded || !shown.length)) {
             const label = turn.awaitingResponse && !shown.length ? "Thinking" : "Working";
-            const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + theme.fg("success", ` ${formatElapsed(turn.startedAt)}`) + " ";
+            const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + " ";
             lines.push(truncateToWidth(prefix + theme.fg("text", "…"), width, ""));
           }
         }
-        for (const reply of turn.replies ?? []) lines.push("", ...markdown(reply, width));
-        if (turn.final) lines.push("", ...markdown(turn.final, width));
-        const noticeRows = notices?.get(index) ?? [];
+        for (const [replyIndex, reply] of (turn.replies ?? []).entries()) lines.push("", ...assistantMarkdown(reply, width, `reply:${index}:${replyIndex}`));
+        if (turn.final) lines.push("", ...assistantMarkdown(turn.final, width, `final:${index}`));
         noticeRegions.push({ y: lines.length, rows: noticeRows });
         lines.push(...noticeRows);
       }
@@ -1028,6 +1124,8 @@ export default function (pi: ExtensionAPI) {
   attachFooterTidy(pi);
   attachTitlePlain(pi);
   let refreshFooter: (() => void) | undefined;
+  let restoreScrollbar: (() => void) | undefined;
+  let scrollbarRoot: unknown;
   let refreshMinimal: (() => void) | undefined;
   let processExpanded = false;
   let nativeOutput = false;
@@ -1079,6 +1177,7 @@ export default function (pi: ExtensionAPI) {
     restoreTranscript = undefined;
     restoreAgentWidgets?.();
     restoreAgentWidgets = undefined;
+    promptView?.dispose();
     promptView = undefined;
     if (settings["pi-mini-mode-minimal-show"] && ctx.mode === "tui") unsubscribeMinimalInput = ctx.ui.onTerminalInput?.((data) => {
       const nativeKey = matchesKey(data, "ctrl+alt+o");
@@ -1091,7 +1190,10 @@ export default function (pi: ExtensionAPI) {
         nativeOutput = !nativeOutput;
         mountMinimalOutput(ctx);
       } else if (subAgentKey) subAgentsExpanded = !subAgentsExpanded;
-      else processExpanded = !processExpanded;
+      else {
+        processExpanded = !processExpanded;
+        promptView?.resetProcessView();
+      }
       refreshMinimalOutput();
       return { consume: true };
     });
@@ -1146,7 +1248,11 @@ export default function (pi: ExtensionAPI) {
           return { ...turn, subAgents: withNotices };
         });
       };
-      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["pi-mini-mode-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["pi-mini-mode-agent-usage-show"], () => subAgentsExpanded, agentDeadlines, messageLinks);
+      const view = minimalOutputComponent(theme, () => visibleMinimalTurns(settings, turnsWithAgents()), () => processExpanded, turn => settings["pi-mini-mode-agent-shortcut-show"] && Date.now() < (turn.shortcutHintUntil ?? 0), () => settings["pi-mini-mode-agent-usage-show"], () => subAgentsExpanded, agentDeadlines, messageLinks, {
+        cwd: () => ctx.cwd,
+        requestRender: () => tui.requestRender(),
+        write: data => tui.terminal.write(data),
+      });
       const hintRemaining = (activeMinimalTurn?.shortcutHintUntil ?? 0) - Date.now();
       if (hintRemaining > 0) {
         shortcutTimer = setTimeout(() => tui.requestRender(), hintRemaining);
@@ -1155,6 +1261,9 @@ export default function (pi: ExtensionAPI) {
       // Native info notifications use dim; warning/error notifications retain
       // their position in the transcript. No plugin names or message matching.
       const dimPrefix = theme.fg("dim", "\u0000").split("\u0000")[0];
+      // Startup model diagnostics are reprinted into the resource header by /new and /reload.
+      // Read the live predicate on every frame: the header is replaced after this factory returns.
+      const hideStartupLine = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "").includes("No models match pattern");
       // Transcript hover wrappers must surround the compact widget handlers;
       // unmount in reverse order so neither adapter resurrects stale handlers.
       restoreAgentWidgets = attachAgentWidgets(tui, theme, () => subAgentsExpanded, undefined, true);
@@ -1191,6 +1300,7 @@ export default function (pi: ExtensionAPI) {
         },
         isPrompt: text => !!activeUIPrompt && (!activeUIPrompt.title || text.includes(activeUIPrompt.title)),
         isTransient: text => !!dimPrefix && text.startsWith(dimPrefix),
+        hideStartupLine,
       });
       lastAttachMode = typeof tui.mode === "string" ? tui.mode : undefined;
       if (!restoreTranscript) {
@@ -1212,7 +1322,7 @@ export default function (pi: ExtensionAPI) {
             saveStatuses();
             lastStatusRead = Date.now();
           }
-          if (changed || Date.now() >= view.agentExpiry() || activeMinimalTurn?.running || statuses.some(status => /^(running|active|starting|queued|pending)$/.test(String(status.state)))) tui.requestRender();
+          if (changed || Date.now() >= view.agentExpiry() || activeMinimalTurn?.running || agentChildren(statuses).some(child => /^(running|active|starting|queued|pending)$/.test(String(child.status ?? child.state)))) tui.requestRender();
         }, 100);
         waitingTimer.unref();
       }
@@ -1396,11 +1506,22 @@ export default function (pi: ExtensionAPI) {
     minimalToolOutputIndices.clear();
     mountMinimalOutput(ctx);
     ctx.ui.setFooter((tui, theme, footerData) => {
+      restoreScrollbar?.();
+      scrollbarRoot = undefined;
+      const syncScrollbar = () => {
+        const root = (tui as typeof tui & { layoutRoot?: unknown }).layoutRoot;
+        if (root === scrollbarRoot) return;
+        restoreScrollbar?.();
+        scrollbarRoot = root;
+        restoreScrollbar = installSeamlessScrollbar(tui, theme);
+      };
+      syncScrollbar();
       refreshFooter = () => tui.requestRender();
       return {
         dispose: footerData?.onBranchChange?.(() => tui.requestRender()),
         invalidate() {},
         render(width: number): string[] {
+          syncScrollbar();
           // switchTuiMode does not re-run setWidget; remount once the live renderer is fullscreen.
           if (settings["pi-mini-mode-minimal-show"] && !nativeOutput && ctx.mode === "tui" && !restoreTranscript
             && tui.mode !== "regular" && lastAttachMode === "regular" && !remountQueued) {
@@ -1448,8 +1569,15 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("model_select", refresh);
   pi.on("thinking_level_select", refresh);
-  const writeThinkingLine = (turn: MinimalTurn, blockIndex: number, line: string): number => {
-    const existing = minimalMessageIndices.get(blockIndex);
+  const writeThinkingLine = (turn: MinimalTurn, content: Array<Record<string, unknown>>, blockIndex: number, line: string): number => {
+    let existing = minimalMessageIndices.get(blockIndex);
+    if (continuesEmptyThinking(content, blockIndex)) {
+      existing = minimalMessageIndices.get(blockIndex - 1);
+      if (existing !== undefined) minimalMessageIndices.set(blockIndex, existing);
+    } else if (existing !== undefined && [...minimalMessageIndices].some(([block, index]) => block < blockIndex && index === existing)) {
+      // A provisional empty block can acquire its own body on a later update.
+      existing = undefined;
+    }
     if (existing === undefined) {
       const index = turn.process.length;
       minimalMessageIndices.set(blockIndex, index);
@@ -1468,6 +1596,7 @@ export default function (pi: ExtensionAPI) {
         activeMinimalTurn.final = pendingMinimalFinal;
         activeMinimalTurn.running = false;
         activeMinimalTurn.thinking = undefined;
+        promptView?.resetProcessView();
       }
       const question = contentText(event.message.content) || "[Attachment]";
       processExpanded = false;
@@ -1484,6 +1613,10 @@ export default function (pi: ExtensionAPI) {
     }
     if (event.message.role !== "assistant") return;
     // Background completions can start a new assistant turn without a user message.
+    if (!activeMinimalTurn?.running) {
+      processExpanded = false;
+      promptView?.resetProcessView();
+    }
     activeMinimalTurn ??= minimalTurns.at(-1);
     if (activeMinimalTurn) {
       freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
@@ -1510,13 +1643,16 @@ export default function (pi: ExtensionAPI) {
       if (partial.content.length) activeMinimalTurn.awaitingResponse = false;
       for (const [blockIndex, item] of partial.content.entries()) {
         if (item.type !== "thinking") continue;
-        const line = `thinking ${processText(item.thinking ?? item.text)}`;
-        const index = writeThinkingLine(activeMinimalTurn, blockIndex, line);
+        const line = `thinking ${thinkingText(item)}`;
+        const index = writeThinkingLine(activeMinimalTurn, partial.content, blockIndex, line);
         if (blockIndex === partial.content.length - 1 && event.assistantMessageEvent.type !== "thinking_end") {
           activeMinimalTurn.thinking = index;
-        } else {
-          freezeThinkingClock(activeMinimalTurn, index);
         }
+      }
+      for (const index of new Set(minimalMessageIndices.values())) {
+        if (index === activeMinimalTurn.thinking) {
+          delete ensureThinkingClock(activeMinimalTurn, index).endedAt;
+        } else freezeThinkingClock(activeMinimalTurn, index);
       }
       if (previousThinking !== undefined && previousThinking !== activeMinimalTurn.thinking) {
         freezeThinkingClock(activeMinimalTurn, previousThinking);
@@ -1563,9 +1699,9 @@ export default function (pi: ExtensionAPI) {
       if (activeMinimalTurn && Array.isArray(content)) {
         for (const [blockIndex, item] of (content as Array<Record<string, unknown>>).entries()) {
           if (item.type !== "thinking" && !(item.type === "text" && content.some((block) => block.type === "toolCall"))) continue;
-          const line = `${item.type === "thinking" ? "thinking" : "output"} ${processText(item.thinking ?? item.text)}`;
+          const line = `${item.type === "thinking" ? "thinking" : "output"} ${item.type === "thinking" ? thinkingText(item) : processText(item.text)}`;
           if (item.type === "thinking") {
-            freezeThinkingClock(activeMinimalTurn, writeThinkingLine(activeMinimalTurn, blockIndex, line));
+            freezeThinkingClock(activeMinimalTurn, writeThinkingLine(activeMinimalTurn, content, blockIndex, line));
             continue;
           }
           const index = minimalMessageIndices.get(blockIndex);
@@ -1658,16 +1794,23 @@ export default function (pi: ExtensionAPI) {
     if (!activeMinimalTurn) return;
     for (const turn of minimalTurns) {
       freezeOpenThinkingClocks(turn);
+      if (turn.running) turn.endedAt = Date.now();
       turn.running = false;
       turn.thinking = undefined;
     }
     activeMinimalTurn.final = pendingMinimalFinal;
+    processExpanded = false;
+    subAgentsExpanded = false;
+    promptView?.resetProcessView();
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
     minimalToolOutputIndices.clear();
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    restoreScrollbar?.();
+    restoreScrollbar = undefined;
+    scrollbarRoot = undefined;
     // In-flight startup checks this generation before installing its server.
     settingsWebGeneration++;
     settingsWeb?.close();
@@ -1678,6 +1821,7 @@ export default function (pi: ExtensionAPI) {
     persistAgentStatuses?.();
     persistAgentStatuses = undefined;
     agentDeadlines.clear();
+    promptView?.dispose();
     promptView = undefined;
     if (shortcutTimer) clearTimeout(shortcutTimer);
     shortcutTimer = undefined;
