@@ -210,7 +210,7 @@ python3 test/minimal-pty.py
 <details>
 <summary><strong>发布</strong></summary>
 
-日常发布在本机完成，使用 `.npmrc` 中的 npm token（`npm publish --access public`）。`publish.yml` 只作为手动备份（在 `main` 上 `workflow_dispatch`）：先执行 `npm ci`、`npm run check` 和 `npm test`，再运行 `scripts/publish.mjs`。该脚本发布本地版本基线与 npm 最新稳定版本再加一个 patch 中的较高者，版本只在 runner 中变更（不创建版本提交或 tag），并跳过已经发布过的提交。发布 major 或 minor 时，同时提高 `package.json` 和 lockfile 中的基线。
+每轮改动完成并提交后，在干净的工作区运行 `npm run release`。入口统一确定高于 npm 全部历史稳定版本的版本号，同步 package.json 与 lockfile，执行类型检查，提交并推送 main，发布 npm，核验包内容与 latest，最后创建同名 Git 标签。新流程从 `2.0.6` 开始，末位持续累加，可超过 100，功能版本升级也不归零。Pi 使用同一 npm 版本。普通推送不触发发布；手动 CI 备用入口只发布已提交的版本，不自行升号。发布失败立即停止，不重复发布。
 
 备份流程需要为该包配置指向此 GitHub 仓库及 `publish.yml` 的 npm Trusted Publisher。它使用 OIDC 和 provenance，不使用 npm token。
 

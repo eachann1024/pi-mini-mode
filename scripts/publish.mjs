@@ -23,7 +23,7 @@ export async function registryMetadata(response) {
   return metadata;
 }
 
-function compareVersions(a, b) {
+export function compareVersions(a, b) {
   const left = stableVersion(a);
   const right = stableVersion(b);
   for (let i = 0; i < 3; i++) {
@@ -32,7 +32,7 @@ function compareVersions(a, b) {
   return 0;
 }
 
-function highestPublishedStable(metadata) {
+export function highestPublishedStable(metadata) {
   const latest = metadata['dist-tags']?.latest;
   stableVersion(latest);
   const versions = metadata.versions;
@@ -66,13 +66,21 @@ export function assertPublishableVersion(localVersion, metadata) {
 export function selectVersion(localVersion, metadata, gitHead) {
   stableVersion(localVersion);
   if (metadata === null) return localVersion;
-  const remote = stableVersion(highestPublishedStable(metadata));
+  const highest = highestPublishedStable(metadata);
   if (typeof gitHead === 'string' && gitHead.length > 0 &&
       Object.values(metadata.versions).some(version => version.gitHead === gitHead)) return null;
-  remote[2] += 1;
-  const next = remote.join('.');
+  const baseline = compareVersions(localVersion, highest) > 0 ? localVersion : highest;
+  const [major, minor] = stableVersion(baseline);
+  const counters = Object.keys(metadata.versions)
+    .filter(version => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version))
+    .map(stableVersion).filter(parts => parts[0] === major).map(parts => parts[2]);
+  const counter = Math.max(stableVersion(localVersion)[0] === major ? stableVersion(localVersion)[2] : 0,
+    ...counters) + 1;
+  // A deliberately prepared version can be used as-is if its counter is newer.
+  const prepared = compareVersions(localVersion, highest) > 0 && stableVersion(localVersion)[2] > Math.max(-1, ...counters);
+  const next = prepared ? localVersion : `${major}.${minor}.${counter}`;
   stableVersion(next);
-  return compareVersions(localVersion, next) > 0 ? localVersion : next;
+  return next;
 }
 
 if (import.meta.main) {
@@ -91,11 +99,12 @@ if (import.meta.main) {
     console.log(`Release version ${manifest.version} exceeds all published stable versions.`);
   } else {
     const gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
-    const version = selectVersion(manifest.version, metadata, gitHead);
-    if (version === null) {
+    if (Object.values(metadata?.versions ?? {}).some(version => version.gitHead === gitHead)) {
       console.log(`Commit ${gitHead} is already published; skipping.`);
     } else {
-      execFileSync('npm', ['version', version, '--no-git-tag-version', '--ignore-scripts', '--allow-same-version'], { cwd, stdio: 'inherit' });
+      assertPublishableVersion(manifest.version, metadata);
+      const dirty = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' }).trim();
+      if (dirty) throw new Error('Publish requires a clean checkout. Run npm run release after committing the completed task.');
       execFileSync('npm', ['publish', '--access', 'public', '--provenance', `--registry=${registry}`], { cwd, stdio: 'inherit' });
     }
   }
