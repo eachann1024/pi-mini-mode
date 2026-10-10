@@ -12,6 +12,7 @@ import { installTerminalCapabilities } from "../lib/terminal-capabilities.ts";
 import { linkMessageFiles, linkToolFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
+import { thinkingPreview } from "../lib/thinking-preview.ts";
 import { basename, dirname, join } from "node:path";
 import attachFooterTidy from "../lib/footer-tidy.ts";
 import attachTitlePlain from "../lib/title-plain.ts";
@@ -587,11 +588,11 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
 }
 
-/** Compact tool duration, visible from the start of execution. */
-export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.now()): string {
-  if (startedAt === undefined) return "";
+/** Show whole seconds only when both execution boundaries are known. */
+export function formatToolElapsed(startedAt: number | undefined, endedAt: number | undefined): string {
+  if (startedAt === undefined || endedAt === undefined || !Number.isFinite(startedAt) || !Number.isFinite(endedAt)) return "";
   const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1_000));
-  if (!seconds) return "1s";
+  if (!seconds) return "";
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.floor(seconds / 60) % 60;
   const remainder = seconds % 60;
@@ -776,6 +777,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedSubagents = new Set<string>();
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
+  const thinkingPreviews = new Map<string, { text: string; width: number; rows: number; updatedAt: number }>();
   const PROCESS_PREVIEW_ROWS = 6;
   const agentModes = new Map<number, "all" | "preview" | "closed">();
   const runningTurns = new Set<number>();
@@ -844,6 +846,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     invalidate() { clearHover(); },
     resetProcessView() {
       agentModes.clear(); expandedThinking.clear(); expandedTools.clear(); expandedSubagents.clear();
+      thinkingPreviews.clear();
       pinnedToolId = undefined; pinnedAgentIndex = undefined; pinnedSubagentId = undefined;
     },
     clearHover,
@@ -926,6 +929,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       const thinkingIds = new Set(turns.flatMap((turn, turnIndex) => turn.process.flatMap((entry, processIndex) =>
         entry.startsWith("thinking") ? [`thinking:${turnIndex}:${processIndex}`] : [])));
       for (const id of expandedThinking) if (!thinkingIds.has(id)) expandedThinking.delete(id);
+      for (const id of thinkingPreviews.keys()) if (!thinkingIds.has(id)) thinkingPreviews.delete(id);
       const inner = Math.max(1, width - 2 * Math.min(2, Math.floor((width - 1) / 2)));
       const lines: string[] = [];
       // An open heading wears the same full-width selectedBg band as an expanded SubAgent row.
@@ -1036,7 +1040,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking || entry.id.startsWith("agents:") ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
-            const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
+            const duration = call ? formatToolElapsed(call.startedAt,
+              call.endedAt ?? (call.state === "running" && turn.running ? Date.now() : undefined)) : "";
             const toolElapsed = duration ? theme.fg(call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
@@ -1056,20 +1061,30 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              const displayBody = placeholderText(activeThinking ? stripVTControlCharacters(entry.detail).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim() : body);
-              const compactBody = entry.thinking ? displayBody
-                : linkToolFiles(displayBody, imageOptions?.cwd() ?? process.cwd(), !open);
               const available = Math.max(0, width - visibleWidth(prefix));
-              const fittedBody = visibleWidth(compactBody) > available && (activeThinking || (!entry.thinking && !open)) && available > 1
-                ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1, true)
-                : truncateToWidth(compactBody, available, "…");
-              const styledBody = activeThinking
-                ? theme.fg("accent", fittedBody)
-                : entry.thinking
-                  ? markdown(fittedBody, Math.max(1, visibleWidth(fittedBody) + 1), true).join(" ").replace(/\s+/g, " ").trim()
-                  // sliceByColumn may end before OSC 8's closing sequence.
-                  : theme.fg(open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
-              lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
+              if (entry.thinking) {
+                const now = Date.now();
+                const cached = thinkingPreviews.get(entry.id);
+                const previewRows = open ? 1 : 2;
+                const reuse = activeThinking && cached?.text && cached.width === available && cached.rows === previewRows && now - cached.updatedAt < 350;
+                const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows);
+                if (!reuse) thinkingPreviews.set(entry.id, { text: display, width: available, rows: previewRows, updatedAt: now });
+                const fallback = activeThinking ? "等待模型返回思考内容" : "模型未提供可显示的思考内容";
+                const rows = new Text(display || fallback, 0, 0).render(Math.max(1, available)).slice(0, open ? 1 : 2);
+                const color = activeThinking ? "accent" : "muted";
+                lines.push(bandHeading(truncateToWidth(prefix + theme.fg(color, rows[0] ?? ""), width, ""), open));
+                const rail = theme.fg(last ? color : "dim", last ? " " : "│") + " ".repeat(Math.max(0, visibleWidth(prefix) - 1));
+                for (const extra of rows.slice(1)) lines.push(truncateToWidth(rail + theme.fg(color, extra), width, ""));
+              } else {
+                const displayBody = placeholderText(body);
+                const compactBody = linkToolFiles(displayBody, imageOptions?.cwd() ?? process.cwd(), !open);
+                const fittedBody = visibleWidth(compactBody) > available && !open && available > 1
+                  ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1, true)
+                  : truncateToWidth(compactBody, available, "…");
+                // sliceByColumn may end before OSC 8's closing sequence.
+                const styledBody = theme.fg(open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
+                lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
+              }
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
@@ -1103,7 +1118,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           if (working && (expanded || !shown.length)) {
             const label = turn.awaitingResponse && !shown.length ? "Thinking" : "Working";
             const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + " ";
-            lines.push(truncateToWidth(prefix + theme.fg("text", "…"), width, ""));
+            lines.push(truncateToWidth(prefix + theme.fg("muted", turn.awaitingResponse ? "等待模型响应" : "等待下一步执行"), width, ""));
           }
         }
         for (const [replyIndex, reply] of (turn.replies ?? []).entries()) lines.push("", ...assistantMarkdown(reply, width, `reply:${index}:${replyIndex}`));
