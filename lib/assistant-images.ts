@@ -9,7 +9,7 @@ const parser = new Marked();
 export interface AssistantImageSpan { start: number; end: number; path: string }
 
 /** Parse image syntax before bare paths, retaining source offsets for placement. */
-export function assistantImageSpans(source: string, cwd: string): AssistantImageSpan[] {
+export function assistantImageSpans(source: string, cwd: string, allowMissing = false): AssistantImageSpan[] {
   const spans: AssistantImageSpan[] = [];
   let cursor = 0;
   let offset = 0;
@@ -40,12 +40,15 @@ export function assistantImageSpans(source: string, cwd: string): AssistantImage
       spans.push({ start: match.start, end: match.end, path: localPath(match.path, cwd) });
     }
   }
-  return spans.filter(span => existsSync(span.path)).sort((a, b) => a.start - b.start);
+  return spans.filter(span => existsSync(span.path) || (allowMissing
+    && !/[*?]/.test(span.path)
+    && /^(?:!\[|\/|~\/|\.{1,2}\/|[a-z]:[\\/])/i.test(source.slice(span.start, span.end))))
+    .sort((a, b) => a.start - b.start);
 }
 
-/** User messages and tool steps expose one linked chip without reserving image height. */
+/** Keep explicit image references compact even after clipboard files have expired. */
 export function imagePlaceholders(source: string, cwd: string): string {
-  const spans = assistantImageSpans(source, cwd);
+  const spans = assistantImageSpans(source, cwd, true);
   for (let index = spans.length - 1; index >= 0; index--) {
     const span = spans[index];
     source = source.slice(0, span.start) + fileLink(`  图片 ${index + 1}`, span.path, false) + source.slice(span.end);
