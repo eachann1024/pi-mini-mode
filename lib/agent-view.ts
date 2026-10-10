@@ -8,9 +8,9 @@ import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-codi
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
 
 type Theme = ExtensionContext["ui"]["theme"];
-// Use the lower three Braille rows to center the spinner beside the text.
-export const RUNNING_FRAMES = ["⠖", "⠲", "⢲", "⢰", "⣰", "⣠", "⣄", "⣆", "⡆", "⡖"];
-export const runningGlyph = (now = Date.now()) => RUNNING_FRAMES[Math.floor(now / 100) % RUNNING_FRAMES.length];
+// Keep the spinner in the middle two Braille rows, with one rotation per second.
+export const RUNNING_FRAMES = ["⠲", "⠴", "⠦", "⠖"];
+export const runningGlyph = (now = Date.now()) => RUNNING_FRAMES[Math.floor(now / 250) % RUNNING_FRAMES.length];
 export interface AgentCall {
   id: string;
   name: string;
