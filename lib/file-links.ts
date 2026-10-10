@@ -70,19 +70,24 @@ export function linkToolFiles(text: string, cwd: string, compact: boolean): stri
   const shorten = (label: string) => compact ? label
     .replace(/\/var\/folders\/[^\s]*\/otty-paste\//g, "…/otty-paste/")
     .replace(/node_modules\/@earendil-works\//g, "…/") : label;
-  if (!inputCapabilities().hyperlinks) return shorten(text);
-  // A path tool's entire argument can contain spaces or punctuation without quotes.
-  const matches = text && !/[\x00-\x1f\x7f]/.test(text) && existsSync(localPath(text, cwd))
-    ? [{ path: text, start: 0, end: text.length }] : filePaths(text);
-  let result = "", offset = 0;
-  for (const match of matches) {
-    const path = localPath(match.path, cwd);
-    result += shorten(text.slice(offset, match.start));
-    const label = shorten(text.slice(match.start, match.end));
-    result += existsSync(path) ? fileLink(label, path) : label;
-    offset = match.end;
-  }
-  return result + shorten(text.slice(offset));
+  const hyperlinks = inputCapabilities().hyperlinks;
+  // Image chips already carry a complete target; never shorten or relink it.
+  return text.split(/(\x1b\]8;[^\x07]*\x07[\s\S]*?\x1b\]8;;\x07)/g).map((part, index) => {
+    if (index % 2) return part;
+    if (!hyperlinks) return shorten(part);
+    // A path tool's entire argument can contain spaces or punctuation without quotes.
+    const matches = part && !/[\x00-\x1f\x7f]/.test(part) && existsSync(localPath(part, cwd))
+      ? [{ path: part, start: 0, end: part.length }] : filePaths(part);
+    let result = "", offset = 0;
+    for (const match of matches) {
+      const path = localPath(match.path, cwd);
+      result += shorten(part.slice(offset, match.start));
+      const label = shorten(part.slice(match.start, match.end));
+      result += existsSync(path) ? fileLink(label, path, false) : label;
+      offset = match.end;
+    }
+    return result + shorten(part.slice(offset));
+  }).join("");
 }
 
 /** Display-only: normalize local targets without changing persisted messages or remote URLs. */
