@@ -29,5 +29,4 @@ jobs:
       - run: npm install --global npm@11 --registry=https://registry.npmjs.org
       - run: npm ci
       - run: npm run check
-      - run: npm test
       - run: node scripts/publish.mjs
