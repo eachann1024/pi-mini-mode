@@ -7,7 +7,7 @@ import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type Se
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { installInputEnhancements, type InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
 import { installTerminalCapabilities } from "../lib/terminal-capabilities.ts";
-import { linkMessageFiles } from "../lib/file-links.ts";
+import { linkMessageFiles, linkToolFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { basename, dirname, join } from "node:path";
@@ -961,7 +961,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               lines.push(truncateToWidth(prefix + (wrapped[0] ?? ""), width, ""));
               for (const extra of wrapped.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
             } else {
-              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", body)), width, controlId ? "" : "…"), open));
+              lines.push(bandHeading(truncateToWidth(prefix + (entry.thinking ? markdown(body, Math.max(1, visibleWidth(body) + 1), true).join(" ").replace(/\s+/g, " ").trim() : theme.fg(open ? "accent" : "muted", linkToolFiles(body, process.cwd(), !open))), width, controlId ? "" : "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
             if (open && call) {
