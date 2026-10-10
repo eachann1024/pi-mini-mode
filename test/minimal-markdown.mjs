@@ -234,8 +234,8 @@ for (const name of ['dark', 'light']) {
     { type: 'message', message: { role: 'user', content: 'second' } },
     { type: 'message', message: { role: 'assistant', content: [], usage: { input: 10, output: 20 } } },
   ]);
-  const usageView = minimalOutputComponent(theme, () => usageTurns, () => false, () => false);
-  const hiddenUsageView = minimalOutputComponent(theme, () => usageTurns, () => false, () => false, () => false);
+  const usageView = minimalOutputComponent(theme, () => usageTurns, () => false);
+  const hiddenUsageView = minimalOutputComponent(theme, () => usageTurns, () => false, () => false);
   assert.doesNotMatch(plain(hiddenUsageView.render(100).join('\n')), /会话 1.2M|缓存 90K|Ctrl\+O/);
   const headers = usageView.render(100).filter(line => plain(line).includes('Agent'));
   assert.match(plain(headers[0]), /会话 1.2M · 缓存 90K$/);

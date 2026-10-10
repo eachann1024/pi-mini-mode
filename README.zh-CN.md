@@ -194,16 +194,14 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500
 ```bash
 pi remove npm:@each1024/pi-mini-mode && pi install /path/to/pi-mini-mode
 npm run check
-npm test
+npm run check:syntax
 ```
 
-修改源码后，在已打开的 Pi 会话中运行 `/reload`。`npm run check` 会执行 TypeScript 检查，`npm test` 会执行页脚、设置和发布自检。真实终端冒烟测试：
+修改源码后，在已打开的 Pi 会话中运行 `/reload`。`npm run check` 检查扩展与 lib 中的全部 TypeScript，包含未使用声明和参数；`npm run check:syntax` 只解析检查脚本、维护脚本及设置页的 JavaScript，不执行检查脚本。
 
-```bash
-python3 test/minimal-pty.py
-```
+需要定位具体回归时，先用 `npm run check:focused -- --list` 列出已有检查，再指定一个名称，例如 `npm run check:focused -- settings-web`。`npm test` 使用相同入口，必须指定名称，不再默认执行全量套件。`test/minimal-pty.py` 保留供明确要求的终端问题调查使用。
 
-该测试需要 Python 3、Node 以及已安装依赖中自带的 Pi CLI；会使用临时 fixture，覆盖普通/全屏模式、切换、10 条过程记录、`Ctrl+O` 展开/收起、恢复结果和窄终端，不会调用模型。
+开发依赖 `@earendil-works/pi-server` 是 Pi 0.85.0 的实验性模块间接导入所需，上游该版本漏写了依赖声明；升级 Pi 并确认上游修复后才能移除。历史界面探索已放入 [docs/archive/prototypes](docs/archive/prototypes/README.md)，不参与 npm 发布和日常检查。
 
 </details>
 

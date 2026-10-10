@@ -203,12 +203,14 @@ Install only the local copy while developing; installing npm and local copies to
 ```bash
 pi remove npm:@each1024/pi-mini-mode && pi install /path/to/pi-mini-mode
 npm run check
-npm test
+npm run check:syntax
 ```
 
-After source changes, run `/reload` in an already-open Pi session. `npm run check` runs TypeScript checking and `npm test` runs the project self-checks.
+After source changes, run `/reload` in an already-open Pi session. `npm run check` checks all extension and library TypeScript, including unused declarations and parameters. `npm run check:syntax` parses the JavaScript checks, maintenance scripts, and settings page without executing them.
 
-For a real terminal smoke test, run `python3 test/minimal-pty.py`. It needs Python 3, Node, and the installed dependency’s bundled Pi CLI. Temporary fixtures cover regular/fullscreen output, toggling, process expansion, restored results, and narrow terminals without model calls.
+For a specific regression, list the existing checks with `npm run check:focused -- --list`, then select one, for example `npm run check:focused -- settings-web`. `npm test` uses the same selector and requires a name; it never defaults to the full suite. Terminal fixtures in `test/minimal-pty.py` remain available for explicitly requested terminal investigations.
+
+The direct development dependency on `@earendil-works/pi-server` is required by experimental modules imported by Pi 0.85.0; that Pi release omits it from its package dependencies. Keep it until a Pi upgrade fixes the upstream dependency declaration. Historical interface explorations live in [docs/archive/prototypes](docs/archive/prototypes/README.md) and are excluded from npm packages and active checks.
 
 </details>
 

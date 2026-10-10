@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Script } from 'node:vm';
 
-const root = new URL('../prototype/thinking/', import.meta.url);
+const root = new URL('./thinking/', import.meta.url);
 const pages = ['01-tree.html', '02-focus.html', '03-board.html'];
 for (const name of pages) {
   const html = readFileSync(new URL(name, root), 'utf8');
@@ -18,7 +18,7 @@ for (const name of pages) {
 }
 console.log('Three self-contained interactive thinking prototypes: OK');
 
-const revised = new URL('../prototype/thinking-v2/', import.meta.url);
+const revised = new URL('./thinking-v2/', import.meta.url);
 const variants = ['01-inline.html', '02-under-row.html', '03-status-rail.html'];
 const styles = readFileSync(new URL('styles.css', revised), 'utf8');
 const logic = readFileSync(new URL('demo.js', revised), 'utf8');

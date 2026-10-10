@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node test/settings-web.mjs && node test/footer-tidy.mjs && node test/footer-status-self-check.mjs && node test/settings-interaction.mjs && node test/transcript-adapter.mjs && node test/prompt-folding.mjs && node test/tool-folding.mjs && node test/sticky-tool.mjs && node test/minimal-markdown.mjs && node test/agent-view.mjs && node test/publish-self-check.mjs && node test/compaction-transcript.mjs && node test/input-enhancements.mjs && node test/user-message-surface.mjs && node test/settings-package.mjs",
+    "test": "node scripts/check-focused.mjs",
+    "check:focused": "node scripts/check-focused.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
     "prepublishOnly": "node scripts/publish.mjs --check && npm run check",
     "release": "node scripts/release.mjs"
   },
