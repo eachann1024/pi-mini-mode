@@ -211,7 +211,7 @@ After source changes, run `/reload` in an already-open Pi session. `npm run chec
 
 For a specific regression, list the existing checks with `npm run check:focused -- --list`, then select one, for example `npm run check:focused -- settings-web`. `npm test` uses the same selector and requires a name; it never defaults to the full suite. Terminal fixtures in `test/minimal-pty.py` remain available for explicitly requested terminal investigations.
 
-The direct development dependency on `@earendil-works/pi-server` is required by experimental modules imported by Pi 0.85.0; that Pi release omits it from its package dependencies. Keep it until a Pi upgrade fixes the upstream dependency declaration. Historical interface explorations live in [docs/archive/prototypes](docs/archive/prototypes/README.md) and are excluded from npm packages and active checks.
+The direct development dependency on `@earendil-works/pi-server` is required by experimental modules imported by Pi 0.85.0; that Pi release omits it from its package dependencies. Keep it until a Pi upgrade fixes the upstream dependency declaration.
 
 </details>
 

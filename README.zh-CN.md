@@ -201,7 +201,7 @@ npm run check:syntax
 
 需要定位具体回归时，先用 `npm run check:focused -- --list` 列出已有检查，再指定一个名称，例如 `npm run check:focused -- settings-web`。`npm test` 使用相同入口，必须指定名称，不再默认执行全量套件。`test/minimal-pty.py` 保留供明确要求的终端问题调查使用。
 
-开发依赖 `@earendil-works/pi-server` 是 Pi 0.85.0 的实验性模块间接导入所需，上游该版本漏写了依赖声明；升级 Pi 并确认上游修复后才能移除。历史界面探索已放入 [docs/archive/prototypes](docs/archive/prototypes/README.md)，不参与 npm 发布和日常检查。
+开发依赖 `@earendil-works/pi-server` 是 Pi 0.85.0 的实验性模块间接导入所需，上游该版本漏写了依赖声明；升级 Pi 并确认上游修复后才能移除。
 
 </details>
 
