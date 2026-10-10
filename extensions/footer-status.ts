@@ -588,11 +588,11 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
 }
 
-/** Show whole seconds only when both execution boundaries are known. */
-export function formatToolElapsed(startedAt: number | undefined, endedAt: number | undefined): string {
-  if (startedAt === undefined || endedAt === undefined || !Number.isFinite(startedAt) || !Number.isFinite(endedAt)) return "";
+/** Compact tool duration, visible from the start of execution. */
+export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.now()): string {
+  if (startedAt === undefined) return "";
   const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1_000));
-  if (!seconds) return "";
+  if (!seconds) return "1s";
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.floor(seconds / 60) % 60;
   const remainder = seconds % 60;
@@ -1040,8 +1040,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking || entry.id.startsWith("agents:") ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
-            const duration = call ? formatToolElapsed(call.startedAt,
-              call.endedAt ?? (call.state === "running" && turn.running ? Date.now() : undefined)) : "";
+            const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
             const toolElapsed = duration ? theme.fg(call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
