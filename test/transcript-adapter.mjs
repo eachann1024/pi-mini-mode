@@ -545,11 +545,15 @@ let childView = matchedView();
 let restoreMatched = attachTranscript(tui, childView, matchedOptions);
 document.render(160); // Existing handledRunIds is populated by the first view render.
 let matchedRows = document.render(160);
-assert.equal((matchedRows.join('\n').match(/代理间沟通已收纳/g) ?? []).length, 1);
+assert.equal((matchedRows.join('\n').match(/Agent ·/g) ?? []).length, 1);
 assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|NATIVE_REPLY_BODY|FINAL_OUTPUT|UNSAFE_LOG/);
 let childY = matchedRows.findIndex(row => row.includes('SubAgent'));
 assert.ok(childY > 0);
 assert.deepEqual(document.handleMouse({ ...event, x: 3, y: childY }), { handled: true, render: true });
+matchedRows = document.render(160);
+childY = matchedRows.findIndex(row => /[├└]─.*SubAgent/.test(row));
+assert.ok(childY > 0, 'opening the Agent summary exposes its child heading');
+document.handleMouse({ ...event, x: 3, y: childY });
 matchedRows = document.render(160);
 assert.match(matchedRows.join('\n'), /DISPATCH_TURN[\s\S]*REPLY_BODY[\s\S]*FINAL_OUTPUT[\s\S]*CHILD_ERROR[\s\S]*FOLLOWUP_TURN/);
 assert.doesNotMatch(matchedRows.join('\n'), /UNSAFE_LOG|NATIVE_REPLY_BODY/);
@@ -565,6 +569,10 @@ restoreMatched = attachTranscript(tui, childView, { ...matchedOptions, turnCount
 matchedRows = document.render(160);
 assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|FINAL_OUTPUT/);
 childY = matchedRows.findIndex(row => row.includes('SubAgent'));
+document.handleMouse({ ...event, x: 3, y: childY });
+matchedRows = document.render(160);
+childY = matchedRows.findIndex(row => /[├└]─.*SubAgent/.test(row));
+assert.ok(childY > 0, 'opening the Agent summary exposes its child heading');
 document.handleMouse({ ...event, x: 3, y: childY });
 matchedRows = document.render(160);
 assert.match(matchedRows.join('\n'), /DISPATCH_TURN[\s\S]*REPLY_BODY[\s\S]*FINAL_OUTPUT[\s\S]*CHILD_ERROR[\s\S]*FOLLOWUP_TURN/);

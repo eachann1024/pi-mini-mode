@@ -41,7 +41,7 @@
 		"text": "text",
 		"thinkingText": "muted",
 		"selectedBg": "selectedBg",
-		"scrollbarThumb": "selectedBg",
+		"scrollbarThumb": "accent",
 		"userMessageBg": "userMessageBg",
 		"userMessageText": "text",
 		"customMessageBg": "customMessageBg",

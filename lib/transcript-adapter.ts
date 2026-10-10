@@ -3,6 +3,7 @@ import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-codi
 import { diagramMarkdown, isMarkdownProse, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { stripVTControlCharacters } from "node:util";
 import { attachStickyTool } from "./sticky-tool.ts";
+import { attachImageRedraw } from "./image-placement.ts";
 
 const record = (value: unknown): Record<string, unknown> | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const clean = (text: string) => stripVTControlCharacters(text).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
@@ -302,7 +303,10 @@ function supervisorEnvelope(child: Component): unknown {
 }
 
 /** Pi 0.85.x private layout adapter. Never mutates the stored messages or child tree. */
-export type NoticeRows = string[] & { handleMouse?: Component["handleMouse"] };
+export type NoticeRows = string[] & {
+  handleMouse?: Component["handleMouse"];
+
+};
 export type TurnNotices = ReadonlyMap<number, NoticeRows>;
 
 /** Pi writes one warning line per miss (`Cache miss…: N tokens re-billed`). */
@@ -326,6 +330,8 @@ interface TranscriptView extends Component {
   pinnedTool?(): { id: string; y: number; line: string } | undefined;
   unpinTool?(): void;
   toggleTool?(id: string): void;
+  pinnedAgent?(): { index: number; y: number; line: string } | undefined;
+  unpinAgent?(): void;
   pinnedSubagent?(): { id: string; y: number; line: string; autoScroll?: boolean } | undefined;
   unpinSubagent?(): void;
   toggleSubagent?(id: string): void;
@@ -341,6 +347,8 @@ interface NoticeOptions {
   /** Blocking extension prompts are native UI, never auto-expiring notices. */
   isPrompt?: (text: string) => boolean;
   isTransient?: (text: string) => boolean;
+  /** Drop individual startup diagnostic lines, such as an unmatched model pattern. */
+  hideStartupLine?: (line: string) => boolean;
   /** When false, Pi's per-turn cache-miss lines stay in the transcript. Default: fold them. */
   foldCacheMiss?: () => boolean;
   now?: () => number;
@@ -360,6 +368,7 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
   const document = host.children[0] as ContainerLike;
   if (document.children.length !== 3 || !document.children.every(isContainer)) return;
   const [header, resources, chat] = document.children as ContainerLike[];
+  const restoreImageRedraw = attachImageRedraw(tui);
   // During /reload Pi replaces the editor with a reload notice until AFTER
   // session_start. The validated document/container layout remains unchanged.
   // Custom editors also need not expose getText; do not use editor contents
@@ -503,21 +512,9 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         notices.set(turn, rows);
         continue;
       }
-      // The compact view reconstructs tool text, but image payloads belong to
-      // Pi's native components (including conversion, IDs and display settings).
-      // Keep their rows intact: adding text prefixes would corrupt image escapes.
-      if (child.constructor.name === "ToolExecutionComponent") {
-        const tool = child as Component & { imageComponents?: Component[]; hideComponent?: boolean };
-        if (!tool.hideComponent && Array.isArray(tool.imageComponents)) {
-          const images = tool.imageComponents.flatMap(image => image.render(width));
-          if (images.length) {
-            const rows = notices.get(turn) ?? [];
-            rows.push("", ...images);
-            notices.set(turn, rows);
-          }
-        }
-        continue;
-      }
+      // Tool images are step attachments, represented by hover links in the
+      // compact view. Only assistant replies own inline image rows.
+      if (child.constructor.name === "ToolExecutionComponent") continue;
       if (child.constructor.name !== "Text") continue;
       // Pi 0.85 Text stores the unwrapped styled source in text. Width changes
       // must not restart the timeout; setText updates must restart it.
@@ -531,14 +528,17 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         cacheMisses.set(turn, current);
         continue;
       }
-      if (typeof source === "string" && !options.isPrompt?.(source) && options.isTransient?.(source)) {
-        let state = noticeTimes.get(child);
-        if (!state || state.text !== source) {
-          state = { text: source, until: time + 5000 };
-          noticeTimes.set(child, state);
+      if (typeof source === "string" && !options.isPrompt?.(source)) {
+        if (options.hideStartupLine?.(source)) continue;
+        if (options.isTransient?.(source)) {
+          let state = noticeTimes.get(child);
+          if (!state || state.text !== source) {
+            state = { text: source, until: time + 5000 };
+            noticeTimes.set(child, state);
+          }
+          if (time >= state.until) continue;
+          nextExpiry = Math.min(nextExpiry, state.until);
         }
-        if (time >= state.until) continue;
-        nextExpiry = Math.min(nextExpiry, state.until);
       }
       const rows = notices.get(turn) ?? [];
       rows.push(...child.render(width));
@@ -563,7 +563,11 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
         }
       };
     }
-    const prefix = [...header.render(width), ...resources.render(width)];
+    const startupLine = options.hideStartupLine;
+    const resourceRows = startupLine
+      ? resources.render(width).filter(line => !startupLine(line))
+      : resources.render(width);
+    const prefix = [...header.render(width), ...resourceRows];
     prefixNoticeOffset = prefix.length;
     prefixNotices = notices.get(-1) ?? [];
     prefix.push(...prefixNotices);
@@ -606,26 +610,32 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
       else delete dock.handleMouse;
     };
   }) : [];
+  const hasStickyAgent = view.pinnedAgent && view.unpinAgent;
   const hasStickyTool = view.pinnedTool && view.unpinTool && view.toggleTool;
   const hasStickySubagent = view.pinnedSubagent && view.unpinSubagent && view.toggleSubagent;
-  const restoreSticky = hasStickyTool || hasStickySubagent ? attachStickyTool(tui, document, {
+  const restoreSticky = hasStickyAgent || hasStickyTool || hasStickySubagent ? attachStickyTool(tui, document, {
     pinnedTool: () => {
+      const agent = view.pinnedAgent?.();
+      if (agent) return { id: `agent:${agent.index}`, y: agent.y + viewOffset, line: agent.line };
       const target = view.pinnedSubagent?.() ?? view.pinnedTool?.();
       if (!target) return;
       const kind = view.pinnedSubagent?.() ? "subagent" : "tool";
       return { ...target, id: `${kind}:${target.id}`, y: target.y + viewOffset };
     },
     unpinTool: () => {
+      view.unpinAgent?.();
       view.unpinSubagent?.();
       view.unpinTool?.();
     },
     toggleTool: id => {
       const [kind, targetId] = id.split(":", 2);
-      if (kind === "subagent") view.toggleSubagent?.(targetId);
+      if (kind === "agent") view.handleMouse?.({ type: "click", button: "left", x: 0, y: view.pinnedAgent?.()?.y ?? 0, screenX: 0, screenY: 0, width: 1, height: 1, clickCount: 1, shift: false, ctrl: false, alt: false });
+      else if (kind === "subagent") view.toggleSubagent?.(targetId);
       else if (kind === "tool") view.toggleTool?.(targetId);
     },
   }, height => { stickyMinHeight = height; }) : undefined;
   return () => {
+    restoreImageRedraw?.();
     restoreSticky?.();
     cancelExpiry?.();
     view.clearHover?.();

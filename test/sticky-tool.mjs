@@ -29,7 +29,7 @@ const theme = { bg: (_, text) => text, fg: (_, text) => text, bold: text => text
 const calls = ['first', 'second'].map(id => ({ id, name: 'bash', task: `${id}-command`, state: 'done', output: Array.from({ length: 70 }, (_, i) => `${id}_${i} 中文 👩‍💻`).join('\n') }));
 const turn = { question: 'question\n\n' + 'prompt '.repeat(100), process: ['call first', 'call second'], agentCalls: calls,
   subAgents: [{ runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'worker', status: 'completed', recentOutput: ['UNSAFE_ACTIVITY'], finalOutput: 'CHILD_DETAIL\n'.repeat(30) }] }], final: '' };
-const view = minimalOutputComponent(theme, () => [turn]);
+const view = minimalOutputComponent(theme, () => [turn], () => true);
 const document = new Container();
 const header = new Container(); header.addChild(new Text('HEADER\nRESOURCE', 0, 0));
 for (const c of [header, new Container(), new Container()]) document.addChild(c);

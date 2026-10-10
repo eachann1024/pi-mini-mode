@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerHooks } from "node:module";
+import { stripVTControlCharacters } from "node:util";
 
 const piModule = `
 export const CONFIG_DIR_NAME = ".pi";
@@ -106,20 +107,26 @@ let minimalText = minimalView.render(100).join("\n");
 assert.doesNotMatch(minimalText, /已收起|我们的极简模块|用户提问|最终的结果/);
 assert.doesNotMatch(minimalText, /entry-[0-6](?!\d)/);
 assert.equal((minimalText.match(/entry-/g) ?? []).length, 6);
-assert.match(minimalText, /Agent · 13\/13 · Ctrl\+O/);
+assert.match(minimalText, /Agent · 13/);
+assert.match(minimalText, /▸/, "the preview heading offers expansion to all records");
 assert.doesNotMatch(minimalText, /展开|收起/);
 assert.match(minimalText, /secret final/);
 minimalTurn.running = false;
 minimalText = minimalView.render(100).join("\n");
 assert.match(minimalText, /secret final/);
 let hintVisible = true;
-const hintView = extension.minimalOutputComponent(minimalTheme, () => [minimalTurn], () => false, () => hintVisible);
-assert.match(hintView.render(100).join("\n"), /13\/13 · Ctrl\+O/);
+const hintTurn = { ...minimalTurn };
+const hintView = extension.minimalOutputComponent(minimalTheme, () => [hintTurn], () => false, () => hintVisible);
+assert.match(hintView.render(100).join("\n"), /Agent · 13/);
 hintVisible = false;
 assert.doesNotMatch(hintView.render(100).join("\n"), /Ctrl\+O/);
-assert.match(hintView.render(100).join("\n"), /Agent · 13\/13/);
+assert.match(hintView.render(100).join("\n"), /Agent · 13/);
+assert.equal((hintView.render(100).join("\n").match(/entry-/g) ?? []).length, 6, "a settled turn keeps the six most recent records");
+const headingY = hintView.render(100).findIndex(row => row.includes("Agent"));
+hintView.handleMouse({ type: "click", button: "left", x: 8, y: headingY, clickCount: 1 });
+assert.equal((hintView.render(100).join("\n").match(/entry-/g) ?? []).length, 13, "clicking the Agent heading expands every record");
 assert.deepEqual(minimalView.render(0), []);
-const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
+const stripAnsi = stripVTControlCharacters;
 assert.ok(minimalView.render(12).every((line) => stripAnsi(line).length <= 12));
 for (const width of [1, 2, 12, 40, 100]) {
   assert.ok(minimalView.render(width).every(line => stripAnsi(line).length <= width));
@@ -127,29 +134,30 @@ for (const width of [1, 2, 12, 40, 100]) {
 assert.doesNotMatch(minimalView.render(100).find((line) => line.includes("secret final")), /\x1b\[48;/);
 const longView = extension.minimalOutputComponent(minimalTheme, () => [{ question: "long question ".repeat(20), process: ["output " + "long output ".repeat(50)], running: true }]);
 assert.ok(longView.render(40).every(line => stripAnsi(line).length <= 40));
-const wrappedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2)], running: false }]).render(40).map(stripAnsi).filter(row => row.trim());
+const wrappedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2)], running: false }], () => true).render(40).map(stripAnsi).filter(row => row.trim());
 const outputRows = wrappedRows.slice(wrappedRows.findIndex(row => row.includes("Output")));
 assert.ok(outputRows.length > 1, "long output wraps instead of truncating");
-assert.ok(outputRows[0].startsWith("└─ ● Output "), "output heading stays inline with the first body chunk");
-assert.ok(outputRows.slice(1).every(row => row.startsWith(" ".repeat(12))), "wrapped output hangs under the body column");
+assert.ok(outputRows[0].startsWith("│ Output "), "output heading stays inline with the first body chunk");
+assert.ok(outputRows.slice(1).every(row => row.startsWith(" ".repeat(9))), "wrapped output hangs under the body column");
 assert.match(outputRows.join(" "), /lambda mu/, "wrapped output keeps the full body");
 assert.doesNotMatch(outputRows.join("\n"), /…/, "wrapped output is not truncated");
 assert.ok(outputRows.every(row => row.length <= 40));
-const connectedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2), "tool next"], running: false }]).render(40).map(stripAnsi).filter(row => row.trim());
+const connectedRows = extension.minimalOutputComponent(minimalTheme, () => [{ question: "Q", process: ["output " + "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(2), "tool next"], running: false }], () => true).render(40).map(stripAnsi).filter(row => row.trim());
 const connectedStart = connectedRows.findIndex(row => row.includes("Output"));
-const connectedNext = connectedRows.findIndex((row, i) => i > connectedStart && /^[├└]─/.test(row));
+const connectedNext = connectedRows.findIndex((row, i) => i > connectedStart && row.includes("Tool next"));
 const connectedOutput = connectedRows.slice(connectedStart, connectedNext);
-assert.ok(connectedOutput[0].startsWith("├─ ● Output "), "non-final output keeps the tree branch");
+assert.ok(connectedOutput[0].startsWith("│ Output "), "non-final output keeps the tree branch");
 assert.ok(connectedOutput.length > 1, "non-final output still wraps");
 assert.ok(connectedOutput.slice(1).every(row => row.startsWith("│")), "wrapped output keeps the tree rail");
 for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   const theme = { ...minimalTheme, fg: (token, text) => token === "accent" ? `${accent}${text}\x1b[39m` : text };
   for (const [state, glyph] of [["running", "⠋"], ["done", "●"], ["error", "✕"]]) {
     const turn = { question: "status", process: ["call status"], agentCalls: [{ id: "status", name: "bash", task: "check", state }] };
-    const view = extension.minimalOutputComponent(theme, () => [turn]);
+    const view = extension.minimalOutputComponent(theme, () => [turn], () => true);
     const rendered = view.render(100).join("\n");
-    if (state === "running") assert.match(stripAnsi(rendered), /└─ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
-    else assert.match(stripAnsi(rendered), new RegExp(`└─ ${glyph}`));
+    if (state === "running") assert.match(stripAnsi(rendered), /│ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash/);
+    else if (state === "error") assert.match(stripAnsi(rendered), /│ ✕ bash/);
+    else { assert.match(stripAnsi(rendered), /│ bash/); assert.doesNotMatch(stripAnsi(rendered), /● bash/); }
     assert.ok(view.render(12).every(line => stripAnsi(line).length <= 12));
   }
   const thinking = extension.minimalOutputComponent(theme, () => [{ question: "status", process: [], running: true, awaitingResponse: true }]);
@@ -157,29 +165,30 @@ for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   assert.match(thinkingText, /└─ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Thinking/);
   const quiet = extension.minimalOutputComponent(theme, () => [{ question: "status", process: ["thinking done"], running: true, awaitingResponse: false, startedAt: 0 }]);
   const quietText = stripAnsi(quiet.render(100).join("\n"));
-  assert.match(quietText, /Thinking[\s\S]*Working/, "Working follows completed process rows instead of leading them");
+  assert.match(quietText, /Thinking/, "a completed record stays visible while the turn is running");
+  assert.doesNotMatch(quietText, /Working/, "Working is hidden once process records occupy the preview");
   const capped = extension.minimalOutputComponent(theme, () => [{ question: "status", process: Array.from({ length: 8 }, (_, i) => `output row ${i}`), running: true, startedAt: 0 }]);
   const cappedRows = stripAnsi(capped.render(100).join("\n")).split("\n").filter(row => row.includes("Output") || row.includes("Working"));
-  assert.equal(cappedRows.length, 6, "Working counts toward the six-row process limit");
-  assert.match(cappedRows.at(-1), /Working/, "Working stays at the bottom");
+  assert.equal(cappedRows.filter(row => row.includes("Output")).length, 6, "the preview keeps six records without reserving one for Working");
+  assert.doesNotMatch(cappedRows.at(-1), /Working/, "records take the preview instead of leaving only Working");
   assert.match(thinkingText, /Agent/);
   assert.doesNotMatch(thinkingText, /0\/0|S 0 \/ C 0/);
   for (const expanded of [false, true]) {
   const view = extension.minimalOutputComponent(theme, () => [{ question: 'CORS', process: ['thinking Clarifying CORS behavior'], running: false }], () => expanded);
   const text = stripAnsi(view.render(100).join('\n'));
-  assert.match(text, /Agent · 1\/1/, 'collapse does not change process totals');
-  assert.match(text, /Thinking Clarifying CORS behavior/, 'the latest thinking stays visible when the process tree is collapsed');
+  assert.match(text, /Agent · 1/, 'the heading shows the record count');
+  assert.match(text, /Thinking Clarifying CORS behavior/, 'the six-row preview stays visible after completion');
   assert.doesNotMatch(text, /Thinking \d+:\d/, 'restored Thinking has no fake live timer');
 }
 const settled = extension.minimalOutputComponent(theme, () => [{ question: 'settled', process: [], usage: { totalTokens: 10 }, running: false }]);
   const settledText = stripAnsi(settled.render(100).join('\n'));
   assert.doesNotMatch(settledText, /Thinking|Working|0\/0/);
-  assert.match(settledText, /S 10 \/ C 0/);
+  assert.match(settledText, /会话 10/);
 }
 assert.equal(extension.formatElapsed(0, 0), "0:00");
 assert.equal(extension.formatElapsed(0, 3_723_000), "1:02:03");
-assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0, endedAt: 2_000 }] }, 0, false, 1_261_000), "0:02");
-assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0 }] }, 0, true, 1_261_000), "21:01");
+assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0, endedAt: 2_000 }] }, 0, false, 1_261_000), "2.0s");
+assert.equal(extension.formatThinkingElapsed({ startedAt: 0, thinkingClocks: [{ startedAt: 0 }] }, 0, true, 1_261_000), "1261.0s");
 assert.equal(extension.formatThinkingElapsed({ startedAt: 0 }, 0, false, 1_261_000), "");
 const elapsedColors = [];
 const elapsedTheme = { ...minimalTheme, fg: (token, text) => { elapsedColors.push([token, text]); return text; } };
@@ -191,22 +200,22 @@ try {
   const first = stripAnsi(elapsedView.render(120).find(line => stripAnsi(line).includes("Thinking")));
   Date.now = () => 4_000;
   const later = stripAnsi(elapsedView.render(120).find(line => stripAnsi(line).includes("Thinking")));
-  assert.match(first, /Thinking 0:02/, "elapsed duration follows Thinking before its body");
-  assert.match(later, /Thinking 0:04/, "elapsed duration advances without resetting during the turn");
+  assert.match(first, /Thinking 2\.0s/, "elapsed duration follows Thinking before its body");
+  assert.match(later, /Thinking 4\.0s/, "elapsed duration advances without resetting during the turn");
   assert.match(first, /beginning/, "active thinking keeps its one-line summary visible");
   assert.doesNotMatch(first, /▼/, "thinking never auto-expands");
-  assert.equal(first.replace(/0:02/, "0:04"), later, "only the elapsed duration changes while thinking");
-  const folded = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: ["thinking older hidden detail", `thinking ${thought}\nsecond paragraph stays in the detail`], running: false }]);
+  assert.equal(first.replace(/2\.0s/, "4.0s"), later, "only the elapsed duration changes while thinking");
+  const folded = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: ["thinking older hidden detail", `thinking ${thought}\nsecond paragraph stays in the detail`], running: false }], () => true);
   const foldedText = stripAnsi(folded.render(100).join("\n"));
-  assert.doesNotMatch(foldedText, /older hidden detail/, "older completed thinking stays collapsed");
+  assert.match(foldedText, /older hidden detail/, "opening the heading shows every thinking record");
   assert.match(foldedText, new RegExp(thought), "the latest completed thinking stays visible");
   assert.doesNotMatch(stripAnsi(folded.render(100).join("\n")), /second paragraph stays in the detail/, "completed thinking stays collapsed until opened");
   folded.toggleTool(folded.toolChoices().at(-1).id);
   assert.match(stripAnsi(folded.render(100).join("\n")), /second paragraph stays in the detail/, "manual toggle still expands thinking");
-  assert.ok(elapsedColors.some(([token, text]) => token === "success" && text === " 0:02"), "running elapsed duration uses the semantic green success color");
+  assert.ok(elapsedColors.some(([token, text]) => token === "success" && text === " 2.0s"), "running elapsed duration uses the semantic green success color");
   const completedThought = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: [`thinking ${thought}`], running: false, startedAt: 0, thinkingClocks: [{ startedAt: 0, endedAt: 4_000 }] }], () => true);
-  assert.match(stripAnsi(completedThought.render(100).join("\n")), /Thinking 0:04/, "completed Thinking retains its frozen elapsed duration when expanded");
-  assert.ok(elapsedColors.some(([token, text]) => token === "muted" && text === " 0:04"), "completed Thinking duration uses the semantic gray muted color");
+  assert.match(stripAnsi(completedThought.render(100).join("\n")), /Thinking 4\.0s/, "completed Thinking retains its frozen elapsed duration when expanded");
+  assert.ok(elapsedColors.some(([token, text]) => token === "muted" && text === " 4.0s"), "completed Thinking duration uses the semantic gray muted color");
   Date.now = () => 1_261_000;
   const historical = extension.minimalOutputComponent(elapsedTheme, () => [{
     question: "elapsed",
@@ -216,8 +225,8 @@ try {
     thinkingClocks: [{ startedAt: 0, endedAt: 2_000 }],
   }], () => true);
   const historicalText = stripAnsi(historical.render(100).join("\n"));
-  assert.match(historicalText, /Thinking 0:02/, "historical Thinking keeps the stop time from when that block ended");
-  assert.doesNotMatch(historicalText, /Thinking 21:/, "historical Thinking does not keep counting while the turn continues");
+  assert.match(historicalText, /Thinking 2\.0s/, "historical Thinking keeps the stop time from when that block ended");
+  assert.doesNotMatch(historicalText, /Thinking 1261/, "historical Thinking does not keep counting while the turn continues");
   assert.ok(elapsedView.render(12).every(line => stripAnsi(line).length <= 12), "narrow rows retain the width contract");
 } finally { Date.now = savedElapsedNow; }
 const dotTheme = { ...minimalTheme, fg: (token, text) => `<${token}>${text}</${token}>` };
@@ -225,18 +234,19 @@ const dotRows = extension.minimalOutputComponent(dotTheme, () => [{
   question: "dot colors",
   process: ["call expandable", "output passive"],
   agentCalls: [{ id: "expandable", name: "read", task: "path", state: "done" }],
-}]).render(100).join("\n");
-assert.match(dotRows, /<muted>●<\/muted>.*read/, "completed tool dot uses the muted token");
-assert.match(dotRows, /<muted>●<\/muted>.*Output/, "non-expandable output dot uses the muted token");
+}], () => true).render(100).join("\n");
+assert.doesNotMatch(dotRows, /●/, "completed rows omit redundant status dots");
+assert.match(dotRows, /<text>read<\/text>/, "completed tool retains its label");
+assert.match(dotRows, /<text>Output<\/text>/, "passive output retains its label");
 const mixedTurn = { question: "mixed", process: ["tool one", "call a", "skill frontend", "tool two", "call b", "tool three", "skill last"], agentCalls: [{ id: "a", name: "researcher", task: "research", state: "done" }, { id: "b", name: "reviewer", task: "review", state: "running" }] };
 const mixedRows = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn]).render(100);
-assert.equal(mixedRows.filter(row => /^[├└]─/.test(row)).length, 6);
+assert.equal(mixedRows.filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6);
 assert.doesNotMatch(mixedRows.join("\n"), /S 0 \/ C 0/);
 assert.doesNotMatch(mixedRows.join("\n"), /较早记录/);
 assert.doesNotMatch(mixedRows.join("\n"), /工具 one|Agent 调用/);
 assert.ok(mixedRows.findIndex(row => row.includes("researcher")) < mixedRows.findIndex(row => row.includes("Skill last")));
-const mixedExpanded = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn], () => true).render(100);
-assert.equal(mixedExpanded.filter(row => /^[├└]─/.test(row)).length, 7);
+const mixedExpanded = extension.minimalOutputComponent(minimalTheme, () => [mixedTurn]).render(100);
+assert.equal(mixedExpanded.filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6);
 const integratedTurn = { question: 'Integrated', process: Array.from({ length: 13 }, (_, i) => `output MAIN_${i}`),
   running: false, final: 'FINAL_REPLY', usage: { totalTokens: 320000, cacheRead: 246000 },
   subAgents: [{ runId: 'workflow', steps: Array.from({ length: 9 }, (_, i) => ({
@@ -246,36 +256,37 @@ const integratedTurn = { question: 'Integrated', process: Array.from({ length: 1
 let expandIntegrated = false;
 const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => false, () => true, () => expandIntegrated);
 let integratedRows = integratedView.render(120).map(stripAnsi);
-assert.match(integratedRows.find(row => row.startsWith('Agent')), /Agent · 13\/13\s+Subagent 4\/9\s+S 320K \/ C 246K$/);
-assert.equal(integratedRows.filter(row => /^[├└]─/.test(row)).length, 15, 'six main entries plus live and briefly completed children');
-assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-2](?!\d)|运行中|Ctrl\+S|PREVIEW_|CHILD_FINAL_/);
-assert.ok(integratedRows.findIndex(row => row.includes('MAIN_12')) < integratedRows.findIndex(row => row.includes('CHILD_4')));
-assert.ok(integratedRows.findIndex(row => row.includes('CHILD_8')) < integratedRows.findIndex(row => row.includes('FINAL_REPLY')));
-assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
-assert.match(integratedRows.find(row => row.includes('CHILD_8')), /^└─/);
+assert.match(integratedRows.find(row => row.startsWith('✦') || row.startsWith('✧')), /Agent · 13/);
+assert.match(integratedRows.find(row => row.includes('会话')), /320K/);
+assert.match(integratedRows.find(row => row.includes('缓存')), /246K/);
+assert.equal(integratedRows.filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6, 'the default preview keeps six main records and hides child rows');
+assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-6](?!\d)|运行中|Ctrl\+S|PREVIEW_|CHILD_FINAL_|CHILD_/);
+assert.ok(integratedRows.findIndex(row => row.includes('MAIN_12')) < integratedRows.findIndex(row => row.includes('FINAL_REPLY')));
+assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^│ /);
 for (const width of [1, 12, 40]) assert.ok(integratedView.render(width).every(row => stripAnsi(row).length <= width));
-assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Subagent 4\/9/, 'narrow headers prioritize progress over token totals');
+assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Agent · 13/, 'the compact heading keeps the record count');
 for (let i = 9; i < 40; i++) integratedTurn.subAgents[0].steps.push({ runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, recentOutput: [`CHILD_${i}`], status: 'running' });
-assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^[├└]─/.test(row)).length, 46, 'children are not subject to the main six-row cap');
+assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6, 'child rows stay hidden until the Agent heading is expanded');
 for (const child of integratedTurn.subAgents[0].steps) child.status = 'completed';
 integratedRows = integratedView.render(120).map(stripAnsi);
-assert.match(integratedRows.join('\n'), /Subagent 40\/40/);
-assert.match(integratedRows.join('\n'), /CHILD_/);
-assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^├─/);
-expandIntegrated = true;
-assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^[├└]─/.test(row)).length, 46, 'Ctrl+S retains one heading per child');
-assert.match(integratedView.render(120).join('\n'), /CHILD_FINAL_0/);
+assert.doesNotMatch(integratedRows.join('\n'), /子代理 40\/40/);
+assert.doesNotMatch(integratedRows.join('\n'), /CHILD_/);
+assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^│ /);
+const heading = integratedRows.findIndex(row => row.includes('Agent'));
+integratedView.handleMouse({ type: 'click', button: 'left', x: 4, y: heading, clickCount: 1 });
+assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^(?:│ |[├└]─)/.test(row)).length, 53, 'expanding the Agent heading shows every main and child record');
+assert.match(integratedView.render(120).join('\n'), /CHILD_0/);
 assert.doesNotMatch(integratedView.render(120).join('\n'), /PREVIEW_/);
 const savedNow = Date.now;
 try {
   Date.now = () => savedNow() + 60_000;
-  assert.match(integratedView.render(120).join('\n'), /Subagent|CHILD_/);
+  assert.match(integratedView.render(120).join('\n'), /子代理|CHILD_/);
   assert.match(integratedView.render(120).join('\n'), /FINAL_REPLY|S 320K/);
 } finally { Date.now = savedNow; }
 const controlCall = { id: 'control', name: 'worker', tool: 'subagent', action: 'list', task: '', state: 'done', output: 'Executable agents (capabilities):\nRAW_DIAGNOSTIC' };
 const controlTurn = { question: '', process: ['call control'], agentCalls: [controlCall] };
 assert.doesNotMatch(extension.minimalOutputComponent(minimalTheme, () => [controlTurn]).render(100).join('\n'), /subagent|Executable agents|worker/);
-assert.match(extension.minimalOutputComponent(minimalTheme, () => [controlTurn], () => true).render(100).join('\n'), /Control subagent · list · returned/);
+assert.doesNotMatch(extension.minimalOutputComponent(minimalTheme, () => [controlTurn], () => true).render(100).join('\n'), /Control subagent|RAW_DIAGNOSTIC/);
 assert.equal(controlCall.output, 'Executable agents (capabilities):\nRAW_DIAGNOSTIC');
 const restoredTurns = extension.minimalTurnsFromBranch(Array.from({ length: 7 }, (_, i) => [
   { type: "message", message: { role: "user", content: `question-${i}` } },
@@ -757,14 +768,14 @@ for (const data of ["\x1b[115;5:2u", "\x1b[115;5:3u"]) {
 }
 inputListener("\x13");
 assert.equal(testTui.children[3].render(100).length, collapsedAgentRows);
-assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+:\d{2} live thought/, "the latest thinking stays visible after text starts");
+assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+\.\ds live thought/, "the latest thinking stays visible after text starts");
 assert.doesNotMatch(doc.render(100).join("\n"), /new paragraph/, "collapsed latest thinking is the one-line summary");
 assert.deepEqual(inputListener("\x0f"), { consume: true });
-assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+:\d{2} live thought/, "completed Thinking keeps a frozen duration when the process is expanded");
+assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+\.\ds live thought/, "completed Thinking keeps a frozen duration when the process is expanded");
 assert.deepEqual(inputListener("\x0f"), { consume: true });
-assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+:\d{2} live thought/, "collapsing the process keeps the latest thinking summary");
+assert.match(stripAnsi(doc.render(100).join("\n")), /Thinking \d+\.\ds live thought/, "collapsing the process keeps the latest thinking summary");
 minimalHandlers.get("message_update")({ assistantMessageEvent: { partial: { content: [{ type: "thinking", thinking: "live thought updated\nnew paragraph" }, { type: "text", text: "unreleased final" }] } } });
-assert.equal(doc.render(100).filter(line => line.includes("Ctrl+O")).length, 1);
+assert.equal(doc.render(100).filter(line => line.includes("Ctrl+O")).length, 0);
 assert.doesNotMatch(doc.render(100).join("\n"), /new paragraph/, "a streaming update does not expand the detail by itself");
 assert.doesNotMatch(doc.render(100).join("\n"), /new paragraph/, "collapsed thinking stays a one-line summary without a slash picker");
 
@@ -773,12 +784,12 @@ minimalHandlers.get("tool_execution_start")({ toolCallId: "waiting", toolName: "
 for (const partialResult of [{ content: [] }, { content: [{ type: "text", text: "  " }] }]) {
   minimalHandlers.get("tool_execution_update")({ toolCallId: "waiting", partialResult });
 }
-assert.match(doc.render(100).join("\n"), /bash.*running · waiting 0s/);
+assert.match(doc.render(100).join("\n"), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash \d+s curl --max-time/);
 assert.doesNotMatch(doc.render(100).join("\n"), /"content"/);
 const rendersBeforeWaiting = transcriptRenders;
 await setTimeout(1100);
 assert.ok(transcriptRenders > rendersBeforeWaiting, "waiting status refreshes without tool output");
-assert.match(doc.render(100).join("\n"), /waiting [1-9]\d*s/);
+assert.match(doc.render(100).join("\n"), /bash [1-9]\d*s curl --max-time/);
 minimalHandlers.get("tool_execution_update")({ toolCallId: "waiting", partialResult: { content: [{ type: "text", text: "real output" }] } });
 minimalHandlers.get("tool_execution_update")({ toolCallId: "waiting", partialResult: { content: [] } });
 assert.match(doc.render(100).join("\n"), /curl --max-time/);
@@ -810,21 +821,21 @@ assert.match(doc.render(100).join("\n"), /Agent ·/);
 assert.doesNotMatch(doc.render(100).join("\n"), /private long task details/);
 minimalHandlers.get("tool_execution_update")({ toolCallId: "agent-1", partialResult: { content: [] } });
 minimalHandlers.get("tool_execution_end")({ toolCallId: "agent-1", result: { content: [{ type: "text", text: "Background launched" }] } });
-assert.match(doc.render(100).join("\n"), /Agent · \d+\/\d+ · Ctrl\+O/);
+assert.match(doc.render(100).join("\n"), /Agent · \d+/);
 inputListener("\x0f");
 assert.doesNotMatch(doc.render(100).join("\n"), /private long task details/);
-assert.match(doc.render(100).join("\n"), /Control subagent · dispatch · returned/);
+assert.doesNotMatch(doc.render(100).join("\n"), /Control subagent|private long task details/);
 inputListener("\x0f");
 minimalHandlers.get("agent_settled")({});
 assert.match(doc.render(100).join("\n"), /unreleased final/);
-assert.match(doc.render(100).join("\n"), /Thinking/, "settling keeps the latest thinking summary");
+assert.match(doc.render(100).join("\n"), /read \d+s file-7/, "settling keeps the recent records visible");
 // Async completion resumes the same user conversation without another user message.
 minimalHandlers.get("message_start")({ message: { role: "custom", customType: "subagent-result", content: "child returned" } });
 minimalHandlers.get("message_start")({ message: { role: "assistant" } });
 minimalHandlers.get("message_update")({ assistantMessageEvent: { partial: { content: [{ type: "thinking", thinking: "Review returned result" }] } } });
-assert.match(doc.render(100).join("\n"), /Thinking \d+:\d\d Review returned result/);
+assert.match(doc.render(100).join("\n"), /Thinking \d+\.\ds Review returned result/);
 minimalHandlers.get("message_update")({ assistantMessageEvent: { partial: { content: [{ type: "thinking", thinking: "Review returned result" }, { type: "text", text: "Follow-up answer" }] } } });
-assert.match(doc.render(100).join("\n"), /Thinking \d+:\d\d Review returned result/, "the latest thinking remains after follow-up text");
+assert.match(doc.render(100).join("\n"), /Thinking \d+\.\ds Review returned result/, "the latest thinking remains after follow-up text");
 assert.match(doc.render(100).join("\n"), /unreleased final[\s\S]*Follow-up answer/);
 minimalHandlers.get("message_end")({ message: { role: "assistant", content: [{ type: "text", text: "Follow-up answer" }], stopReason: "stop" } });
 minimalHandlers.get("agent_settled")({});
@@ -833,7 +844,7 @@ minimalHandlers.get("message_start")({ message: { role: "assistant" } });
 minimalHandlers.get("message_end")({ message: { role: "assistant", content: [], stopReason: "error", errorMessage: "Follow-up failure" } });
 minimalHandlers.get("agent_settled")({});
 assert.match(doc.render(100).join("\n"), /Follow-up answer[\s\S]*Follow-up failure/);
-assert.match(doc.render(100).join("\n"), /Thinking/, "an error follow-up still keeps the latest thinking summary");
+assert.match(doc.render(100).join("\n"), /Thinking/, "an error follow-up keeps the recent six records visible");
 const statusRoot = await mkdtemp(join(tmpdir(), "mini-live-status-"));
 const statusDirectory = join(statusRoot, "async-subagent-runs", "child");
 await mkdir(statusDirectory, { recursive: true });
@@ -842,20 +853,20 @@ const previousStatusRoot = process.env.PI_SUBAGENTS_TEMP_ROOT;
 process.env.PI_SUBAGENTS_TEMP_ROOT = statusRoot;
 minimalCtx.sessionManager.getSessionFile = () => "current-session";
 await updateMinimal(minimalCtx, true);
-assert.match(doc.render(100).join("\n"), /Subagent 0\/1[\s\S]*child task[\s\S]*Follow-up answer/, "settled parent keeps children before its replies");
+assert.match(doc.render(100).join("\n"), /Agent · 12[\s\S]*Follow-up answer/, "settled parent keeps its preview before replies");
 assert.deepEqual(testTui.children[3].render(100), [], 'nothing is rendered in the dock');
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/);
 inputListener("\x13");
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/, "Ctrl+S cannot expose running child previews");
 minimalHandlers.get("message_start")({ message: { role: "user", content: "new question" } });
-assert.match(doc.render(100).join("\n"), /child task[\s\S]*new question/, "running child remains under its original turn after a new user message");
+assert.match(doc.render(100).join("\n"), /Agent · 12[\s\S]*new question/, "the original turn keeps its preview after a new user message");
 minimalHandlers.get("tool_execution_start")({ toolCallId: "agent-2", toolName: "subagent", args: { agent: "reviewer" } });
-assert.equal((doc.render(100).join("\n").match(/child task/g) ?? []).length, 1, 'child appears exactly once');
+assert.equal((doc.render(100).join("\n").match(/child task/g) ?? []).length, 0, 'child rows stay hidden in the default preview');
 const childSessionFile = join(statusDirectory, 'session.jsonl');
 await writeFile(childSessionFile, JSON.stringify({ type: 'message', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'completed child' }] } }) + '\n');
 await writeFile(join(statusDirectory, 'status.json'), JSON.stringify({ sessionId: 'current-session', toolCallId: 'agent-1', runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'reviewer', status: 'running', sessionFile: childSessionFile, recentOutput: ['unsafe completed preview'] }] }));
 await setTimeout(1100);
-assert.match(doc.render(100).join('\n'), /Subagent 1\/1/);
+assert.match(doc.render(100).join('\n'), /Agent · 12/);
 assert.doesNotMatch(doc.render(100).join('\n'), /child summary/);
 assert.doesNotMatch(doc.render(100).join('\n'), /completed child|unsafe completed preview/);
 minimalHandlers.get('agent_settled')({});
@@ -866,11 +877,11 @@ try {
   const beforeRetention = transcriptRenders;
   await setTimeout(150);
   assert.ok(transcriptRenders >= beforeRetention, 'idle completed child does not schedule expiry redraws');
-  assert.match(doc.render(100).join('\n'), /Subagent|completed child/);
+  assert.match(doc.render(100).join('\n'), /Agent · 12/);
   inputListener('\x13');
-  assert.match(doc.render(100).join('\n'), /completed child/, 'expanded completed child stays visible');
+  assert.doesNotMatch(doc.render(100).join('\n'), /completed child/, 'child details stay collapsed in the default preview');
   await updateMinimal(minimalCtx, true);
-  assert.match(doc.render(100).join('\n'), /Subagent|completed child/, 'remount retains current-session completed children');
+  assert.match(doc.render(100).join('\n'), /Agent · 12/, 'remount retains the current-session preview');
 } finally { Date.now = realNow; }
 assert.deepEqual(testTui.children[3].render(100), []);
 assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'running'));
@@ -878,7 +889,7 @@ assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'completed' &
 await rm(statusDirectory, { recursive: true });
 minimalCtx.sessionManager.getBranch = () => persistedAgentEntries;
 await updateMinimal(minimalCtx, true);
-assert.match(doc.render(100).join('\n'), /completed child/, 'session entries restore children after temporary status removal');
+assert.match(doc.render(100).join('\n'), /Agent · 12/, 'session entries restore the preview after temporary status removal');
 await updateMinimal(minimalCtx, false);
 if (previousStatusRoot === undefined) delete process.env.PI_SUBAGENTS_TEMP_ROOT;
 else process.env.PI_SUBAGENTS_TEMP_ROOT = previousStatusRoot;
