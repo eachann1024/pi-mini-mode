@@ -18,6 +18,8 @@ export interface AgentCall {
   action?: string;
   state: "running" | "done" | "error";
   output?: string;
+  startedAt?: number;
+  endedAt?: number;
 }
 export function agentCallDisplay(call: AgentCall): { summary: string; detail: string } {
   if (isAgentTool(call.tool ?? call.name)) return {
