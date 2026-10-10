@@ -1048,19 +1048,19 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
             const controlId = call?.id ?? (entry.thinking || entry.id.startsWith("agents:") ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
-            const identity = open || activeThinking ? "accent" : "text";
+            const identity = entry.state === "error" ? "error" : open || activeThinking ? "accent" : "text";
             const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
-            const toolElapsed = duration ? theme.fg(call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
+            const toolElapsed = duration ? theme.fg(entry.state === "error" ? "error" : call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
-            const status = entry.state === "error" ? "✕" : entry.state === "running" ? runningGlyph() : "●";
+            const status = entry.state === "running" ? runningGlyph() : "●";
             const arrow = !!controlId && (open || hoveredTool?.id === controlId);
-            const keepStatus = entry.state === "running" || (open && entry.state === "error");
+            const keepStatus = entry.state === "running";
             const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
             const last = row === shown.length - 1 && !showWorking && !agents.rows.length;
-            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || entry.state === "error" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
+            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
             if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
               const indent = visibleWidth(prefix);
@@ -1093,7 +1093,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
                   ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1, true)
                   : truncateToWidth(compactBody, available, "…");
                 // sliceByColumn may end before OSC 8's closing sequence.
-                const styledBody = theme.fg(open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
+                const styledBody = theme.fg(entry.state === "error" ? "error" : open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
                 lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
               }
             }
@@ -1104,7 +1104,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
               const details = new Text(output || (entry.state === "running" ? "等待工具文本结果…" : "无文本结果"), 0, 0).render(detailWidth);
-              lines.push(...details.map(line => truncateToWidth(rail + theme.fg("muted", line), width, "")));
+              lines.push(...details.map(line => truncateToWidth(rail + theme.fg(entry.state === "error" ? "error" : "muted", line), width, "")));
             } else if (open && entry.thinking) {
               const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
