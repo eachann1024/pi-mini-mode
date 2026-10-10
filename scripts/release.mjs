@@ -25,7 +25,10 @@ async function verifyRelease({name, version, head, shasum}) {
       if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 20_000));
     }
     const record = published?.versions?.[version];
-    if (published?.['dist-tags']?.latest !== version || record?.gitHead !== head) throw new Error('Published version/latest/gitHead not verified; do not republish.');
+    if (published?.['dist-tags']?.latest !== version || !record || (record.gitHead !== undefined && record.gitHead !== head)) throw new Error('Published version/latest/gitHead not verified; do not republish.');
+    const remote = git('ls-remote', 'origin', 'refs/heads/main').split('\t')[0];
+    git('fetch', 'origin', 'main');
+    git('merge-base', '--is-ancestor', head, remote);
     if (record.dist.shasum !== shasum) throw new Error('Published package differs from the prepared package.');
     const response = await fetch(record.dist.tarball, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`Published tarball HTTP ${response.status}`);
