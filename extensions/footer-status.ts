@@ -584,6 +584,17 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
 }
 
+/** Compact tool duration, visible from the start of execution. */
+export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.now()): string {
+  if (startedAt === undefined) return "";
+  const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1_000));
+  if (!seconds) return "1s";
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor(seconds / 60) % 60;
+  const remainder = seconds % 60;
+  return `${hours ? `${hours}h` : ""}${minutes ? `${minutes}m` : ""}${remainder ? `${remainder}s` : ""}`;
+}
+
 function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt = Date.now()): ThinkingClock {
   const clocks = turn.thinkingClocks ??= [];
   return clocks[index] ??= { startedAt: turn.startedAt ?? startedAt };
@@ -943,7 +954,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
             const identity = open || activeThinking ? "accent" : "text";
-            const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + " ";
+            const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
+            const toolElapsed = duration ? theme.fg(call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
+            const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
             const status = entry.state === "error" ? "✕" : entry.state === "running" ? runningGlyph() : "●";
@@ -1578,7 +1591,7 @@ export default function (pi: ExtensionAPI) {
       freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
       activeMinimalTurn.thinking = undefined;
       activeMinimalTurn.awaitingResponse = false;
-      (activeMinimalTurn.agentCalls ??= []).push(agentCall(event.toolCallId, event.toolName, event.args));
+      (activeMinimalTurn.agentCalls ??= []).push({ ...agentCall(event.toolCallId, event.toolName, event.args), startedAt: toolStarts.get(event.toolCallId) });
       pushProcess(activeMinimalTurn, "call", event.toolCallId);
       (activeMinimalTurn.waitingTools ??= []).push({ id: event.toolCallId, name: event.toolName, startedAt: Date.now() });
     }
@@ -1620,6 +1633,7 @@ export default function (pi: ExtensionAPI) {
     const call = activeMinimalTurn?.agentCalls?.find(call => call.id === event.toolCallId);
     if (call) {
       if (activeMinimalTurn) activeMinimalTurn.waitingTools = activeMinimalTurn.waitingTools?.filter(tool => tool.id !== event.toolCallId);
+      call.endedAt = Date.now();
       call.state = event.isError ? "error" : "done";
       call.output = contentText(event.result) || (event.isError ? "Call failed (no text details)" : "Call returned (background task status below)");
       refresh();
