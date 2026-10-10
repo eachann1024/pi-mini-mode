@@ -1,5 +1,5 @@
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { sliceByColumn, Text, truncateToWidth, visibleWidth, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth, visibleWidth, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { stripVTControlCharacters } from "node:util";
 import { agentCallDisplay, isAgentTool, liveAgentView, runningGlyph } from "./agent-view.ts";
 import { createAssistantImages, imagePlaceholders } from "./assistant-images.ts";
@@ -30,7 +30,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedSubagents = new Set<string>();
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
-  const thinkingPreviews = new Map<string, { text: string; width: number; rows: number; updatedAt: number }>();
+  const thinkingPreviews = new Map<string, { text: string; source: string; width: number; rows: number; live: boolean }>();
   const agentModes = new Map<number, "all" | "preview">();
   const runningTurns = new Set<number>();
   let pinnedToolId: string | undefined;
@@ -220,8 +220,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           const part = entry.match(/^(tool|output|thinking|skill)(?:\s+|$)([\s\S]*)/);
           const thinking = part?.[1] === "thinking";
           const activeThinking = thinking && turn.running && turn.thinking === processIndex;
+          const failedThinking = thinking && /^(error|aborted)$/.test(turn.thinkingOutcomes?.[processIndex] ?? "");
           const label = ({ tool: "Tool", output: "Output", thinking: "Thinking", skill: "Skill" } as Record<string, string>)[part?.[1] ?? ""] ?? "Process";
-          return [{ title: `${label} ${part?.[2] ?? entry}`, detail: part?.[2] ?? entry, state: activeThinking ? "running" : "done", id: thinking ? `thinking:${index}:${processIndex}` : "", thinking, processIndex, activeThinking }];
+          return [{ title: `${label} ${part?.[2] ?? entry}`, detail: part?.[2] ?? entry, state: failedThinking ? "error" : activeThinking ? "running" : "done", id: thinking ? `thinking:${index}:${processIndex}` : "", thinking, processIndex, activeThinking }];
         });
         // Older in-memory turns may predate call markers.
         for (const call of turn.agentCalls ?? []) {
@@ -251,7 +252,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           // Every child keeps its heading; process records share the remaining preview budget.
           const processLimit = Math.max(0, getRecordLimit() - agents.total);
           const shown = expanded ? entries : processLimit ? entries.slice(-processLimit) : [];
-          const showWorking = working && (expanded || (!shown.length && !agents.total));
+          const showWorking = working && (turn.awaitingResponse || expanded || (!shown.length && !agents.total));
           const sparkle = active ? Math.floor(Date.now() / 360) % 2 ? "✧" : "✦" : "✦";
           const usage = addUsage({ ...EMPTY_USAGE, ...turn.usage, cost: turn.usage?.cost ?? 0 }, turn.pendingUsage);
           const hasUsage = usage.totalTokens > 0 || usage.cacheRead > 0;
@@ -276,14 +277,14 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const text = title.split(/\r?\n/).find(line => line.trim())?.replace(/\s+/g, " ").trim() ?? "";
             const split = text.indexOf(" ");
             const noThinkingBody = entry.thinking && !stripVTControlCharacters(entry.detail).trim();
-            const label = noThinkingBody ? "Progress" : split < 0 ? text : text.slice(0, split);
+            const label = split < 0 ? text : text.slice(0, split);
             const body = split < 0 ? "" : text.slice(split + 1);
             const activeThinking = !!entry.activeThinking;
             const elapsed = entry.thinking ? formatThinkingElapsed(turn, entry.processIndex, activeThinking) : "";
             const thinkingElapsed = elapsed ? theme.fg(activeThinking ? "success" : "muted", ` ${elapsed}`) : "";
             const call = turn.agentCalls?.find(call => call.id === entry.id && !isAgentTool(call.tool ?? call.name));
-            const controlId = call?.id ?? (entry.thinking || entry.id.startsWith("agents:") ? entry.id : "");
-            const open = call ? expandedTools.has(call.id) : entry.thinking && expandedThinking.has(entry.id);
+            const controlId = call?.id ?? (entry.thinking && !noThinkingBody || entry.id.startsWith("agents:") ? entry.id : "");
+            const open = call ? expandedTools.has(call.id) : entry.thinking && !noThinkingBody && expandedThinking.has(entry.id);
             const identity = entry.state === "error" ? "error" : open || activeThinking ? "accent" : "text";
             const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
             const toolElapsed = duration ? theme.fg(entry.state === "error" ? "error" : call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
@@ -307,28 +308,25 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             } else {
               const available = Math.max(0, width - visibleWidth(prefix));
               if (entry.thinking) {
-                const now = Date.now();
                 const cached = thinkingPreviews.get(entry.id);
                 const previewRows = open ? 1 : 2;
-                const reuse = activeThinking && cached?.text && cached.width === available && cached.rows === previewRows && now - cached.updatedAt < 350;
-                const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows);
-                if (!reuse) thinkingPreviews.set(entry.id, { text: display, width: available, rows: previewRows, updatedAt: now });
-                const recent = entries.slice(0, entries.indexOf(entry)).reverse().find(candidate => !candidate.thinking && candidate.title.trim());
-                const activity = recent ? recent.title.startsWith("Output ") ? `最近说明：${recent.detail}` : `最近操作：${recent.title}` : "";
-                const fallback = activity ? thinkingPreview(activity, available, previewRows)
-                  : activeThinking ? "模型已开始推理，尚未返回可显示摘要" : "推理已结束，本次未返回可显示摘要";
-                const rows = new Text(display || fallback, 0, 0).render(Math.max(1, available)).slice(0, open ? 1 : 2);
-                const color = activeThinking ? "accent" : "muted";
+                const reuse = cached?.source === entry.detail && cached.width === available && cached.rows === previewRows && cached.live === activeThinking;
+                const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows, activeThinking);
+                if (!reuse) thinkingPreviews.set(entry.id, { text: display, source: entry.detail, width: available, rows: previewRows, live: activeThinking });
+                const outcome = turn.thinkingOutcomes?.[entry.processIndex];
+                const fallback = activeThinking ? "正在思考，等待可显示摘要"
+                  : outcome === "aborted" ? "思考已中断，未返回可显示摘要"
+                  : outcome === "error" ? "思考失败，未返回可显示摘要" : "思考已结束，未返回可显示摘要";
+                const rows = available > 0 ? new Text(display || fallback, 0, 0).render(available).slice(0, previewRows) : [];
+                const color = entry.state === "error" ? "error" : activeThinking ? "accent" : "muted";
                 lines.push(bandHeading(truncateToWidth(prefix + theme.fg(color, rows[0] ?? ""), width, ""), open));
                 const rail = theme.fg(last ? color : "dim", last ? " " : "│") + " ".repeat(Math.max(0, visibleWidth(prefix) - 1));
                 for (const extra of rows.slice(1)) lines.push(truncateToWidth(rail + theme.fg(color, extra), width, ""));
               } else {
                 const displayBody = placeholderText(body);
                 const compactBody = linkToolFiles(displayBody, imageOptions?.cwd() ?? process.cwd(), !open);
-                const fittedBody = visibleWidth(compactBody) > available && !open && available > 1
-                  ? "…" + sliceByColumn(compactBody, visibleWidth(compactBody) - available + 1, available - 1, true)
-                  : truncateToWidth(compactBody, available, "…");
-                // sliceByColumn may end before OSC 8's closing sequence.
+                const fittedBody = truncateToWidth(compactBody, available, "…");
+                // Always close a hyperlink before subsequent rows.
                 const styledBody = theme.fg(entry.state === "error" ? "error" : open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
                 lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
               }
@@ -339,6 +337,11 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const output = stripVTControlCharacters(call.output ?? "").replace(/\r\n?/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
               const rail = width > 5 ? (last ? "     " : theme.fg("accent", "│    ")) : "";
               const detailWidth = Math.max(1, width - visibleWidth(rail));
+              if (call.task && (/\r|\n/.test(call.task) || visibleWidth(call.task) > width - visibleWidth(prefix))) {
+                const input = stripVTControlCharacters(call.task).replace(/\r\n?/g, "\n").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+                lines.push(...new Text(`输入：\n${input}`, 0, 0).render(detailWidth).map(line => truncateToWidth(rail + theme.fg("muted", line), width, "")));
+                lines.push(truncateToWidth(rail + theme.fg("muted", "输出："), width, ""));
+              }
               const details = new Text(output || (entry.state === "running" ? "等待工具文本结果…" : "无文本结果"), 0, 0).render(detailWidth);
               lines.push(...details.map(line => truncateToWidth(rail + theme.fg(entry.state === "error" ? "error" : "muted", line), width, "")));
             } else if (open && entry.thinking) {
@@ -357,7 +360,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             lines.push(...agents.rows);
           }
           if (showWorking) {
-            const label = turn.awaitingResponse && !shown.length ? "Thinking" : "Working";
+            const label = turn.awaitingResponse ? "Waiting" : "Working";
             const prefix = theme.fg("dim", "└─ ") + theme.fg("accent", `${runningGlyph()} `) + theme.fg("text", theme.bold(label)) + " ";
             lines.push(truncateToWidth(prefix + theme.fg("muted", turn.awaitingResponse ? "等待模型响应" : "等待下一步执行"), width, ""));
           }

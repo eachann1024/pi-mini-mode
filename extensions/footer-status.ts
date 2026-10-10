@@ -11,8 +11,9 @@ import attachTitlePlain from "../lib/title-plain.ts";
 import { COPY, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, RECOMMENDED_THEMES, SETTING_IDS, isLegacyMinimalSetting, isRecordLimit, loadSettings, parseSettings, saveSettings, settingsItems, settingsPath, type MiniLensSettings, type RecommendedTheme } from "../lib/settings.ts";
 import { addUsage, cacheWaste, EMPTY_USAGE, finiteNumber, outputSpeed, sessionUsage, type ActiveGeneration, type UsageLike } from "../lib/usage.ts";
 import { statusLine } from "../lib/footer-line.ts";
-import { contentText, continuesEmptyThinking, ensureThinkingClock, freezeOpenThinkingClocks, freezeThinkingClock, minimalTurnsFromBranch, processText, pushProcess, skillNames, thinkingText, type MinimalTurn } from "../lib/minimal-turns.ts";
+import { contentText, minimalTurnsFromBranch, processText, pushProcess, skillNames, type MinimalTurn } from "../lib/minimal-turns.ts";
 import { minimalOutputComponent } from "../lib/minimal-output.ts";
+import { createThinkingStream } from "../lib/thinking-stream.ts";
 
 // Preserve the existing module entry points for consumers and focused checks.
 export { SETTINGS_FILE_NAME, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, settingsPath, parseSettings, settingsNeedBackfill, loadSettings, saveSettings, settingsItems, type MiniLensSettings } from "../lib/settings.ts";
@@ -69,7 +70,7 @@ export default function (pi: ExtensionAPI) {
   let minimalTurns: MinimalTurn[] = [];
   let activeMinimalTurn: MinimalTurn | undefined;
   let pendingMinimalFinal = "";
-  const minimalMessageIndices = new Map<number, number>();
+  const thinkingStream = createThinkingStream();
   let speed: number | undefined;
   let mcpCount: number | undefined;
   let activeGeneration: ActiveGeneration | undefined;
@@ -420,6 +421,8 @@ export default function (pi: ExtensionAPI) {
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
     cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"], () => settings["pi-mini-mode-image-preview"]);
+    thinkingStream.stop(activeMinimalTurn, "aborted");
+    thinkingStream.reset();
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
@@ -459,10 +462,11 @@ export default function (pi: ExtensionAPI) {
     if (!settings.onboardingCompleted && ctx.mode === "tui" && ctx.hasUI) await runOnboarding(ctx);
   });
   const syncMinimalBranch = (_event: unknown, ctx: ExtensionContext) => {
+    thinkingStream.stop(activeMinimalTurn, "aborted");
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
-    minimalMessageIndices.clear();
+    thinkingStream.reset();
     minimalToolOutputIndices.clear();
     mountMinimalOutput(ctx);
     refreshMinimalOutput();
@@ -489,32 +493,13 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on("model_select", refresh);
   pi.on("thinking_level_select", refresh);
-  const writeThinkingLine = (turn: MinimalTurn, content: Array<Record<string, unknown>>, blockIndex: number, line: string): number => {
-    let existing = minimalMessageIndices.get(blockIndex);
-    if (continuesEmptyThinking(content, blockIndex)) {
-      existing = minimalMessageIndices.get(blockIndex - 1);
-      if (existing !== undefined) minimalMessageIndices.set(blockIndex, existing);
-    } else if (existing !== undefined && [...minimalMessageIndices].some(([block, index]) => block < blockIndex && index === existing)) {
-      // A provisional empty block can acquire its own body on a later update.
-      existing = undefined;
-    }
-    if (existing === undefined) {
-      const index = turn.process.length;
-      minimalMessageIndices.set(blockIndex, index);
-      turn.process.push(line);
-      ensureThinkingClock(turn, index);
-      return index;
-    }
-    turn.process[existing] = line;
-    ensureThinkingClock(turn, existing);
-    return existing;
-  };
   pi.on("message_start", (event) => {
     if (event.message.role === "user") {
       if (activeMinimalTurn) {
-        freezeOpenThinkingClocks(activeMinimalTurn);
+        thinkingStream.stop(activeMinimalTurn, "aborted");
         activeMinimalTurn.final = pendingMinimalFinal;
         activeMinimalTurn.running = false;
+        activeMinimalTurn.endedAt ??= Date.now();
         activeMinimalTurn.thinking = undefined;
         promptView?.resetProcessView();
       }
@@ -525,6 +510,7 @@ export default function (pi: ExtensionAPI) {
       for (const name of skillNames(question)) pushProcess(activeMinimalTurn, "skill", name);
       pendingMinimalFinal = "";
       minimalToolOutputIndices.clear();
+      thinkingStream.reset();
       minimalTurns.push(activeMinimalTurn);
       refreshMinimalOutput();
     }
@@ -536,14 +522,14 @@ export default function (pi: ExtensionAPI) {
     }
     activeMinimalTurn ??= minimalTurns.at(-1);
     if (activeMinimalTurn) {
-      freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
+      thinkingStream.start(activeMinimalTurn, event.message.timestamp);
       if (activeMinimalTurn.final) (activeMinimalTurn.replies ??= []).push(activeMinimalTurn.final);
       activeMinimalTurn.final = undefined;
       activeMinimalTurn.running = true;
+      activeMinimalTurn.endedAt = undefined;
       activeMinimalTurn.awaitingResponse = true;
       activeMinimalTurn.thinking = undefined;
     }
-    minimalMessageIndices.clear();
     pendingMinimalFinal = "";
     // Keep the last completed speed visible until this response produces tokens.
     // Tool-call-only assistant messages therefore cannot erase a useful rate.
@@ -555,25 +541,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("message_update", (event) => {
     const partial = (event.assistantMessageEvent as { partial?: { usage?: UsageLike; content?: Array<Record<string, unknown>> } }).partial;
     if (activeMinimalTurn && partial?.content) {
-      const previousThinking = activeMinimalTurn.thinking;
-      activeMinimalTurn.thinking = undefined;
+      if (!thinkingStream.update(activeMinimalTurn, partial.content, event.assistantMessageEvent)) return;
       if (partial.content.length) activeMinimalTurn.awaitingResponse = false;
-      for (const [blockIndex, item] of partial.content.entries()) {
-        if (item.type !== "thinking") continue;
-        const line = `thinking ${thinkingText(item)}`;
-        const index = writeThinkingLine(activeMinimalTurn, partial.content, blockIndex, line);
-        if (blockIndex === partial.content.length - 1 && event.assistantMessageEvent.type !== "thinking_end") {
-          activeMinimalTurn.thinking = index;
-        }
-      }
-      for (const index of new Set(minimalMessageIndices.values())) {
-        if (index === activeMinimalTurn.thinking) {
-          delete ensureThinkingClock(activeMinimalTurn, index).endedAt;
-        } else freezeThinkingClock(activeMinimalTurn, index);
-      }
-      if (previousThinking !== undefined && previousThinking !== activeMinimalTurn.thinking) {
-        freezeThinkingClock(activeMinimalTurn, previousThinking);
-      }
       activeMinimalTurn.final = contentText(partial.content) || undefined;
       refreshMinimalOutput();
     }
@@ -599,10 +568,9 @@ export default function (pi: ExtensionAPI) {
   pi.on("message_end", (event) => {
     if (event.message.role === "assistant") {
       if (activeMinimalTurn) {
-        freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
-        freezeOpenThinkingClocks(activeMinimalTurn);
-        activeMinimalTurn.thinking = undefined;
-        activeMinimalTurn.awaitingResponse = false;
+        const content = Array.isArray(event.message.content) ? event.message.content as unknown as Array<Record<string, unknown>> : [];
+        const outcome = event.message.stopReason === "error" || event.message.stopReason === "aborted" ? event.message.stopReason : "done";
+        if (!thinkingStream.finish(activeMinimalTurn, content, outcome, event.message.timestamp)) return;
         activeMinimalTurn.usage = addUsage(activeMinimalTurn.usage ?? EMPTY_USAGE, event.message.usage as UsageLike | undefined);
         activeMinimalTurn.pendingUsage = undefined;
       }
@@ -614,16 +582,10 @@ export default function (pi: ExtensionAPI) {
       }
       const content = (event.message as { content?: unknown }).content;
       if (activeMinimalTurn && Array.isArray(content)) {
-        for (const [blockIndex, item] of (content as Array<Record<string, unknown>>).entries()) {
-          if (item.type !== "thinking" && !(item.type === "text" && content.some((block) => block.type === "toolCall"))) continue;
-          const line = `${item.type === "thinking" ? "thinking" : "output"} ${item.type === "thinking" ? thinkingText(item) : processText(item.text)}`;
-          if (item.type === "thinking") {
-            freezeThinkingClock(activeMinimalTurn, writeThinkingLine(activeMinimalTurn, content, blockIndex, line));
-            continue;
+        for (const item of content as Array<Record<string, unknown>>) {
+          if (item?.type === "text" && content.some((block) => block?.type === "toolCall")) {
+            activeMinimalTurn.process.push(`output ${processText(item.text)}`);
           }
-          const index = minimalMessageIndices.get(blockIndex);
-          if (index === undefined) activeMinimalTurn.process.push(line);
-          else activeMinimalTurn.process[index] = line;
         }
         const text = contentText(content);
         const message = event.message as { stopReason?: string; errorMessage?: string };
@@ -641,8 +603,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_execution_start", (event) => {
     toolStarts.set(event.toolCallId, Date.now());
     if (activeMinimalTurn) {
-      freezeThinkingClock(activeMinimalTurn, activeMinimalTurn.thinking);
-      activeMinimalTurn.thinking = undefined;
+      thinkingStream.stop(activeMinimalTurn);
       activeMinimalTurn.awaitingResponse = false;
       (activeMinimalTurn.agentCalls ??= []).push({ ...agentCall(event.toolCallId, event.toolName, event.args), startedAt: toolStarts.get(event.toolCallId) });
       pushProcess(activeMinimalTurn, "call", event.toolCallId);
@@ -710,7 +671,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", () => {
     if (!activeMinimalTurn) return;
     for (const turn of minimalTurns) {
-      freezeOpenThinkingClocks(turn);
+      thinkingStream.stop(turn);
       if (turn.running) turn.endedAt = Date.now();
       turn.running = false;
       turn.thinking = undefined;
@@ -721,10 +682,13 @@ export default function (pi: ExtensionAPI) {
     promptView?.resetProcessView();
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
+    thinkingStream.reset();
     minimalToolOutputIndices.clear();
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
+    thinkingStream.stop(activeMinimalTurn, "aborted");
+    thinkingStream.reset();
     restoreScrollbar?.();
     restoreScrollbar = undefined;
     scrollbarRoot = undefined;
