@@ -87,8 +87,8 @@ const COPY = {
   model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", miss: "显示缓存 miss", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", inputEnhancements: "输入增强", showThinking: "显示思考", tools: "显示工具调用", output: "显示过程输出", skills: "显示技能", agentUsage: "显示 Agent token 用量", shortcut: "新 Agent 显示 Ctrl+O 提示（6 秒）",
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
-  inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，光标移入或全屏悬停可预览。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
-  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "多数功能默认开启；「仅显示分支」「缓存 token」「MCP」默认关，「仅显示分支」与「项目与分支」互斥。可用 /pi-mini-mode-settings 再改。", keepDefaults: "保留默认", configureNow: "立即配置", applyRecommended: "应用推荐配置", chooseTheme: "选择 Pi Mini Mode 主题（将保存全局主题和全屏模式；重启后生效）", themeSaved: "已保存推荐主题和全屏模式。请重启 Pi；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
+  inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，默认在输入框上方显示内联卡片（可切换光标悬停模式）。空白后 / 选择技能并在光标处插入。Cmd+点击带下划线的图片标签或消息文件路径，用系统默认应用打开；预览及点击需终端支持。关闭仅恢复原生行为。",
+  tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", minimalRequired: "/pi-mini-mode-minimal 需要 TUI 模式", minimalUsage: "用法：/pi-mini-mode-minimal [on|off]", minimalState: "Pi Mini Mode 极简输出：", onboarding: "默认开启输入增强和极简输出；极简输出需要全屏模式。仅显示分支、缓存 token 和 MCP 服务数默认关闭。选择「打开浏览器设置」可调整字段、预览方式和功能开关；推荐配置会保存主题和全屏模式。以后可用 /pi-mini-mode-settings 修改。", keepDefaults: "保留默认", configureNow: "打开浏览器设置", applyRecommended: "应用推荐配置", chooseTheme: "选择主题（主题立即应用；全屏模式需重启 Pi）", themeSaved: "已保存主题和全屏模式。请重启 Pi 以启用全屏；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
 } as const;
 
 const RECOMMENDED_THEMES = ["cc-dark", "cc-light"] as const;
@@ -1502,7 +1502,7 @@ export default function (pi: ExtensionAPI) {
     if (choice === COPY.configureNow) await openSettings(ctx);
   };
   pi.registerCommand("pi-mini-mode-settings", {
-    description: "Open HTML settings in the browser",
+    description: "Open browser settings for footer fields, image previews, and minimal output",
     handler: async (_args, ctx) => openSettings(ctx),
   });
 
