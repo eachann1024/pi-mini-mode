@@ -7,7 +7,7 @@ import { Markdown, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, type Se
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { installInputEnhancements, type InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
 import { installTerminalCapabilities } from "../lib/terminal-capabilities.ts";
-import { linkMessageFiles } from "../lib/file-links.ts";
+import { linkMessageFiles, linkToolFiles } from "../lib/file-links.ts";
 import { homedir } from "node:os";
 import { stripVTControlCharacters } from "node:util";
 import { basename, dirname, join } from "node:path";
@@ -992,13 +992,13 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const available = Math.max(0, width - visibleWidth(prefix));
               const thinkingBody = activeThinking
                 ? stripVTControlCharacters(entry.detail).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim()
-                : body;
+                : entry.thinking ? body : linkToolFiles(body, process.cwd(), !open);
               const fittedBody = activeThinking && visibleWidth(thinkingBody) > available && available > 1
-                ? "…" + sliceByColumn(thinkingBody, visibleWidth(thinkingBody) - available + 1, available - 1)
+                ? "…" + sliceByColumn(thinkingBody, visibleWidth(thinkingBody) - available + 1, available - 1, true)
                 : truncateToWidth(thinkingBody, available, "…");
               const styledBody = activeThinking ? theme.fg("accent", fittedBody)
                 : entry.thinking ? markdown(fittedBody, Math.max(1, visibleWidth(fittedBody) + 1), true).join(" ").replace(/\s+/g, " ").trim()
-                  : theme.fg(open ? "accent" : "muted", fittedBody);
+                  : theme.fg(open ? "accent" : "muted", fittedBody + "\x1b]8;;\x07");
               lines.push(bandHeading(truncateToWidth(prefix + styledBody, width, "…"), open));
             }
             if (open && call && call.id === pinnedToolId) pinnedTool = { id: call.id, y: lines.length - 1, line: lines.at(-1)! };
