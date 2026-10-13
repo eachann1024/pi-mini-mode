@@ -1,0 +1,88 @@
+name: Daily stable release
+
+on:
+  schedule:
+    # Daily after 08:00 Asia/Shanghai (00:00 UTC); unchanged source is skipped.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish after successful checks (false only validates and uploads artifacts)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-stable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      build: ${{ steps.prepare.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select unreleased source
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            python3 .github/scripts/stable-release.py prepare --force-build
+          else
+            python3 .github/scripts/stable-release.py prepare
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.prepare.outputs.build == 'true'
+        with:
+          node-version: '24'
+      - name: Verify and build affected release inputs
+        if: steps.prepare.outputs.build == 'true'
+        run: |
+          npm ci
+          npm run check
+          mkdir dist-release
+          npm pack --ignore-scripts --pack-destination dist-release
+      - name: Package selected source and checksums
+        if: steps.prepare.outputs.build == 'true'
+        run: python3 .github/scripts/stable-release.py package
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.build == 'true'
+        with:
+          name: stable-${{ github.sha }}
+          path: .stable-release/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    if: needs.build.outputs.build == 'true' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.publish == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: stable-${{ github.sha }}
+          path: .stable-release/
+      - name: Publish verified assets as latest stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_ALLOWED: 'true'
+        run: python3 .github/scripts/stable-release.py publish
