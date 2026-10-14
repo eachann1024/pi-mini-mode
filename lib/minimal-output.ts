@@ -286,7 +286,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const controlId = call?.id ?? (entry.thinking && !noThinkingBody || entry.id.startsWith("agents:") ? entry.id : "");
             const open = call ? expandedTools.has(call.id) : entry.thinking && !noThinkingBody && expandedThinking.has(entry.id);
             const identity = entry.state === "error" ? "error" : open || activeThinking ? "accent" : "text";
-            const duration = call ? formatToolElapsed(call.startedAt, call.endedAt ?? Date.now()) : "";
+            const duration = call ? formatToolElapsed(call.startedAt,
+              call.endedAt ?? (call.state === "running" && turn.running ? Date.now() : undefined)) : "";
             const toolElapsed = duration ? theme.fg(entry.state === "error" ? "error" : call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });

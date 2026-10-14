@@ -54,11 +54,11 @@ export function formatElapsed(startedAt: number | undefined, now = Date.now()): 
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}` : `${minutes}:${remainder}`;
 }
 
-/** Compact tool duration, visible from the start of execution. */
-export function formatToolElapsed(startedAt: number | undefined, endedAt = Date.now()): string {
-  if (startedAt === undefined) return "";
+/** Show whole seconds only when both execution boundaries are known. */
+export function formatToolElapsed(startedAt: number | undefined, endedAt: number | undefined): string {
+  if (startedAt === undefined || endedAt === undefined || !Number.isFinite(startedAt) || !Number.isFinite(endedAt)) return "";
   const seconds = Math.max(0, Math.floor((endedAt - startedAt) / 1_000));
-  if (!seconds) return "1s";
+  if (!seconds) return "";
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.floor(seconds / 60) % 60;
   const remainder = seconds % 60;
