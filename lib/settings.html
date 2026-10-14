@@ -10,12 +10,12 @@
 .preview-mode input[type=number]{font:inherit;color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px;width:6em;height:44px}.preview-mode input:disabled{opacity:.5}
 
 /* Editorial headings; controls and status data retain readable system fonts. */
-body{background:light-dark(#f6f3ed,#141614)}main{max-width:1160px;padding:32px 32px 88px}header{align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:36px}h1{font:italic 400 clamp(2.625rem,5vw,3.625rem)/1.06 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:.02em}.subtitle{font:normal 1.625rem/1.4 "Didot","Bodoni 72","Songti SC","STSong",serif;color:var(--accent);margin:16px 0 0}h2{font:normal 2rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:0;text-transform:none;color:var(--foreground);margin:0 0 16px}section{margin:0;padding-top:24px}.feature-head h3{font:normal 1.625rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif}.feature{padding:20px}.feature:first-child{border-top:3px solid var(--accent)}.feature-body,.feature-points{line-height:1.7}#preview{background:var(--surface);border:1px solid var(--border);padding:16px 24px;height:80px;margin-bottom:12px}.grid label{min-height:44px}@media(max-width:760px){main{padding:20px 16px 64px}header{padding-bottom:20px}.features{grid-template-columns:1fr}h2{font-size:1.75rem}.subtitle{font-size:1.375rem}}
+body{background:light-dark(#f6f3ed,#141614)}main{max-width:1160px;padding:32px 32px 88px}header{align-items:flex-start;border-bottom:1px solid var(--border);padding-bottom:36px}.title-block{flex:1 1 420px;min-width:0}h1{font:italic 400 clamp(2.625rem,5vw,3.625rem)/1.06 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:.02em}.subtitle-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}.subtitle{font:normal 1.625rem/1.4 "Didot","Bodoni 72","Songti SC","STSong",serif;color:var(--accent);margin:16px 0 0}.version{margin:16px 0 0;color:var(--muted);font:var(--text-sm)/1.4 ui-sans-serif,system-ui,sans-serif;letter-spacing:.04em;white-space:nowrap}h2{font:normal 2rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif;letter-spacing:0;text-transform:none;color:var(--foreground);margin:0 0 16px}section{margin:0;padding-top:24px}.feature-head h3{font:normal 1.625rem/1.25 "Didot","Bodoni 72","Songti SC","STSong",serif}.feature{padding:20px}.feature:first-child{border-top:3px solid var(--accent)}.feature-body,.feature-points{line-height:1.7}#preview{background:var(--surface);border:1px solid var(--border);padding:16px 24px;height:80px;margin-bottom:12px}.grid label{min-height:44px}@media(max-width:760px){main{padding:20px 16px 64px}header{padding-bottom:20px}.features{grid-template-columns:1fr}h2{font-size:1.75rem}.subtitle{font-size:1.375rem}}
 </style>
 <main>
 <div id="statusbar" role="status" aria-live="polite"><span id="status"></span><button type="button" id="retry" hidden></button></div>
 <header>
-  <div><h1 id="title"></h1><p class="subtitle" id="subtitle"></p></div>
+  <div class="title-block"><h1 id="title"></h1><div class="subtitle-row"><p class="subtitle" id="subtitle"></p><p class="version" id="version"></p></div></div>
   <nav>
     <button type="button" id="lang-en" aria-pressed="false">EN</button>
     <button type="button" id="lang-zh" aria-pressed="false">中文</button>
@@ -31,7 +31,7 @@ body{background:light-dark(#f6f3ed,#141614)}main{max-width:1160px;padding:32px 3
 <section><h2 id="featuresHeading"></h2><div class="features" id="features"></div></section>
 </main>
 <script>
-const $=id=>document.getElementById(id),token=location.hash.slice(1);
+const $=id=>document.getElementById(id),token=location.hash.slice(1),VERSION=document.documentElement.dataset.version||'';
 history.replaceState(null,'',location.pathname);
 const I18N={
   title:{zh:'Pi Mini Mode',en:'Pi Mini Mode'},
@@ -114,6 +114,7 @@ function applyLang(){
   document.documentElement.lang=lang==='zh'?'zh-CN':'en';
   document.title=t('documentTitle');
   for(const id of ['title','subtitle','featuresHeading','fieldsHeading','dragHint']) $(id).textContent=t(id);
+$('version').textContent=VERSION?`v${VERSION}`:'';
   $('reset').textContent=t('reset');$('retry').textContent=t('retry');
   $('lang-zh').setAttribute('aria-pressed',String(lang==='zh'));
   $('lang-en').setAttribute('aria-pressed',String(lang==='en'));
