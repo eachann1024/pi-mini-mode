@@ -22,11 +22,6 @@
 
 `.github/workflows/publish.yml` 只保留 `workflow_dispatch` 手动触发，作为本机不可用时的备份，避免与上一步重复发布同一版本。
 
-## 演示视频与仓库文件
-
-- README 只保留两条 GitHub user-attachments 内联视频（英文在前、中文在后，各自为单独一行的裸 URL，不要写 `<video src=user-attachments...>`，匿名访客会 404）；禁止添加「演示视频 / Watch the video / 旁白版」等文字链接，禁止链接仓库内 raw/blob 的 mp4。
-- 仓库内只允许保留 `pi.video` 必需的那一个 mp4；禁止提交视频副本、封面图、poster、contact sheet、临时脚本，以及 package.json / CHANGELOG / 文档里的相关描述。
-
 ## 提交与推送
 
 - 每完成一项独立功能、修复、优化或文档／规则更新，并通过最小必要验收后，立即提交并推送到任务对应的远端分支；不积攒多个已完成事项，不再重复询问。
@@ -48,6 +43,7 @@
 - 沿用本项目的版本、产物与宿主边界；自动创建 GitHub 稳定版不自动授权 npm 发布、应用商店提交或生产部署，这些操作继续遵守各自现有流程。
 - 本规则必须由默认分支上的定时发布工作流配套执行；只有规则文本或普通构建工作流不代表自动发布已启用。新增或调整发布流程时同步本节，并核对时间、分支、跳过条件、必要检查及发布产物。
 - `.github/workflows/publish.yml` 继续只保留手动触发作为 npm 发布备份；定时 GitHub 稳定版不得自动调用它或绕过本机 npm 发布与版本校验流程。
+
 
 - 定时 GitHub 稳定版执行入口：`.github/workflows/daily-stable.yml`；每天北京时间 08:00 检查默认分支，手动运行默认只构建验证，选择 `publish=true` 才发布。
 
