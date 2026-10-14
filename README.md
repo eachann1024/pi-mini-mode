@@ -12,7 +12,7 @@ An everyday refinement for [Pi](https://pi.dev), not just a footer. Preview imag
 
 https://github.com/user-attachments/assets/1ad90757-ecea-4901-afd8-f33a68176ae2
 
-https://github.com/user-attachments/assets/53c1bcd8-9f0b-42d7-a424-a407dcf666e8
+
 
 Numbers in the footer shots come from a scripted demo session; prices are estimates, not provider bills.
 
