@@ -63,8 +63,15 @@ export async function startSettingsWeb(snapshot: () => unknown, update: (value: 
     }
     if (req.url === "/" && req.method === "GET") {
       try {
-        const html = await readFile(new URL("./settings.html", import.meta.url));
-        res.setHeader("Content-Type", "text/html; charset=utf-8"); res.end(html);
+        const [html, manifest] = await Promise.all([
+          readFile(new URL("./settings.html", import.meta.url), "utf8"),
+          readFile(new URL("../package.json", import.meta.url), "utf8"),
+        ]);
+        const version = JSON.parse(manifest).version;
+        const page = typeof version === "string" && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)
+          ? html.replace("<html lang=\"zh-CN\">", `<html lang="zh-CN" data-version="${version}">`)
+          : html;
+        res.setHeader("Content-Type", "text/html; charset=utf-8"); res.end(page);
       } catch {
         res.writeHead(503).end("Settings page unavailable. Reload Pi and reopen settings.");
       }
