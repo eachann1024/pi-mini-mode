@@ -2,7 +2,7 @@ import { ensureThinkingClock, freezeOpenThinkingClocks, freezeThinkingClock, thi
 
 type ThinkingEvent = { type: string; contentIndex?: number; content?: string; partial?: { timestamp?: number } };
 
-/** One assistant message owns its block indices; ended blocks can never become active again. */
+/** One assistant message owns its block indices; each start owns a fresh process row. */
 export function createThinkingStream() {
   const indices = new Map<number, number>();
   const ended = new Set<number>();
@@ -21,7 +21,6 @@ export function createThinkingStream() {
         index = turn.process.length;
         indices.set(block, index);
         turn.process.push(`thinking ${body}`);
-        if (event) ensureThinkingClock(turn, index);
       } else if (body) turn.process[index] = `thinking ${body}`;
       // A terminal empty snapshot must not erase already streamed, readable text.
     }
@@ -36,14 +35,33 @@ export function createThinkingStream() {
     },
     update(turn: MinimalTurn, content: Array<Record<string, unknown>>, event: ThinkingEvent) {
       if (closed || turn !== owner || !matchesMessage(event.partial?.timestamp)) return false;
-      if ((event.type === "thinking_start" || event.type === "thinking_delta") && event.contentIndex !== undefined && ended.has(event.contentIndex)) return false;
+      const block = event.contentIndex;
+      if (event.type === "thinking_delta" && block !== undefined && ended.has(block)) return false;
+      const now = Date.now();
+      if (event.type === "thinking_start" && block !== undefined) {
+        freezeOpenThinkingClocks(turn);
+        for (const previous of indices.keys()) ended.add(previous);
+        indices.delete(block);
+        ended.delete(block);
+      }
       write(turn, content, event);
+      if ((event.type === "thinking_start" || event.type === "thinking_delta") && block !== undefined) {
+        const index = indices.get(block);
+        if (index !== undefined) {
+          for (const [previous, previousIndex] of indices) if (previous !== block) {
+            ended.add(previous);
+            freezeThinkingClock(turn, previousIndex);
+          }
+          ensureThinkingClock(turn, index, now).lastUpdatedAt = now;
+          turn.thinking = index;
+        }
+      }
       if (event.type === "thinking_end" && event.contentIndex !== undefined) ended.add(event.contentIndex);
-      const last = content.length - 1;
-      for (const block of indices.keys()) if (block < last) ended.add(block);
-      if (/^(text|toolcall)_/.test(event.type) && event.contentIndex !== undefined && event.contentIndex >= last) ended.add(last);
-      turn.thinking = content[last]?.type === "thinking" && !ended.has(last) ? indices.get(last) : undefined;
-      for (const [block, index] of indices) if (ended.has(block)) freezeThinkingClock(turn, index);
+      if (/^(text|toolcall)_/.test(event.type)) for (const block of indices.keys()) ended.add(block);
+      for (const [block, index] of indices) if (ended.has(block)) {
+        freezeThinkingClock(turn, index);
+        if (turn.thinking === index) turn.thinking = undefined;
+      }
       return true;
     },
     finish(turn: MinimalTurn, content: Array<Record<string, unknown>>, outcome: ThinkingOutcome = "done", timestamp?: number) {

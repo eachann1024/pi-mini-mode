@@ -25,6 +25,8 @@ export interface MinimalTurn {
 
 export interface ThinkingClock {
   startedAt: number;
+  /** Last thinking token, excluding delayed end frames and subsequent output. */
+  lastUpdatedAt?: number;
   endedAt?: number;
 }
 
@@ -73,7 +75,7 @@ export function ensureThinkingClock(turn: MinimalTurn, index: number, startedAt 
 export function freezeThinkingClock(turn: MinimalTurn | undefined, index: number | undefined, endedAt = Date.now(), outcome: ThinkingOutcome = "done"): void {
   if (!turn || index === undefined) return;
   const clock = turn.thinkingClocks?.[index];
-  if (clock && clock.endedAt === undefined) clock.endedAt = endedAt;
+  if (clock && clock.endedAt === undefined) clock.endedAt = Math.max(clock.startedAt, Math.min(endedAt, clock.lastUpdatedAt ?? endedAt));
   (turn.thinkingOutcomes ??= [])[index] ??= outcome;
 }
 
@@ -86,15 +88,15 @@ export function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt 
 
 /** Each Thinking row counts from its own start and keeps its frozen stop time. */
 export function formatThinkingElapsed(
-  turn: Pick<MinimalTurn, "startedAt" | "thinkingClocks">,
+  turn: Pick<MinimalTurn, "thinkingClocks">,
   processIndex: number,
   active: boolean,
   now = Date.now(),
 ): string {
   const clock = turn.thinkingClocks?.[processIndex];
   const startedAt = clock?.startedAt;
-  if (active && startedAt != null) return `${(Math.max(0, now - startedAt) / 1_000).toFixed(1)}s`;
   if (clock?.endedAt != null) return `${(Math.max(0, clock.endedAt - clock.startedAt) / 1_000).toFixed(1)}s`;
+  if (active && startedAt != null) return `${(Math.max(0, now - startedAt) / 1_000).toFixed(1)}s`;
   return "";
 }
 
