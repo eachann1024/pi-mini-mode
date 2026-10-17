@@ -218,9 +218,9 @@ The direct development dependency on `@earendil-works/pi-server` is required by 
 <details>
 <summary><strong>Publishing</strong></summary>
 
-Complete and commit the task, then run `npm run release` from a clean checkout. It selects one version above every historically published stable npm version, updates package.json and the lockfile, checks types, commits and pushes to main, publishes to npm, verifies the package and latest tag, and creates the matching Git tag. Versions start at `2.0.6`; the final number continues through 100 and beyond and does not reset when the feature version changes. Pi uses the same npm version. Ordinary pushes do not publish. The manual CI backup publishes the committed version exactly and never changes it. Failed publication stops without a second publish.
+Every push to main (including merged PRs) that changes `extensions/`, `lib/`, `themes/`, package.json or the lockfile publishes automatically via `.github/workflows/publish.yml`: a package.json version above the highest published npm version is used as is; otherwise the patch number of the highest published version is incremented, the package is published to npm, the version is committed back to main with `[skip ci]`, and a matching tag and GitHub Release are created. Docs-only or CI-only changes do not publish, and a version is never published twice. The Pi package gallery discovers the package from npm.
 
-The backup workflow needs the package’s npm Trusted Publisher configured for this GitHub repository and `publish.yml`. It uses OIDC and provenance and does not use an npm token.
+npm authentication prefers a Trusted Publisher (OIDC) bound to this repository and `publish.yml`; a repository secret `NPM_TOKEN` also works.
 
 </details>
 
