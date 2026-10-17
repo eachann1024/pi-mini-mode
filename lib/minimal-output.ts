@@ -30,7 +30,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const expandedSubagents = new Set<string>();
   const expandedTools = new Set<string>();
   const expandedThinking = new Set<string>();
-  const thinkingPreviews = new Map<string, { text: string; source: string; width: number; rows: number; live: boolean }>();
+  const thinkingPreviews = new Map<string, { text: string; source: string; width: number; rows: number; live: boolean; shownAt: number }>();
+  const THINKING_SCROLL_MS = 480;
   const agentModes = new Map<number, "all" | "preview">();
   const runningTurns = new Set<number>();
   let pinnedToolId: string | undefined;
@@ -312,9 +313,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               if (entry.thinking) {
                 const cached = thinkingPreviews.get(entry.id);
                 const previewRows = open ? 1 : 2;
-                const reuse = cached?.source === entry.detail && cached.width === available && cached.rows === previewRows && cached.live === activeThinking;
-                const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows, activeThinking);
-                if (!reuse) thinkingPreviews.set(entry.id, { text: display, source: entry.detail, width: available, rows: previewRows, live: activeThinking });
+                const sameFrame = cached?.source === entry.detail && cached.width === available && cached.rows === previewRows && cached.live === activeThinking;
+                const holdTail = activeThinking && cached?.live && cached.width === available && cached.rows === previewRows && Date.now() - cached.shownAt < THINKING_SCROLL_MS;
+                const display = sameFrame || holdTail ? cached.text : thinkingPreview(entry.detail, available, previewRows, activeThinking);
+                if (!sameFrame && !holdTail) thinkingPreviews.set(entry.id, { text: display, source: entry.detail, width: available, rows: previewRows, live: activeThinking, shownAt: Date.now() });
                 const outcome = turn.thinkingOutcomes?.[entry.processIndex];
                 const fallback = activeThinking ? "正在思考，等待可显示摘要"
                   : outcome === "aborted" ? "思考已中断，未返回可显示摘要"
