@@ -21,6 +21,7 @@ export function createThinkingStream() {
         index = turn.process.length;
         indices.set(block, index);
         turn.process.push(`thinking ${body}`);
+        if (event) ensureThinkingClock(turn, index);
       } else if (body) turn.process[index] = `thinking ${body}`;
       // A terminal empty snapshot must not erase already streamed, readable text.
     }
@@ -57,7 +58,13 @@ export function createThinkingStream() {
         }
       }
       if (event.type === "thinking_end" && event.contentIndex !== undefined) ended.add(event.contentIndex);
-      if (/^(text|toolcall)_/.test(event.type)) for (const block of indices.keys()) ended.add(block);
+      const last = content.length - 1;
+      for (const block of indices.keys()) if (block < last) ended.add(block);
+      if (/^(text|toolcall)_/.test(event.type) || (last >= 0 && content[last]?.type !== "thinking")) {
+        for (const block of indices.keys()) ended.add(block);
+      }
+      turn.thinking = content[last]?.type === "thinking" && !ended.has(last) ? indices.get(last) : undefined;
+      if (turn.thinking !== undefined) ensureThinkingClock(turn, turn.thinking, now).lastUpdatedAt = now;
       for (const [block, index] of indices) if (ended.has(block)) {
         freezeThinkingClock(turn, index);
         if (turn.thinking === index) turn.thinking = undefined;

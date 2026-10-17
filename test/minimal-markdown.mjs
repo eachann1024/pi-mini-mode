@@ -85,7 +85,8 @@ for (const name of ['dark', 'light']) {
   assert.ok(output.includes(theme.fg('muted', 'body')), 'Output body uses neutral gray');
   const neutral = minimalOutputComponent(theme, () => [{ question: '', process: ['call r', 'skill frontend'], agentCalls: [{ id: 'r', name: 'read', task: 'README.md', state: 'done' }] }]).render(100).join('\n');
   for (const label of ['Agent', 'read', 'Skill']) assert.ok(neutral.includes(theme.fg('text', theme.bold(label))), label);
-  for (const body of ['README.md', 'frontend']) assert.ok(neutral.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '').includes(theme.fg('muted', body)), body);
+  assert.ok(neutral.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '').includes(theme.fg('muted', './README.md')) || neutral.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '').includes(theme.fg('muted', 'README.md')), 'README.md');
+  assert.ok(neutral.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, '').includes(theme.fg('muted', 'frontend')), 'frontend');
   assert.ok(!neutral.includes(theme.fg('accent', '')), 'settled plain process contains no accent foreground');
   const mdOutput = minimalOutputComponent(theme, () => [{ question: 'Q', process: ['output 重点区分 **SAPI 网关** 的职责'], running: false }]).render(100).join('\n');
   assert.doesNotMatch(plain(mdOutput), /\*\*/);

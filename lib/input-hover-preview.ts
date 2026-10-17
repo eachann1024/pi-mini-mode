@@ -1,5 +1,7 @@
 import { allocateImageId, deleteKittyImage, getCellDimensions, getImageDimensions, getOsc8LinkAtColumn, matchesKey, renderImage, visibleWidth, type TUI } from "@earendil-works/pi-tui";
-import { extname } from "node:path";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Enhancements } from "./input-enhancements-types.ts";
 import { imageLayoutKey, previewLines } from "./input-image-graphics.ts";
@@ -12,14 +14,39 @@ export function setPointer(state: Enhancements, pointer: boolean): void {
   state.pointer = pointer;
 }
 
+/** Show a local file selected in its folder. Windows paste stays available off a file link. */
+export function revealInFolder(path: string, launch: typeof spawn = spawn): boolean {
+  if (!existsSync(path)) return false;
+  // macOS and Windows can select the file. Other desktops open its folder.
+  const [command, args] = process.platform === "darwin" ? ["open", ["-R", path]]
+    : process.platform === "win32" ? ["explorer.exe", [`/select,${path}`]]
+      : ["xdg-open", [dirname(path)]];
+  launch(command, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref();
+  return true;
+}
+
+function linkedFile(screen: string[] | undefined, x: number, y: number): string | undefined {
+  const url = getOsc8LinkAtColumn(screen?.[y] ?? "", x);
+  if (!url?.startsWith("file:")) return;
+  try {
+    const path = fileURLToPath(url);
+    return existsSync(path) ? path : undefined;
+  } catch { return; }
+}
+
 export function handleTerminalInput(state: Enhancements, data: string): { consume?: boolean } | undefined {
   if (data === "\x1b[O") { setPointer(state, false); void requestPreview(state, undefined); }
   const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data);
   if (mouse) {
-    const x = Number(mouse[2]) - 1, y = Number(mouse[3]) - 1;
+    const button = Number(mouse[1]), x = Number(mouse[2]) - 1, y = Number(mouse[3]) - 1;
     // ponytail: Pi 0.85 has no public screen hit-test API; inspect its last rendered OSC 8 cells.
     const screen = (state.tui as TUI & { previousScreen?: string[] } | undefined)?.previousScreen;
-    const moving = !!(Number(mouse[1]) & 32) && mouse[4] === "M";
+    const moving = !!(button & 32) && mouse[4] === "M";
+    // Fullscreen treats a secondary press as selection. Reveal the linked file first.
+    if (!moving && mouse[4] === "M" && (button & 3) === 2 && state.enabled()) {
+      const path = linkedFile(screen, x, y);
+      if (path && revealInFolder(path, state.reveal)) return { consume: true };
+    }
     if (!moving) { setPointer(state, false); void requestPreview(state, undefined); return undefined; }
     const cached = state.hoverLink;
     const sameTarget = cached?.row === y && x >= cached.start && x < cached.end;

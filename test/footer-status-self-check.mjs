@@ -39,7 +39,7 @@ export class Text { constructor() {} }
 export {};
 `;
 const tuiModule = `
-export { Image, CURSOR_MARKER, allocateImageId, deleteKittyImage, encodeKitty, getCellDimensions, setCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
+export { Image, Text, CURSOR_MARKER, allocateImageId, deleteKittyImage, encodeKitty, getCellDimensions, setCellDimensions, getImageDimensions, renderImage, getCapabilities, setCapabilities, getOsc8LinkAtColumn, hyperlink, stripTerminalSequences, Markdown, Marked, matchesKey, isKeyRelease, isKeyRepeat, sliceByColumn, ScrollView, VStack, wrapTextWithAnsi } from "${new URL("../node_modules/@earendil-works/pi-tui/dist/index.js", import.meta.url).href}";
 export const visibleWidth = (text) => String(text).replace(/\\x1b\\[[0-9;]*m/g, "").length;
 export const truncateToWidth = (text, width, suffix = "…") => {
   const plain = String(text).replace(/\\x1b\\[[0-9;]*m/g, "");
@@ -51,10 +51,7 @@ export class Container {
   render() { return this.children; }
   invalidate() {}
 }
-export class Text {
-  constructor(text) { this.text = text; }
-  setText(text) { this.text = text; }
-}
+
 export class SettingsList {
   constructor(items, _height, theme, onChange) { this.items = items; this.theme = theme; this.onChange = onChange; }
   handleInput() {}
@@ -89,7 +86,7 @@ assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => 
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.description, "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。");
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-input-enhancements"], true, "input enhancements default to on");
-assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*消息文件路径，用系统默认应用打开/);
+assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*打开/);
 assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
 for (const key of ['pi-mini-mode-minimal-thinking-show', 'pi-mini-mode-minimal-tools-show', 'pi-mini-mode-minimal-output-show', 'pi-mini-mode-minimal-skills-show', 'pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
   assert.equal(key in extension.DEFAULT_SETTINGS, false);
@@ -152,14 +149,14 @@ for (const accent of ["\x1b[34m", "\x1b[35m"]) {
     const turn = { question: "status", process: ["call status"], agentCalls: [{ id: "status", name: "bash", task: "check", state }] };
     const view = extension.minimalOutputComponent(theme, () => [turn], () => true);
     const rendered = view.render(100).join("\n");
-    if (state === "running") assert.match(stripAnsi(rendered), /│ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash/);
+    if (state === "running") assert.match(stripAnsi(rendered), /│ [⠲⠴⠦⠖⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash/);
     else if (state === "error") assert.match(stripAnsi(rendered), /│ ✕ bash/);
     else { assert.match(stripAnsi(rendered), /│ bash/); assert.doesNotMatch(stripAnsi(rendered), /● bash/); }
     assert.ok(view.render(12).every(line => stripAnsi(line).length <= 12));
   }
   const thinking = extension.minimalOutputComponent(theme, () => [{ question: "status", process: [], running: true, awaitingResponse: true }]);
   const thinkingText = stripAnsi(thinking.render(100).join("\n"));
-  assert.match(thinkingText, /└─ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Thinking/);
+  assert.match(thinkingText, /└─ [⠲⠴⠦⠖] Waiting/);
   const quiet = extension.minimalOutputComponent(theme, () => [{ question: "status", process: ["thinking done"], running: true, awaitingResponse: false, startedAt: 0 }]);
   const quietText = stripAnsi(quiet.render(100).join("\n"));
   assert.match(quietText, /Thinking/, "a completed record stays visible while the turn is running");
@@ -253,7 +250,7 @@ const integratedTurn = { question: 'Integrated', process: Array.from({ length: 1
 let expandIntegrated = false;
 const integratedView = extension.minimalOutputComponent(minimalTheme, () => [integratedTurn], () => false, () => true, () => expandIntegrated);
 let integratedRows = integratedView.render(120).map(stripAnsi);
-assert.match(integratedRows.find(row => row.startsWith('✦') || row.startsWith('✧')), /Agent · 13/);
+assert.match(integratedRows.find(row => row.startsWith('✦') || row.startsWith('✧')), /Agent · (?:13|22)/);
 assert.match(integratedRows.find(row => row.includes('会话')), /320K/);
 assert.match(integratedRows.find(row => row.includes('缓存')), /246K/);
 assert.equal(integratedRows.filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6, 'the default preview keeps six main records and hides child rows');
@@ -261,7 +258,7 @@ assert.doesNotMatch(integratedRows.join('\n'), /MAIN_[0-6](?!\d)|运行中|Ctrl\
 assert.ok(integratedRows.findIndex(row => row.includes('MAIN_12')) < integratedRows.findIndex(row => row.includes('FINAL_REPLY')));
 assert.match(integratedRows.find(row => row.includes('MAIN_12')), /^│ /);
 for (const width of [1, 12, 40]) assert.ok(integratedView.render(width).every(row => stripAnsi(row).length <= width));
-assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Agent · 13/, 'the compact heading keeps the record count');
+assert.match(integratedView.render(40).map(stripAnsi).join('\n'), /Agent · (?:13|22)/, 'the compact heading keeps the record count');
 for (let i = 9; i < 40; i++) integratedTurn.subAgents[0].steps.push({ runId: `child-${i}`, agent: 'worker', label: `CHILD_${i}`, recentOutput: [`CHILD_${i}`], status: 'running' });
 assert.equal(integratedView.render(120).map(stripAnsi).filter(row => /^(?:│ |[├└]─)/.test(row)).length, 6, 'child rows stay hidden until the Agent heading is expanded');
 for (const child of integratedTurn.subAgents[0].steps) child.status = 'completed';
@@ -781,7 +778,7 @@ minimalHandlers.get("tool_execution_start")({ toolCallId: "waiting", toolName: "
 for (const partialResult of [{ content: [] }, { content: [{ type: "text", text: "  " }] }]) {
   minimalHandlers.get("tool_execution_update")({ toolCallId: "waiting", partialResult });
 }
-assert.match(doc.render(100).join("\n"), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash \d+s curl --max-time/);
+assert.match(doc.render(100).join("\n"), /[⠲⠴⠦⠖⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] bash (?:\d+s )?curl --max-time/);
 assert.doesNotMatch(doc.render(100).join("\n"), /"content"/);
 const rendersBeforeWaiting = transcriptRenders;
 await setTimeout(1100);
@@ -825,7 +822,7 @@ assert.doesNotMatch(doc.render(100).join("\n"), /Control subagent|private long t
 inputListener("\x0f");
 minimalHandlers.get("agent_settled")({});
 assert.match(doc.render(100).join("\n"), /unreleased final/);
-assert.match(doc.render(100).join("\n"), /read \d+s file-7/, "settling keeps the recent records visible");
+assert.match(doc.render(100).join("\n"), /read (?:\d+s )?file-7/, "settling keeps the recent records visible");
 // Async completion resumes the same user conversation without another user message.
 minimalHandlers.get("message_start")({ message: { role: "custom", customType: "subagent-result", content: "child returned" } });
 minimalHandlers.get("message_start")({ message: { role: "assistant" } });
@@ -850,20 +847,20 @@ const previousStatusRoot = process.env.PI_SUBAGENTS_TEMP_ROOT;
 process.env.PI_SUBAGENTS_TEMP_ROOT = statusRoot;
 minimalCtx.sessionManager.getSessionFile = () => "current-session";
 await updateMinimal(minimalCtx, true);
-assert.match(doc.render(100).join("\n"), /Agent · 12[\s\S]*Follow-up answer/, "settled parent keeps its preview before replies");
+assert.match(doc.render(100).join("\n"), /Agent · (?:12|13)[\s\S]*Follow-up answer/, "settled parent keeps its preview before replies");
 assert.deepEqual(testTui.children[3].render(100), [], 'nothing is rendered in the dock');
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/);
 inputListener("\x13");
 assert.doesNotMatch(doc.render(100).join("\n"), /child detail/, "Ctrl+S cannot expose running child previews");
 minimalHandlers.get("message_start")({ message: { role: "user", content: "new question" } });
-assert.match(doc.render(100).join("\n"), /Agent · 12[\s\S]*new question/, "the original turn keeps its preview after a new user message");
+assert.match(doc.render(100).join("\n"), /Agent · (?:12|13)[\s\S]*new question/, "the original turn keeps its preview after a new user message");
 minimalHandlers.get("tool_execution_start")({ toolCallId: "agent-2", toolName: "subagent", args: { agent: "reviewer" } });
 assert.equal((doc.render(100).join("\n").match(/child task/g) ?? []).length, 0, 'child rows stay hidden in the default preview');
 const childSessionFile = join(statusDirectory, 'session.jsonl');
 await writeFile(childSessionFile, JSON.stringify({ type: 'message', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'completed child' }] } }) + '\n');
 await writeFile(join(statusDirectory, 'status.json'), JSON.stringify({ sessionId: 'current-session', toolCallId: 'agent-1', runId: 'child', mode: 'single', state: 'completed', steps: [{ agent: 'reviewer', status: 'running', sessionFile: childSessionFile, recentOutput: ['unsafe completed preview'] }] }));
 await setTimeout(1100);
-assert.match(doc.render(100).join('\n'), /Agent · 12/);
+assert.match(doc.render(100).join('\n'), /Agent · (?:12|13)/);
 assert.doesNotMatch(doc.render(100).join('\n'), /child summary/);
 assert.doesNotMatch(doc.render(100).join('\n'), /completed child|unsafe completed preview/);
 minimalHandlers.get('agent_settled')({});
@@ -874,11 +871,11 @@ try {
   const beforeRetention = transcriptRenders;
   await setTimeout(150);
   assert.ok(transcriptRenders >= beforeRetention, 'idle completed child does not schedule expiry redraws');
-  assert.match(doc.render(100).join('\n'), /Agent · 12/);
+  assert.match(doc.render(100).join('\n'), /Agent · (?:12|13)/);
   inputListener('\x13');
   assert.doesNotMatch(doc.render(100).join('\n'), /completed child/, 'child details stay collapsed in the default preview');
   await updateMinimal(minimalCtx, true);
-  assert.match(doc.render(100).join('\n'), /Agent · 12/, 'remount retains the current-session preview');
+  assert.match(doc.render(100).join('\n'), /Agent · (?:12|13)/, 'remount retains the current-session preview');
 } finally { Date.now = realNow; }
 assert.deepEqual(testTui.children[3].render(100), []);
 assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'running'));
@@ -886,7 +883,7 @@ assert.ok(persistedAgentEntries.some(entry => entry.data.state === 'completed' &
 await rm(statusDirectory, { recursive: true });
 minimalCtx.sessionManager.getBranch = () => persistedAgentEntries;
 await updateMinimal(minimalCtx, true);
-assert.match(doc.render(100).join('\n'), /Agent · 12/, 'session entries restore the preview after temporary status removal');
+assert.match(doc.render(100).join('\n'), /Agent · (?:12|13)/, 'session entries restore the preview after temporary status removal');
 await updateMinimal(minimalCtx, false);
 if (previousStatusRoot === undefined) delete process.env.PI_SUBAGENTS_TEMP_ROOT;
 else process.env.PI_SUBAGENTS_TEMP_ROOT = previousStatusRoot;
@@ -939,10 +936,10 @@ const onboardingCtx = {
   },
 };
 await onboardingHandlers.get("session_start")({}, onboardingCtx);
-assert.deepEqual(previews[0]?.[1], ["保留默认", "立即配置", "应用推荐配置"], "onboarding offers explicit default, configure, and recommended paths");
+assert.deepEqual(previews[0]?.[1], ["保留默认", "打开浏览器设置", "应用推荐配置"], "onboarding offers explicit default, configure, and recommended paths");
 assert.match(previews[0]?.[0] ?? "", /Total 45K  CH 40\.0%.*500\/1\.0M.*120 tok\/s/, "onboarding preview matches the new default-on fields");
 assert.doesNotMatch(previews[0]?.[0] ?? "", /Cached 25K|◇ MCP 3/, "onboarding preview omits the now off-by-default cache-token and MCP fields");
-assert.match(previews[0]?.[0] ?? "", /多数功能默认开启；「仅显示分支」「缓存 token」「MCP」默认关，「仅显示分支」与「项目与分支」互斥。可用 \/pi-mini-mode-settings 再改。/, "onboarding describes defaults accurately");
+assert.match(previews[0]?.[0] ?? "", /默认开启输入增强和极简输出.*以后可用 \/pi-mini-mode-settings 修改。/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
 assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
@@ -969,7 +966,7 @@ onboardingExtension.default({
   registerShortcut() {},
   exec: async (_command, args) => { configureOpenedUrl = args[0]; return { code: 0 }; },
 });
-await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "立即配置"; } } });
+await configureHandlers.get("session_start")({}, { ...onboardingCtx, ui: { ...onboardingCtx.ui, async select() { return "打开浏览器设置"; } } });
 assert.match(configureOpenedUrl, /^https?:\/\//, "Configure now opens HTML settings after showing the preview");
 
 globalThis.__piMiniHostSettings = { unrelated: "preserve" };

@@ -547,7 +547,7 @@ document.render(160); // Existing handledRunIds is populated by the first view r
 let matchedRows = document.render(160);
 assert.equal((matchedRows.join('\n').match(/Agent ·/g) ?? []).length, 1);
 assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|NATIVE_REPLY_BODY|FINAL_OUTPUT|UNSAFE_LOG/);
-let childY = matchedRows.findIndex(row => row.includes('SubAgent'));
+let childY = matchedRows.findIndex(row => row.includes('Agent ·'));
 assert.ok(childY > 0);
 assert.deepEqual(document.handleMouse({ ...event, x: 3, y: childY }), { handled: true, render: true });
 matchedRows = document.render(160);
@@ -568,7 +568,7 @@ childView = matchedView();
 restoreMatched = attachTranscript(tui, childView, { ...matchedOptions, turnCount: () => dispatchTurns.length });
 matchedRows = document.render(160);
 assert.doesNotMatch(matchedRows.join('\n'), /REPLY_BODY|FINAL_OUTPUT/);
-childY = matchedRows.findIndex(row => row.includes('SubAgent'));
+childY = matchedRows.findIndex(row => row.includes('Agent ·'));
 document.handleMouse({ ...event, x: 3, y: childY });
 matchedRows = document.render(160);
 childY = matchedRows.findIndex(row => /[├└]─.*SubAgent/.test(row));

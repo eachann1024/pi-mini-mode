@@ -231,7 +231,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           if (!entries.some(entry => entry.id === call.id)) entries.push({ title: `${isAgentTool(call.tool ?? call.name) ? "Control" : call.name} ${display.summary}`, detail: display.detail, state: call.state, id: call.id, thinking: false, processIndex: -1, activeThinking: false });
         }
         const agentTurnControls: Array<{ runId: string; y: number; width: number; line: string }> = [];
-        const agents = liveAgentView(turn.subAgents ?? [], theme, width, subAgentsExpanded(), true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
+        const agents = liveAgentView(turn.subAgents ?? [], theme, width, false, true, agentDeadlines, Date.now(), expandedSubagents, agentTurnControls);
         const active = !!turn.running || agents.running > 0 || entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
         if (active) runningTurns.add(index);
         else if (runningTurns.delete(index)) {
@@ -249,8 +249,9 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           const expanded = mode === "all";
           const busy = entries.some(entry => entry.state === "running") || (turn.waitingTools?.length ?? 0) > 0;
           const working = turn.running && !busy && !turn.final;
+          const showAgentRows = (expanded || subAgentsExpanded()) && agents.total > 0;
           // Every child keeps its heading; process records share the remaining preview budget.
-          const processLimit = Math.max(0, getRecordLimit() - agents.total);
+          const processLimit = Math.max(0, getRecordLimit() - (showAgentRows ? agents.total : 0));
           const shown = expanded ? entries : processLimit ? entries.slice(-processLimit) : [];
           const showWorking = working && (turn.awaitingResponse || expanded || (!shown.length && !agents.total));
           const sparkle = active ? Math.floor(Date.now() / 360) % 2 ? "✧" : "✦" : "✦";
@@ -262,7 +263,6 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             : "";
           const recordCount = entries.length + agents.total;
           const progressHeader = theme.fg(active ? "accent" : "muted", sparkle + " ") + theme.bold(theme.fg("text", "Agent")) + theme.fg("muted", recordCount ? ` · ${recordCount}` : "");
-          const showAgentRows = agents.total > 0;
           const caret = theme.fg("muted", expanded ? " ▾" : " ▸");
           const elapsedHeader = turn.startedAt == null ? "" : theme.fg("muted", " · ") + theme.fg(active ? "success" : "muted", formatElapsed(turn.startedAt, turn.endedAt ?? Date.now()));
           const left = progressHeader + elapsedHeader + caret;
@@ -287,18 +287,19 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             const open = call ? expandedTools.has(call.id) : entry.thinking && !noThinkingBody && expandedThinking.has(entry.id);
             const identity = entry.state === "error" ? "error" : open || activeThinking ? "accent" : "text";
             const duration = call ? formatToolElapsed(call.startedAt,
-              call.endedAt ?? (call.state === "running" && turn.running ? Date.now() : undefined)) : "";
+              call.endedAt ?? (call.state === "running" ? Date.now() : undefined)) : "";
             const toolElapsed = duration ? theme.fg(entry.state === "error" ? "error" : call?.state === "running" ? "accent" : "muted", ` ${duration}`) : "";
             const summary = theme.fg(identity, theme.bold(label)) + thinkingElapsed + toolElapsed + " ";
             if (controlId && width >= 4) toolControls.push({ id: controlId, y: lines.length, width, title: text });
             if (hoveredTool?.id === controlId && (hoveredTool.y !== lines.length || hoveredTool.width !== width)) clearHover();
-            const status = entry.state === "running" ? runningGlyph() : "●";
+            const status = entry.state === "error" ? "✕" : entry.state === "running" ? runningGlyph() : "●";
             const arrow = !!controlId && (open || hoveredTool?.id === controlId);
-            const keepStatus = entry.state === "running";
+            const keepStatus = entry.state === "running" || (open && entry.state === "error");
             const glyph = arrow ? (open ? "▼" : "▶") + (keepStatus ? ` ${status}` : "") : status;
             const glyphColor = entry.state === "error" ? "error" : entry.state === "running" || arrow ? "accent" : "muted";
             const last = row === shown.length - 1 && !showWorking && !agents.rows.length;
-            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (entry.state === "running" || arrow ? theme.fg(glyphColor, glyph) + " " : "") + summary;
+            const showGlyph = entry.state === "running" || entry.state === "error" || arrow;
+            const prefix = theme.fg(open ? "accent" : "dim", "│ ") + (showGlyph ? theme.fg(glyphColor, glyph) + " " : "") + summary;
             if (label === "Output") {
               // Wrapped output hangs under the body column and keeps the tree rail to the next sibling.
               const indent = visibleWidth(prefix);
@@ -318,11 +319,15 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
                 const fallback = activeThinking ? "正在思考，等待可显示摘要"
                   : outcome === "aborted" ? "思考已中断，未返回可显示摘要"
                   : outcome === "error" ? "思考失败，未返回可显示摘要" : "思考已结束，未返回可显示摘要";
-                const rows = available > 0 ? new Text(display || fallback, 0, 0).render(available).slice(0, previewRows) : [];
                 const color = entry.state === "error" ? "error" : activeThinking ? "accent" : "muted";
-                lines.push(bandHeading(truncateToWidth(prefix + theme.fg(color, rows[0] ?? ""), width, ""), open));
+                const rows = available > 0
+                  ? renderMinimalMarkdown(display || fallback, available, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
+                      { color: value => theme.fg(color, value) }, (source, avail) => transformText(placeholderText(diagramMarkdown(source, avail))))
+                      .slice(0, previewRows)
+                  : [];
+                lines.push(bandHeading(truncateToWidth(prefix + (rows[0] ?? ""), width, ""), open));
                 const rail = theme.fg(last ? color : "dim", last ? " " : "│") + " ".repeat(Math.max(0, visibleWidth(prefix) - 1));
-                for (const extra of rows.slice(1)) lines.push(truncateToWidth(rail + theme.fg(color, extra), width, ""));
+                for (const extra of rows.slice(1)) lines.push(truncateToWidth(rail + extra, width, ""));
               } else {
                 const displayBody = placeholderText(body);
                 const compactBody = linkToolFiles(displayBody, imageOptions?.cwd() ?? process.cwd(), !open);

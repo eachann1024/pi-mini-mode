@@ -10,6 +10,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { ProcessTerminal } from '@earendil-works/pi-tui/dist/terminal.js';
 import { Box, Markdown, renderImage, allocateImageId, getCapabilities, getCellDimensions, setCellDimensions, isKittyProtocolActive, setKittyProtocolActive, resetCapabilitiesCache, setCapabilityOverrides, getImageDimensions, TuiAltScreen, TuiMainScreen, Text, setCapabilities, stripTerminalSequences, getOsc8LinkAtColumn, sliceByColumn, visibleWidth } from '@earendil-works/pi-tui';
 import { createSkillAutocompleteProvider, expandSkillTokens, imagePathsInLine, installInputEnhancements, readPreview, previewLines, inlinePreviewLines } from '../lib/input-enhancements.ts';
+import { handleTerminalInput, revealInFolder } from '../lib/input-hover-preview.ts';
 import { filePaths, inputCapabilities, linkMessageFiles } from '../lib/file-links.ts';
 
 // Track protocol cursor placement in the actual compositor output, not terminal paint timing.
@@ -882,6 +883,15 @@ const fencedPath = '```text\nsee "' + file + '"\n```';
   await delay(40);
   live.renderNow();
   assert.ok(!live.previousScreen.some(line => stripTerminalSequences(line).includes('╭')), 'late shutdown must not tear down the new session hook');
+  const launched = [];
+  const launch = (command, args) => { launched.push([command, args]); return { on: () => ({ unref() {} }) }; };
+  assert.equal(revealInFolder(image, launch), true, 'an existing file can be revealed');
+  assert.equal(revealInFolder(join(dir, 'missing.png'), launch), false, 'a missing file is not revealed');
+  const linkColumn = stripTerminalSequences(live.previousScreen[0]).indexOf('') + 1;
+  const state = { enabled: () => true, tui: live, reveal: launch, preview: {}, previewToken: 0 };
+  assert.equal(handleTerminalInput(state, `\x1b[<2;${linkColumn};1M`)?.consume, true, 'right-click on a file link is consumed before selection');
+  assert.equal(handleTerminalInput(state, '\x1b[<2;75;1M'), undefined, 'right-click away from a file keeps native selection or paste');
+  assert.deepEqual(launched.at(-1)?.[1]?.slice(-1), [image], 'reveal command selects the linked file');
   next();
   assert.equal(live.handleViewportInput, originalViewport, 'replacement cleanup restores native mouse dispatch');
   assert.equal(process.stdin.listenerCount('data'), stdinListeners, 'reload/shutdown leave stdin untouched');
