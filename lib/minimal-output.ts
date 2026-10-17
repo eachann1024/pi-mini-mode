@@ -311,7 +311,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
               const available = Math.max(0, width - visibleWidth(prefix));
               if (entry.thinking) {
                 const cached = thinkingPreviews.get(entry.id);
-                const previewRows = open ? 1 : 2;
+                const previewRows = 1;
                 const reuse = cached?.source === entry.detail && cached.width === available && cached.rows === previewRows && cached.live === activeThinking;
                 const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows, activeThinking);
                 if (!reuse) thinkingPreviews.set(entry.id, { text: display, source: entry.detail, width: available, rows: previewRows, live: activeThinking });
