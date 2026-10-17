@@ -199,6 +199,18 @@ try {
   assert.match(first, /beginning/, "active thinking keeps its one-line summary visible");
   assert.doesNotMatch(first, /▼/, "thinking never auto-expands");
   assert.equal(first.replace(/2\.0s/, "4.0s"), later, "only the elapsed duration changes while thinking");
+  const scrollingTurns = [{ question: "elapsed", process: [`thinking ${"开头".repeat(80)}`], running: true, startedAt: 0, thinking: 0 }];
+  const scrolling = extension.minimalOutputComponent(elapsedTheme, () => scrollingTurns);
+  Date.now = () => 10_000;
+  const held = stripAnsi(scrolling.render(40).find(line => stripAnsi(line).includes("Thinking")));
+  scrollingTurns[0] = { question: "elapsed", process: [`thinking ${"开头".repeat(80)}${"结尾".repeat(80)}`], running: true, startedAt: 0, thinking: 0 };
+  Date.now = () => 10_200;
+  const paused = stripAnsi(scrolling.render(40).find(line => stripAnsi(line).includes("Thinking")));
+  assert.equal(paused.replace(/\d+\.\ds/, "TIME"), held.replace(/\d+\.\ds/, "TIME"), "live thinking holds its tail between scroll steps");
+  assert.doesNotMatch(paused, /结尾/, "a fast thinking update does not jump the preview");
+  Date.now = () => 10_500;
+  const stepped = stripAnsi(scrolling.render(40).find(line => stripAnsi(line).includes("Thinking")));
+  assert.match(stepped, /结尾/, "the preview advances after the slower scroll step");
   const folded = extension.minimalOutputComponent(elapsedTheme, () => [{ question: "elapsed", process: ["thinking older hidden detail", `thinking ${thought}\nsecond paragraph stays in the detail`], running: false }], () => true);
   const foldedText = stripAnsi(folded.render(100).join("\n"));
   assert.match(foldedText, /older hidden detail/, "opening the heading shows every thinking record");
