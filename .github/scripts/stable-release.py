@@ -75,11 +75,13 @@ def current_plan():
 
 
 def released_version(version):
-    """Return the published release tag for this version, if any."""
+    """Return the published stable release tag (vX.Y.Z or vX.Y.Z-<sha>) for this version, if any."""
     pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{REPO}/releases?per_page=100'))
     for release in (r for page in pages for r in page):
         name = release['tag_name']
-        if not release['draft'] and (name == f'v{version}' or name.startswith(f'v{version}-')):
+        if release['draft'] or release['prerelease']:
+            continue
+        if name == f'v{version}' or re.fullmatch(rf'v{re.escape(version)}-[0-9a-f]{{7,40}}', name):
             return name
     return None
 
