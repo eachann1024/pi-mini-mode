@@ -1,3 +1,4 @@
+import type { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, OverlayHandle, OverlayOptions, renderImage, TUI } from "@earendil-works/pi-tui";
 import type { Preview } from "./input-image-paths.ts";
@@ -43,6 +44,7 @@ export interface Enhancements {
   baseFactory?: EditorFactoryFunction;
   editor?: EditorComponent;
   editorFactory?: EditorFactoryFunction;
+  reveal?: typeof spawn;
   unsubscribeInput?: () => void;
   restoreViewportInput?: () => void;
   cleanup: InputEnhancementsCleanup;

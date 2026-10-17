@@ -62,7 +62,7 @@ pi install git:github.com/eachann1024/pi-mini-mode
 
 **Images where you write.** Images appear as inline cards above the editor by default; you can switch to cursor popups in settings. Press `Esc` to dismiss a popup.
 
-**Less path clutter. Same image.** Image paths become underlined `[image1]` labels in the editor and messages, preserving the original path when submitted. Open the original image or another linked file in its default app using your terminal’s link gesture.
+**Less path clutter. Same image.** Image paths become underlined `[image1]` labels in the editor and messages, preserving the original path when submitted. Left-click opens the original image or another linked file in its default app. In fullscreen, right-click reveals the file selected in its folder.
 
 **Skills where you type.** Enter `/` at the start or after whitespace to find a skill and insert `/skill:name` at the cursor. Inline skills expand on submission; URLs and paths keep their normal behavior.
 
@@ -102,7 +102,7 @@ This earlier screenshot shows footer configuration, not the newer image, folding
 
 ## Compatibility
 
-- **Images:** previews require a terminal image protocol; unsupported terminals show a hint. Large images are resized for the terminal preview only (up to 1200 × 800 pixels and 1 MB encoded); the original file and submitted path are unchanged. Image reads are limited to **20 MB**, and deleted files cannot be reopened. Link gestures depend on the terminal: usually `Cmd+click` on macOS or `Ctrl+click` on Windows/Linux; Ghostty fullscreen may require `Shift+Cmd` / `Shift+Ctrl`. Pi fullscreen also supports direct link clicks. See [Pi terminal setup](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
+- **Images:** previews require a terminal image protocol; unsupported terminals show a hint. Large images are resized for the terminal preview only (up to 1200 × 800 pixels and 1 MB encoded); the original file and submitted path are unchanged. Image reads are limited to **20 MB**, and deleted files cannot be reopened. Link gestures depend on the terminal: usually `Cmd+click` on macOS or `Ctrl+click` on Windows/Linux; Ghostty fullscreen may require `Shift+Cmd` / `Shift+Ctrl`. Pi fullscreen also supports a direct left-click. Right-clicking a file link reveals and selects that file on macOS and Windows, and opens its folder elsewhere. Right-clicking empty space keeps selection or paste behavior. See [Pi terminal setup](https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/terminal-setup.md).
 - **Minimal output:** uses a private Pi 0.85.x layout adapter without patching Pi’s installation. Unknown layouts refuse activation and keep native output. Recheck after Pi upgrades; other transcript-replacing extensions can conflict.
 - **Subagents:** the pi-subagents widget adapter runs only in minimal mode, restores on disable, and passes unknown formats through. Available details depend on the integration’s status/output data; this is not a complete subagent transcript viewer.
 - **History:** `/reload` remounts the transcript, including history created in native mode. Empty progress events do not erase existing content; tools without output show elapsed waiting time. Legacy per-item minimal controls no longer filter content.

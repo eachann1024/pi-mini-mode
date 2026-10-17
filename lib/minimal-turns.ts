@@ -88,13 +88,13 @@ export function freezeOpenThinkingClocks(turn: MinimalTurn | undefined, endedAt 
 
 /** Each Thinking row counts from its own start and keeps its frozen stop time. */
 export function formatThinkingElapsed(
-  turn: Pick<MinimalTurn, "thinkingClocks">,
+  turn: Pick<MinimalTurn, "startedAt" | "thinkingClocks">,
   processIndex: number,
   active: boolean,
   now = Date.now(),
 ): string {
   const clock = turn.thinkingClocks?.[processIndex];
-  const startedAt = clock?.startedAt;
+  const startedAt = clock?.startedAt ?? (active ? turn.startedAt : undefined);
   if (clock?.endedAt != null) return `${(Math.max(0, clock.endedAt - clock.startedAt) / 1_000).toFixed(1)}s`;
   if (active && startedAt != null) return `${(Math.max(0, now - startedAt) / 1_000).toFixed(1)}s`;
   return "";

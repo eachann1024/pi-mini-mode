@@ -21,7 +21,7 @@ try {
   assert.match(html, /button.draggable=true/);
   assert.match(html, /Drag or use Arrow Left\/Right to reorder preview items/);
   assert.match(html, /拖拽或左右方向键调整预览字段顺序/);
-  assert.match(html, /data-version="2\.0\.9"/);
+  assert.match(html, /data-version="2\.0\.\d+"/);
   assert.match(html, /id="version"/);
   assert.match(html, /id="features"/);
   assert.match(html, /feature-body/);
