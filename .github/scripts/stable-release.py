@@ -74,6 +74,16 @@ def current_plan():
     return plan
 
 
+def released_version(version):
+    """Return the published release tag for this version, if any."""
+    pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{REPO}/releases?per_page=100'))
+    for release in (r for page in pages for r in page):
+        name = release['tag_name']
+        if not release['draft'] and (name == f'v{version}' or name.startswith(f'v{version}-')):
+            return name
+    return None
+
+
 def prepare(force, offline):
     branch = CONFIG['branch']
     ref = os.environ.get('GITHUB_REF')
@@ -108,6 +118,10 @@ def prepare(force, offline):
         if existing and not existing['draft']:
             if existing['prerelease']:
                 raise ValueError('Existing published tag is a prerelease; do not overwrite it')
+            unchanged = True
+        released = released_version(version) if version else None
+        if released:
+            print(f"Version {version} is already released as {released}; bump {CONFIG['version_file']} to publish again.")
             unchanged = True
     STATE.mkdir(exist_ok=True)
     plan = {'schema': 1, 'commit': commit, 'fingerprint': digest, 'tag': tag,
