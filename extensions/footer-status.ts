@@ -1,6 +1,6 @@
 import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentStatusesByTurn, attachAgentWidgets, readAgentStatuses } from "../lib/agent-view.ts";
 import { getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { matchesKey, isKeyRelease, isKeyRepeat } from "@earendil-works/pi-tui";
+import { matchesKey, isKeyRelease, isKeyRepeat, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { attachTranscript } from "../lib/transcript-adapter.ts";
 import { installSeamlessScrollbar } from "../lib/seamless-scrollbar.ts";
 import { installInputEnhancements, type InputEnhancementsCleanup } from "../lib/input-enhancements.ts";
@@ -9,7 +9,9 @@ import { linkMessageFiles } from "../lib/file-links.ts";
 import attachFooterTidy from "../lib/footer-tidy.ts";
 import attachTitlePlain from "../lib/title-plain.ts";
 import { COPY, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, RECOMMENDED_THEMES, SETTING_IDS, isLegacyMinimalSetting, isRecordLimit, loadSettings, parseSettings, saveSettings, settingsItems, settingsPath, type MiniLensSettings, type RecommendedTheme } from "../lib/settings.ts";
-import { addUsage, cacheWaste, EMPTY_USAGE, finiteNumber, outputSpeed, sessionUsage, type ActiveGeneration, type UsageLike } from "../lib/usage.ts";
+import { attachSpeedHover, speedHit, type SpeedHover } from "../lib/speed-popup.ts";
+import { createTokenSpeedTracker, SPEED_REFRESH_MS } from "../lib/token-speed.ts";
+import { addUsage, cacheWaste, EMPTY_USAGE, finiteNumber, formatSpeed, sessionUsage, type UsageLike } from "../lib/usage.ts";
 import { statusLine } from "../lib/footer-line.ts";
 import { contentText, minimalTurnsFromBranch, processText, pushProcess, skillNames, type MinimalTurn } from "../lib/minimal-turns.ts";
 import { minimalOutputComponent } from "../lib/minimal-output.ts";
@@ -18,6 +20,8 @@ import { createThinkingStream } from "../lib/thinking-stream.ts";
 // Preserve the existing module entry points for consumers and focused checks.
 export { SETTINGS_FILE_NAME, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, settingsPath, parseSettings, settingsNeedBackfill, loadSettings, saveSettings, settingsItems, type MiniLensSettings } from "../lib/settings.ts";
 export { cacheWaste, sessionUsage, speedColor, formatSpeed, outputSpeed, DECODE_SPEED_MIN_ELAPSED_MS, DECODE_SPEED_MIN_OUTPUT, type CacheWaste, type SessionUsage, type SpeedColor } from "../lib/usage.ts";
+export { placeSpeedPopup, SPEED_POPUP_GAP, SPEED_POPUP_WIDTH } from "../lib/speed-popup.ts";
+export { SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 export { isPlannotatorPlanningStatus, planCapsule, settingsPreviewLine, statusLine } from "../lib/footer-line.ts";
 export { formatElapsed, formatToolElapsed, formatThinkingElapsed, minimalTurnsFromBranch, type MinimalTurn, type ThinkingClock } from "../lib/minimal-turns.ts";
 export { minimalOutputComponent } from "../lib/minimal-output.ts";
@@ -71,9 +75,10 @@ export default function (pi: ExtensionAPI) {
   let activeMinimalTurn: MinimalTurn | undefined;
   let pendingMinimalFinal = "";
   const thinkingStream = createThinkingStream();
-  let speed: number | undefined;
+  const speeds = createTokenSpeedTracker();
+  let speedHover: SpeedHover | undefined;
+  let speedHitBox: { start: number; end: number } | undefined;
   let mcpCount: number | undefined;
-  let activeGeneration: ActiveGeneration | undefined;
   let activeUIPrompt: { kind: string; title?: string } | undefined;
   const toolStarts = new Map<string, number>();
   const minimalToolOutputIndices = new Map<string, number>();
@@ -259,14 +264,14 @@ export default function (pi: ExtensionAPI) {
     speedTimer = undefined;
   };
   const refreshStreamingSpeed = () => {
-    if (!activeGeneration) return;
-    const nextSpeed = outputSpeed(activeGeneration.output, activeGeneration.firstTokenAt);
-    if (nextSpeed !== undefined) speed = nextSpeed;
+    if (!speeds.refresh(Date.now())) return;
     refresh();
+    speedHover?.relayout();
   };
   const startSpeedTimer = () => {
     stopSpeedTimer();
-    speedTimer = setInterval(refreshStreamingSpeed, 250);
+    speedTimer = setInterval(refreshStreamingSpeed, SPEED_REFRESH_MS);
+    speedTimer.unref?.();
   };
   const persistSettings = (ctx: ExtensionContext) => {
     const snapshot = { ...settings };
@@ -440,9 +445,24 @@ export default function (pi: ExtensionAPI) {
       };
       syncScrollbar();
       refreshFooter = () => tui.requestRender();
+      speedHover?.dispose();
+      speedHover = attachSpeedHover(tui, theme, () => ({
+        metrics: settings["pi-mini-mode-speed-show"] ? speeds.metrics() : [],
+        hit: speedHitBox,
+      }));
+      const onBranchChange = footerData?.onBranchChange?.(() => tui.requestRender());
       return {
-        dispose: footerData?.onBranchChange?.(() => tui.requestRender()),
+        dispose() {
+          onBranchChange?.();
+          speedHover?.dispose();
+          speedHover = undefined;
+        },
         invalidate() {},
+        handleMouse(event: TuiMouseEvent) {
+          if (event.type === "move" && event.y === 0) speedHover?.hover(event.screenX, event.screenY, true);
+          else if (event.type !== "move") speedHover?.hover(event.screenX, event.screenY, false);
+          return undefined;
+        },
         render(width: number): string[] {
           syncScrollbar();
           // switchTuiMode does not re-run setWidget; remount once the live renderer is fullscreen.
@@ -454,7 +474,13 @@ export default function (pi: ExtensionAPI) {
               mountMinimalOutput(ctx);
             });
           }
-          return [statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.(), footerData?.getGitBranch?.(), cacheWaste(ctx.sessionManager.getBranch()))];
+          const speed = speeds.displayed();
+          const line = statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.(), footerData?.getGitBranch?.(), cacheWaste(ctx.sessionManager.getBranch()));
+          const speedText = settings["pi-mini-mode-speed-show"] && speed !== undefined
+            ? formatSpeed(speed, settings["pi-mini-mode-speed-unit-show"])
+            : "";
+          speedHitBox = speedHit(line, speedText);
+          return [line];
         },
       };
     });
@@ -531,15 +557,17 @@ export default function (pi: ExtensionAPI) {
       activeMinimalTurn.thinking = undefined;
     }
     pendingMinimalFinal = "";
-    // Keep the last completed speed visible until this response produces tokens.
+    // Keep the last completed average visible until this response produces a live sample.
     // Tool-call-only assistant messages therefore cannot erase a useful rate.
-    // Decode clock starts on the first output token, not message_start (TTFT).
-    const sampledAt = Date.now();
-    activeGeneration = { output: 0, lastSampleAt: sampledAt };
+    speeds.onAssistantStart(Date.now());
     startSpeedTimer();
   });
   pi.on("message_update", (event) => {
     const partial = (event.assistantMessageEvent as { partial?: { usage?: UsageLike; content?: Array<Record<string, unknown>> } }).partial;
+    if (speeds.onStream({ at: Date.now(), output: finiteNumber(partial?.usage?.output), content: partial?.content, usage: partial?.usage })) {
+      refresh();
+      speedHover?.relayout();
+    }
     if (activeMinimalTurn && partial?.content) {
       if (!thinkingStream.update(activeMinimalTurn, partial.content, event.assistantMessageEvent)) return;
       if (partial.content.length) activeMinimalTurn.awaitingResponse = false;
@@ -550,35 +578,21 @@ export default function (pi: ExtensionAPI) {
       activeMinimalTurn.pendingUsage = partial.usage;
       refreshMinimalOutput();
     }
-    const usage = partial?.usage;
-    const output = finiteNumber(usage?.output);
-    const timestamp = Date.now();
-    const hasOutputContent = Array.isArray(partial?.content) && partial.content.length > 0;
-    if (activeGeneration && timestamp >= activeGeneration.lastSampleAt) {
-      if (activeGeneration.firstTokenAt === undefined && (hasOutputContent || (output !== undefined && output > 0))) {
-        activeGeneration.firstTokenAt = timestamp;
-      }
-      if (output !== undefined && output >= activeGeneration.output) {
-        activeGeneration.output = output;
-        activeGeneration.lastSampleAt = timestamp;
-        refreshStreamingSpeed();
-      }
-    }
   });
   pi.on("message_end", (event) => {
     if (event.message.role === "assistant") {
+      speeds.onAssistantEnd(event.message.usage as UsageLike | undefined, Date.now());
+      stopSpeedTimer();
+      speedHover?.relayout();
       if (activeMinimalTurn) {
         const content = Array.isArray(event.message.content) ? event.message.content as unknown as Array<Record<string, unknown>> : [];
         const outcome = event.message.stopReason === "error" || event.message.stopReason === "aborted" ? event.message.stopReason : "done";
-        if (!thinkingStream.finish(activeMinimalTurn, content, outcome, event.message.timestamp)) return;
+        if (!thinkingStream.finish(activeMinimalTurn, content, outcome, event.message.timestamp)) {
+          refresh();
+          return;
+        }
         activeMinimalTurn.usage = addUsage(activeMinimalTurn.usage ?? EMPTY_USAGE, event.message.usage as UsageLike | undefined);
         activeMinimalTurn.pendingUsage = undefined;
-      }
-      if (activeGeneration) {
-        const finalSpeed = outputSpeed((event.message.usage as UsageLike | undefined)?.output, activeGeneration.firstTokenAt);
-        if (finalSpeed !== undefined) speed = finalSpeed;
-        activeGeneration = undefined;
-        stopSpeedTimer();
       }
       const content = (event.message as { content?: unknown }).content;
       if (activeMinimalTurn && Array.isArray(content)) {
@@ -640,10 +654,7 @@ export default function (pi: ExtensionAPI) {
     const nestedUsage = (event.result as { usage?: UsageLike } | undefined)?.usage;
     if (activeMinimalTurn) activeMinimalTurn.usage = addUsage(activeMinimalTurn.usage ?? EMPTY_USAGE, nestedUsage);
     // Nested tool LLM completions must not overwrite a measured main-turn decode rate.
-    if (startedAt !== undefined && speed === undefined) {
-      const nestedSpeed = outputSpeed(nestedUsage?.output, startedAt);
-      if (nestedSpeed !== undefined) speed = nestedSpeed;
-    }
+    if (startedAt !== undefined) speeds.noteNested(nestedUsage?.output, startedAt, Date.now());
     const call = activeMinimalTurn?.agentCalls?.find(call => call.id === event.toolCallId);
     if (call) {
       if (activeMinimalTurn) activeMinimalTurn.waitingTools = activeMinimalTurn.waitingTools?.filter(tool => tool.id !== event.toolCallId);
@@ -665,6 +676,10 @@ export default function (pi: ExtensionAPI) {
     minimalToolOutputIndices.delete(event.toolCallId);
     refresh();
     refreshMinimalOutput();
+  });
+  pi.on("turn_start", (event) => {
+    const startedAt = finiteNumber((event as { timestamp?: unknown }).timestamp) ?? Date.now();
+    speeds.onTurnStart(startedAt);
   });
   pi.on("agent_start", refresh);
   pi.on("agent_end", refresh);
@@ -706,7 +721,9 @@ export default function (pi: ExtensionAPI) {
     promptView = undefined;
     unsubscribeMcpStatus();
     refreshFooter = undefined;
-    activeGeneration = undefined;
+    speeds.reset();
+    speedHover?.dispose();
+    speedHover = undefined;
     activeUIPrompt = undefined;
     toolStarts.clear();
     minimalToolOutputIndices.clear();
