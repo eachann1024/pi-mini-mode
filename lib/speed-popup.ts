@@ -3,6 +3,8 @@ import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil
 import type { SpeedMetric } from "./token-speed.ts";
 
 export const SPEED_POPUP_WIDTH = 36;
+/** Blank terminal rows between the popup's bottom border and the status-bar indicator. */
+export const SPEED_POPUP_GAP = 1;
 
 type Theme = {
   fg(color: string, text: string): string;
@@ -33,7 +35,9 @@ export function speedHit(line: string, speedText: string): SpeedHit | undefined 
 
 /**
  * Pin the popup above the status bar, right edge on the indicator.
- * `pinRight` keeps that edge fixed so later redraws do not follow the pointer.
+ * One blank row stays between the bottom border and the indicator so the
+ * speed text is not covered. `pinRight` keeps that edge fixed so later
+ * redraws do not follow the pointer.
  */
 export function placeSpeedPopup(input: {
   rows: number;
@@ -47,13 +51,14 @@ export function placeSpeedPopup(input: {
   const columns = Math.max(1, input.columns);
   const width = Math.max(1, Math.min(input.width, columns));
   const above = Math.max(0, input.indicatorRow);
-  const height = Math.max(1, Math.min(input.height, Math.max(1, above || 1)));
+  const gap = above > SPEED_POPUP_GAP ? SPEED_POPUP_GAP : 0;
+  const height = Math.max(1, Math.min(input.height, Math.max(1, above - gap)));
   const right = input.pinRight ?? input.indicatorEnd;
   let col = right - width;
   col = Math.max(0, Math.min(col, columns - width));
-  let row = above > 0 ? input.indicatorRow - height : 0;
+  let row = above > 0 ? input.indicatorRow - gap - height : 0;
   if (row < 0) row = 0;
-  if (above > 0 && row + height > input.indicatorRow) row = Math.max(0, input.indicatorRow - height);
+  if (above > 0 && row + height > input.indicatorRow - gap) row = Math.max(0, input.indicatorRow - gap - height);
   return { row, col, width, height };
 }
 
@@ -146,7 +151,8 @@ export function attachSpeedHover(
     options.row = place.row;
     options.col = place.col;
     options.maxHeight = place.height;
-    options.margin = { top: 0, left: 0, right: 0, bottom: Math.max(0, rows - indicatorRow) };
+    const gap = indicatorRow > SPEED_POPUP_GAP ? SPEED_POPUP_GAP : 0;
+    options.margin = { top: 0, left: 0, right: 0, bottom: Math.max(0, rows - indicatorRow) + gap };
   };
 
   const ensure = () => {

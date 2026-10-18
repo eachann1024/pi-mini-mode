@@ -20,7 +20,7 @@ import { createThinkingStream } from "../lib/thinking-stream.ts";
 // Preserve the existing module entry points for consumers and focused checks.
 export { SETTINGS_FILE_NAME, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, settingsPath, parseSettings, settingsNeedBackfill, loadSettings, saveSettings, settingsItems, type MiniLensSettings } from "../lib/settings.ts";
 export { cacheWaste, sessionUsage, speedColor, formatSpeed, outputSpeed, DECODE_SPEED_MIN_ELAPSED_MS, DECODE_SPEED_MIN_OUTPUT, type CacheWaste, type SessionUsage, type SpeedColor } from "../lib/usage.ts";
-export { placeSpeedPopup, SPEED_POPUP_WIDTH } from "../lib/speed-popup.ts";
+export { placeSpeedPopup, SPEED_POPUP_GAP, SPEED_POPUP_WIDTH } from "../lib/speed-popup.ts";
 export { SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 export { isPlannotatorPlanningStatus, planCapsule, settingsPreviewLine, statusLine } from "../lib/footer-line.ts";
 export { formatElapsed, formatToolElapsed, formatThinkingElapsed, minimalTurnsFromBranch, type MinimalTurn, type ThinkingClock } from "../lib/minimal-turns.ts";
