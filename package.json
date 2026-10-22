@@ -4,7 +4,7 @@
   "description": "A compact Pi footer with live usage metrics, theme-aware settings previews, and configurable progress bars.",
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit -p tsconfig.json",
+    "check": "node scripts/typecheck.mjs --noEmit -p tsconfig.json",
     "test": "node scripts/check-focused.mjs",
     "check:focused": "node scripts/check-focused.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
@@ -57,6 +57,7 @@
     "@earendil-works/pi-server": "0.85.0",
     "@earendil-works/pi-tui": "^0.85.0",
     "@types/node": "^26.4.1",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript": "^5.9.3"
   },
   "dependencies": {
