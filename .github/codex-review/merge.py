@@ -95,13 +95,32 @@ def secret_matching(names, patterns):
     ]
 
 
-def path_block_reason(names, protected_patterns, secret_patterns, owner_verdict_path):
+def change_paths(entry):
+    """Current path, previous path on rename, and the path of a removed file.
+
+    Renaming into or out of a secret path both count. Removed files use filename,
+    and previous_filename when the API provides it.
+    """
+    paths = []
+    if isinstance(entry, str):
+        entry = {"filename": entry}
+    if not isinstance(entry, dict):
+        return paths
+    for key in ("filename", "previous_filename"):
+        value = str(entry.get(key) or "").strip()
+        if value and value not in paths:
+            paths.append(value)
+    return paths
+
+
+def path_block_reason(names, protected_patterns, secret_patterns, owner_verdict_path, secret_names=None):
     """Block secret paths always. Other protected paths block except on the owner path.
 
     owner_verdict_path is same-repo OWNER_LOGIN and merge_recommendation safe_to_merge.
-    Non-owners keep the single protected-path reason from PROTECTED_PATHS.
+    secret_names includes previous_filename and removed paths; names is the current paths
+    used for the non-secret protected-path rule.
     """
-    secret_hit = secret_matching(names, secret_patterns)
+    secret_hit = secret_matching(names if secret_names is None else secret_names, secret_patterns)
     protected_hit = matching(names, protected_patterns)
     if owner_verdict_path:
         if secret_hit:
@@ -109,6 +128,8 @@ def path_block_reason(names, protected_patterns, secret_patterns, owner_verdict_
         return None, secret_hit, protected_hit
     if protected_hit:
         return "改动了受保护路径：" + ", ".join(protected_hit[:10]), secret_hit, protected_hit
+    if secret_hit:
+        return "改动了密钥材料路径：" + ", ".join(secret_hit[:10]), secret_hit, protected_hit
     return None, secret_hit, protected_hit
 
 
@@ -145,11 +166,12 @@ def main():
         folder = os.path.dirname(artifact) or "."
         found = sorted(os.listdir(folder))[:20] if os.path.isdir(folder) else []
         listing = ", ".join(found) or "（空或不存在）"
+        download = env.get("REVIEW_DOWNLOAD") or "未知"
         die(
             env,
             "AI 审核任务已成功，但没有拿到审核结果文件（artifact 缺失或下载失败）。"
             "结果改为经 artifact 传递，避免 GitHub 因疑似 secret 丢弃 job output 后变成空结论。"
-            f" 期望文件：{os.path.basename(artifact) or 'review.json'}；目录内容：{listing}",
+            f" 下载步骤={download}；期望文件：{os.path.basename(artifact) or 'review.json'}；目录内容：{listing}",
         )
 
     parse_error = None
@@ -274,13 +296,19 @@ def main():
         reasons.append("PR 带有安全疑虑标签")
 
     files = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/pulls/{pr}/files?per_page=100"))
-    names = [item["filename"] for page in files for item in page]
+    entries = [item for page in files for item in page]
+    names = [path for item in entries for path in change_paths(item)[:1]]
+    secret_names = []
+    for item in entries:
+        for path in change_paths(item):
+            if path not in secret_names:
+                secret_names.append(path)
     protected_patterns = split_patterns(env.get("PROTECTED_PATHS", ""))
     secret_patterns = split_patterns(env.get("SECRET_PATHS", ""))
     if not secret_patterns:
         die(env, "SECRET_PATHS 未配置，无法判断密钥材料路径")
     reason, secret_hit, protected_hit = path_block_reason(
-        names, protected_patterns, secret_patterns, owner_verdict_path,
+        names, protected_patterns, secret_patterns, owner_verdict_path, secret_names,
     )
     if owner_verdict_path:
         bypassed = [name for name in protected_hit if name not in set(secret_hit)]
