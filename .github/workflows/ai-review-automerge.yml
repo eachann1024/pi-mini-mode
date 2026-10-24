@@ -33,8 +33,9 @@ env:
   OWNER_LOGIN: eachann1024                # 同仓库且结论为 safe_to_merge 时，非密钥受保护路径也自动合并，不要求 bot-automerge
   # 动到这些路径默认转人工（审核/CI 配置、密钥、部署配置）。规则：以 / 结尾=任意层级目录；以 * 开头=后缀；其他=文件名前缀
   # 仓库主人（OWNER_LOGIN）的同仓库 PR，若审核结论是 safe_to_merge，即使改到下列非密钥路径也自动 squash 合并，且不要求 bot-automerge。
-  # 密钥材料没有豁免，仍转人工并打 needs-human。匹配的是路径段，不只是文件名：
-  # 任一段等于 secrets 或 credentials（如 .github/secrets/production.json），以及 .env*、*.pem、*.key、*.p12、id_rsa*。
+  # 密钥材料没有豁免，仍转人工并打 needs-human。当前路径、previous_filename、删除路径都按 / 拆开，检查每一段：
+  # 任一段等于 secrets 或 credentials（大小写不敏感，如 .github/secrets/production.json）；任一段以 .env 开头。
+  # 只有最后一段（文件名）匹配 *.pem、*.key、*.p12、id_rsa*。
   # 其他作者或 fork 没有豁免；受保护路径仍转人工。fork 不进入本工作流。
   # 仓库有其他部署配置（如自定义 deploy 脚本目录）就追加到这里
   PROTECTED_PATHS: ".github/,.pr_agent.toml,.gemini/,.coderabbit.yaml,.greptile/,.env,secrets,credentials,*.pem,*.key,*.p12,id_rsa,deploy/,vercel.json,netlify.toml,fly.toml,wrangler.toml,render.yaml,Dockerfile,docker-compose,compose.yaml,compose.yml,Procfile,publish.mjs,release.sh"
