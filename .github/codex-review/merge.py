@@ -70,29 +70,38 @@ def matching(names, patterns):
     return [name for name in names if any(protected(name, pattern) for pattern in patterns)]
 
 
-def is_secret_material(name):
-    """Secret paths match a path segment, not only the file basename.
+def path_segments(name):
+    """Split a repo path on `/`. Empty, `.`, and `..` are not segments."""
+    return [part for part in str(name).split("/") if part not in ("", ".", "..")]
 
-    `secrets` and `credentials` match any exact segment, so
-    `.github/secrets/production.json` is included. `.env*` and `id_rsa*` match
-    a segment prefix. `*.pem`, `*.key`, and `*.p12` match a segment suffix.
+
+def is_secret_material(name):
+    """Secret check used for current paths, previous_filename, and removals.
+
+    Every segment is tested: case-insensitive equality with `secrets` or
+    `credentials` (so `.github/secrets/production.json` matches), and a segment
+    that starts with `.env`. Only the basename is tested for `*.pem`, `*.key`,
+    `*.p12`, and `id_rsa*`.
     """
-    parts = [part for part in name.split("/") if part not in ("", ".", "..")]
+    parts = path_segments(name)
     if not parts:
         return False
-    if any(part in ("secrets", "credentials") for part in parts):
-        return True
+    for part in parts:
+        if part.lower() in ("secrets", "credentials"):
+            return True
+        if part.startswith(".env"):
+            return True
     base = parts[-1]
-    if base.startswith((".env", "id_rsa", "secrets", "credentials")):
+    if base.startswith("id_rsa"):
         return True
     return base.endswith((".pem", ".key", ".p12"))
 
 
-def secret_matching(names, patterns):
-    return [
-        name for name in names
-        if is_secret_material(name) or any(protected(name, pattern) for pattern in patterns)
-    ]
+def secret_matching(names, patterns=None):
+    # Segment rules above are the check. Do not fall back to basename prefixes:
+    # that misses a secret directory and disagrees with the documented rule.
+    del patterns
+    return [name for name in names if is_secret_material(name)]
 
 
 def change_paths(entry):
