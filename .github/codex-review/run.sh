@@ -70,7 +70,16 @@ PROMPT
   echo '```'
 } >> "$prompt_file"
 
-out="${RUNNER_TEMP}/review.json"
+# Codex 原始结果和本脚本的标准输出必须是两个文件。
+# 工作流会把标准输出重定向到 review.json；若 -o 也指向该文件，较短的解析结果会留下尾部残留。
+raw="${RUNNER_TEMP}/codex-review-raw.json"
+rm -f "$raw"
+stdout_path=$(readlink -f /proc/$$/fd/1 2>/dev/null || true)
+raw_path=$(readlink -f "$raw" 2>/dev/null || echo "$raw")
+if [ -n "$stdout_path" ] && [ "$stdout_path" = "$raw_path" ]; then
+  echo "Codex 原始结果与标准输出指向同一文件，已拒绝写入。" >&2
+  exit 1
+fi
 codex_log="${RUNNER_TEMP}/codex-exec.log"
 set +e
 env -u GH_TOKEN -u GITHUB_TOKEN -u CODEX_AUTH_JSON CODEX_HOME="$review_codex_home" codex exec \
@@ -79,7 +88,7 @@ env -u GH_TOKEN -u GITHUB_TOKEN -u CODEX_AUTH_JSON CODEX_HOME="$review_codex_hom
   --skip-git-repo-check \
   -s read-only \
   --output-schema .github/codex-review/schema.json \
-  -o "$out" \
+  -o "$raw" \
   - < "$prompt_file" >"$codex_log" 2>&1
 codex_status=$?
 set -e
@@ -91,7 +100,7 @@ fi
 rm -f "$codex_log"
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-python3 - "$out" "$script_dir" <<'PARSE'
+python3 - "$raw" "$script_dir" <<'PARSE'
 import json, sys
 sys.path.insert(0, sys.argv[2])
 from review_json import load_last_verdict

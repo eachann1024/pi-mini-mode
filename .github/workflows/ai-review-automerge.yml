@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
+      actions: write       # 上传审核 artifact；受限 token 没有这项会在首次运行失败
       contents: read
       issues: write
       pull-requests: write
@@ -94,6 +95,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
+      actions: write       # 上传验收 artifact
       contents: read
       pull-requests: read
     steps:
@@ -168,6 +170,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      actions: read         # 下载同一运行里的审核 artifact
       contents: write        # 合并 + 删除分支
       pull-requests: write   # 打标签、评论
       issues: write
@@ -194,5 +197,18 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REVIEW_RESULT: ${{ needs.review.result }}
+          REVIEW_DOWNLOAD: ${{ steps.review-file.outcome }}
           REVIEW_ARTIFACT: ${{ runner.temp }}/codex-review-result/review.json
-        run: python3 .github/codex-review/merge.py
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          script=".github/codex-review/merge.py"
+          helper=".github/codex-review/review_json.py"
+          if [ ! -f "$script" ] || [ ! -f "$helper" ]; then
+            echo "默认分支缺少闸门脚本（$script 或 $helper）。拒绝静默跳过。" >&2
+            exit 1
+          fi
+          if [ "$REVIEW_RESULT" = "success" ] && [ "$REVIEW_DOWNLOAD" != "success" ]; then
+            echo "审核任务已成功，但下载审核 artifact 失败（outcome=${REVIEW_DOWNLOAD}）。检查 actions: read 权限和 artifact 名称 codex-review-result。" >&2
+            exit 1
+          fi
+          python3 "$script"
