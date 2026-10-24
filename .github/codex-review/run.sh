@@ -71,6 +71,8 @@ PROMPT
 } >> "$prompt_file"
 
 out="${RUNNER_TEMP}/review.json"
+codex_log="${RUNNER_TEMP}/codex-exec.log"
+set +e
 env -u GH_TOKEN -u GITHUB_TOKEN -u CODEX_AUTH_JSON CODEX_HOME="$review_codex_home" codex exec \
   --ephemeral \
   --disable shell_tool \
@@ -78,11 +80,25 @@ env -u GH_TOKEN -u GITHUB_TOKEN -u CODEX_AUTH_JSON CODEX_HOME="$review_codex_hom
   -s read-only \
   --output-schema .github/codex-review/schema.json \
   -o "$out" \
-  - < "$prompt_file" >&2
+  - < "$prompt_file" >"$codex_log" 2>&1
+codex_status=$?
+set -e
+if [ "$codex_status" -ne 0 ]; then
+  codex_bytes=$(wc -c < "$codex_log" | tr -d ' ')
+  echo "codex exec 失败（exit ${codex_status}），输出 ${codex_bytes} 字节，未写入日志" >&2
+  exit 1
+fi
+rm -f "$codex_log"
 
-python3 - "$out" <<'PARSE'
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+python3 - "$out" "$script_dir" <<'PARSE'
 import json, sys
-data = json.load(open(sys.argv[1], encoding="utf-8"))
+sys.path.insert(0, sys.argv[2])
+from review_json import load_last_verdict
+try:
+    data = load_last_verdict(open(sys.argv[1], encoding="utf-8").read())
+except ValueError as exc:
+    raise SystemExit(str(exc))
 needed = {"merge_recommendation", "risk_level", "security_concerns", "key_issues_to_review"}
 if not isinstance(data, dict) or set(data) != needed:
     raise SystemExit("审核结果字段不合法")
