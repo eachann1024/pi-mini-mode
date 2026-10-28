@@ -87,7 +87,8 @@ assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => 
 assert.equal(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-minimal-show")?.currentValue, "on");
 assert.equal(extension.DEFAULT_SETTINGS["pi-mini-mode-input-enhancements"], true, "input enhancements default to on");
 assert.match(extension.settingsItems(extension.DEFAULT_SETTINGS).find((item) => item.id === "pi-mini-mode-input-enhancements")?.description ?? "", /空白后 \/ 选择技能并在光标处插入.*打开/);
-assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "zh" }), false);
+assert.equal(extension.parseSettings({ "pi-mini-mode-language": "zh" })["pi-mini-mode-language"], "zh", "settings-page language is persisted");
+assert.equal("pi-mini-mode-language" in extension.parseSettings({ "pi-mini-mode-language": "fr" }), false, "unknown languages are dropped");
 for (const key of ['pi-mini-mode-minimal-thinking-show', 'pi-mini-mode-minimal-tools-show', 'pi-mini-mode-minimal-output-show', 'pi-mini-mode-minimal-skills-show', 'pi-mini-mode-agent-usage-show', 'pi-mini-mode-agent-shortcut-show']) {
   assert.equal(key in extension.DEFAULT_SETTINGS, false);
   assert.equal(key in extension.parseSettings({ [key]: false }), false, `${key} is removed during legacy migration`);
@@ -739,7 +740,7 @@ for (let attempt = 0; attempt < 100; attempt++) {
 const savedRuntime = (await extension.loadSettings(extension.settingsPath(runtimeDir))).settings;
 assert.equal(savedRuntime["pi-mini-mode-mcp-show"], true, "settings-panel MCP toggle persists to disk");
 assert.equal(savedRuntime["pi-mini-mode-speed-unit-show"], false, "queued settings writes complete in order");
-assert.equal("pi-mini-mode-language" in savedRuntime, false, "legacy language setting is not persisted");
+assert.equal("pi-mini-mode-language" in savedRuntime, false, "language stays unset until chosen in the settings page");
 handlers.get("session_shutdown")({}, ctx);
 const updateMinimal = (target, on) => extension.applyMinimal(target, on);
 assert.equal(eventEmitter.listenerCount(mcpStatusEvent), 0, "shutdown removes shared bus listener for reload");

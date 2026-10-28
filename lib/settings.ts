@@ -28,6 +28,22 @@ export interface MiniLensSettings {
   "pi-mini-mode-image-preview": "hover" | "inline";
   onboardingCompleted: boolean;
   footerOrder?: string[];
+  /** Language picked in the settings page; unset follows the system locale. */
+  "pi-mini-mode-language"?: UiLanguage;
+}
+
+export type UiLanguage = "en" | "zh";
+
+export function isUiLanguage(value: unknown): value is UiLanguage {
+  return value === "en" || value === "zh";
+}
+
+/** The saved choice wins; otherwise a zh* system locale keeps Chinese and everything else is English. */
+export function uiLanguage(settings: Pick<MiniLensSettings, "pi-mini-mode-language">, env: NodeJS.ProcessEnv = process.env): UiLanguage {
+  const saved = settings["pi-mini-mode-language"];
+  if (saved) return saved;
+  const locale = env.LC_ALL || env.LC_MESSAGES || env.LANG || Intl.DateTimeFormat().resolvedOptions().locale;
+  return /^zh/i.test(locale) ? "zh" : "en";
 }
 
 export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
@@ -53,7 +69,7 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   onboardingCompleted: false,
 };
 
-export const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<Exclude<keyof MiniLensSettings, "footerOrder">>;
+export const SETTING_IDS = Object.keys(DEFAULT_SETTINGS) as Array<Exclude<keyof MiniLensSettings, "footerOrder" | "pi-mini-mode-language">>;
 export const FOOTER_FIELDS = ["project-branch", "model", "thinking", "branch", "session-tokens", "cache-tokens", "cache-miss", "ch", "cost", "mcp", "context", "context-percent", "speed"] as const;
 export const FOOTER_STYLE_OPTIONS = ["context-dots", "speed-unit"] as const;
 
@@ -96,6 +112,7 @@ export function parseSettings(value: unknown): MiniLensSettings {
       typeof id === "string" && (FOOTER_FIELDS as readonly string[]).includes(id)))];
     for (const id of FOOTER_FIELDS) if (!settings.footerOrder.includes(id)) settings.footerOrder.push(id);
   }
+  if (isUiLanguage(candidate["pi-mini-mode-language"])) settings["pi-mini-mode-language"] = candidate["pi-mini-mode-language"];
   if (settings["pi-mini-mode-branch-show"]) settings["pi-mini-mode-project-branch-show"] = false;
   return settings;
 }
@@ -140,7 +157,7 @@ export function isLegacyMinimalSetting(id: string): boolean {
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
-  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder" | "pi-mini-mode-image-preview" | "pi-mini-mode-minimal-record-limit">, string> = {
+  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "footerOrder" | "pi-mini-mode-language" | "pi-mini-mode-image-preview" | "pi-mini-mode-minimal-record-limit">, string> = {
     "pi-mini-mode-project-branch-show": "显示项目名称和分支（互斥）",
     "pi-mini-mode-branch-show": "仅显示分支（思考等级后，互斥）",
     "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-cache-miss-show": COPY.miss, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements,

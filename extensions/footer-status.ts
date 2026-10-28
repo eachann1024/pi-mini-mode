@@ -8,7 +8,7 @@ import { installTerminalCapabilities } from "../lib/terminal-capabilities.ts";
 import { linkMessageFiles } from "../lib/file-links.ts";
 import attachFooterTidy from "../lib/footer-tidy.ts";
 import attachTitlePlain from "../lib/title-plain.ts";
-import { COPY, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, RECOMMENDED_THEMES, SETTING_IDS, isLegacyMinimalSetting, isRecordLimit, loadSettings, parseSettings, saveSettings, settingsItems, settingsPath, type MiniLensSettings, type RecommendedTheme } from "../lib/settings.ts";
+import { COPY, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, RECOMMENDED_THEMES, SETTING_IDS, isLegacyMinimalSetting, isRecordLimit, isUiLanguage, loadSettings, parseSettings, saveSettings, settingsItems, settingsPath, uiLanguage, type MiniLensSettings, type RecommendedTheme } from "../lib/settings.ts";
 import { attachSpeedHover, speedHit, type SpeedHover } from "../lib/speed-popup.ts";
 import { createTokenSpeedTracker, SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 import { addUsage, cacheWaste, EMPTY_USAGE, finiteNumber, formatSpeed, sessionUsage, type UsageLike } from "../lib/usage.ts";
@@ -178,7 +178,7 @@ export default function (pi: ExtensionAPI) {
         cwd: () => ctx.cwd,
         requestRender: () => tui.requestRender(),
         write: data => tui.terminal.write(data),
-      }, () => settings["pi-mini-mode-minimal-record-limit"]);
+      }, () => settings["pi-mini-mode-minimal-record-limit"], () => uiLanguage(settings));
       // Native info notifications use dim; warning/error notifications retain
       // their position in the transcript. No plugin names or message matching.
       const dimPrefix = theme.fg("dim", "\u0000").split("\u0000")[0];
@@ -347,6 +347,8 @@ export default function (pi: ExtensionAPI) {
               if (entry !== "hover" && entry !== "inline") throw new TypeError("Invalid preview mode");
             } else if (key === "pi-mini-mode-minimal-record-limit") {
               if (!isRecordLimit(entry)) throw new TypeError("Invalid record limit");
+            } else if (key === "pi-mini-mode-language") {
+              if (!isUiLanguage(entry)) throw new TypeError("Invalid language");
             } else if (isLegacyMinimalSetting(key) && typeof entry === "boolean") {
               // Accept stale settings pages; these former child switches no longer gate output.
               continue;

@@ -7,12 +7,18 @@ import { linkToolFiles } from "./file-links.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { minimalSurface, paintExpandedHeading } from "./minimal-theme.ts";
 import { formatElapsed, formatThinkingElapsed, formatToolElapsed, piLoopSummary, type MinimalTurn } from "./minimal-turns.ts";
-import { DEFAULT_SETTINGS } from "./settings.ts";
+import { DEFAULT_SETTINGS, uiLanguage, type UiLanguage } from "./settings.ts";
 import { thinkingPreview } from "./thinking-preview.ts";
 import type { NoticeRows, TurnNotices } from "./transcript-adapter.ts";
 import { addUsage, EMPTY_USAGE, formatTokens } from "./usage.ts";
 
-export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: { cwd(): string; requestRender(): void; write?(data: string): void }, getRecordLimit: () => number = () => DEFAULT_SETTINGS["pi-mini-mode-minimal-record-limit"]) {
+/** Shown when a thinking block has no displayable summary. */
+const THINKING_FALLBACK: Record<UiLanguage, Record<"active" | "aborted" | "error" | "ended", string>> = {
+  zh: { active: "正在思考，等待可显示摘要", aborted: "思考已中断，未返回可显示摘要", error: "思考失败，未返回可显示摘要", ended: "思考已结束，未返回可显示摘要" },
+  en: { active: "Waiting for a displayable summary", aborted: "Interrupted, no displayable summary returned", error: "Failed, no displayable summary returned", ended: "Finished, no displayable summary returned" },
+};
+
+export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: { cwd(): string; requestRender(): void; write?(data: string): void }, getRecordLimit: () => number = () => DEFAULT_SETTINGS["pi-mini-mode-minimal-record-limit"], getLanguage: () => UiLanguage = () => uiLanguage({})) {
   const placeholderText = (text: string) => imageOptions ? imagePlaceholders(text, imageOptions.cwd()) : text;
   const markdown = (text: string, width: number, process = false) => renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
     { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(placeholderText(diagramMarkdown(source, available))));
@@ -316,9 +322,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
                 const display = reuse ? cached.text : thinkingPreview(entry.detail, available, previewRows, activeThinking);
                 if (!reuse) thinkingPreviews.set(entry.id, { text: display, source: entry.detail, width: available, rows: previewRows, live: activeThinking });
                 const outcome = turn.thinkingOutcomes?.[entry.processIndex];
-                const fallback = activeThinking ? "正在思考，等待可显示摘要"
-                  : outcome === "aborted" ? "思考已中断，未返回可显示摘要"
-                  : outcome === "error" ? "思考失败，未返回可显示摘要" : "思考已结束，未返回可显示摘要";
+                const fallbackCopy = THINKING_FALLBACK[getLanguage()];
+                const fallback = activeThinking ? fallbackCopy.active
+                  : outcome === "aborted" ? fallbackCopy.aborted
+                  : outcome === "error" ? fallbackCopy.error : fallbackCopy.ended;
                 const color = entry.state === "error" ? "error" : activeThinking ? "accent" : "muted";
                 const rows = available > 0
                   ? renderMinimalMarkdown(display || fallback, available, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
