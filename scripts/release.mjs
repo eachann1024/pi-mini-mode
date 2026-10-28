@@ -69,14 +69,8 @@ try {
       throw new Error(`Release tag ${tag} already exists.`);
     }
     run('npm', ['version', version, '--no-git-tag-version', '--ignore-scripts']);
-    const changelogPath = join(cwd, 'CHANGELOG.md');
-    const changelog = readFileSync(changelogPath, 'utf8');
-    if (!changelog.includes(`\n## ${version}\n`)) {
-      const newline = changelog.indexOf('\n');
-      writeFileSync(changelogPath, changelog.slice(0, newline + 1) + `\n## ${version}\n\n- 发布本轮已提交的改动。\n` + changelog.slice(newline + 1));
-    }
     run('npm', ['run', 'check']);
-    run('git', ['add', 'package.json', 'package-lock.json', 'CHANGELOG.md']);
+    run('git', ['add', 'package.json', 'package-lock.json']);
     run('git', ['diff', '--cached', '--check']);
     run('git', ['commit', '-m', `chore: release pi-mini-mode ${version}`]);
     clean();
