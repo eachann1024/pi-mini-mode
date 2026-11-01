@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 import { agentCallDisplay, isAgentTool, liveAgentView, runningGlyph } from "./agent-view.ts";
 import { createAssistantImages, imagePlaceholders } from "./assistant-images.ts";
 import { linkToolFiles } from "./file-links.ts";
+import { createLinkHover } from "./link-hover.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { minimalSurface, paintExpandedHeading } from "./minimal-theme.ts";
 import { formatElapsed, formatThinkingElapsed, formatToolElapsed, piLoopSummary, type MinimalTurn } from "./minimal-turns.ts";
@@ -46,9 +47,13 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   let pinnedSubagentId: string | undefined;
   let pinnedSubagent: { id: string; y: number; line: string; autoScroll?: boolean } | undefined;
   let toolControls: Array<{ id: string; y: number; width: number; title: string }> = [];
+  let processRows: Array<{ key: string; y: number }> = [];
+  let hoveredProcess: { key: string; y: number } | undefined;
+  let hoverWidth = 0;
   let agentControls: Array<{ index: number; y: number; width: number }> = [];
   let hoveredTool: typeof toolControls[number] | undefined;
-  const clearHover = () => { const changed = !!hoveredTool; hoveredTool = undefined; return changed; };
+  const linkHover = createLinkHover(text => paintExpandedHeading(theme, text));
+  const clearHover = () => { const changed = !!hoveredTool || hoveredProcess !== undefined; hoveredTool = undefined; hoveredProcess = undefined; return linkHover.clear() || changed; };
   const toggleTool = (id: string) => {
     if (id.startsWith("thinking:")) {
       const present = getTurns().some((turn, turnIndex) => turn.process.some((entry, processIndex) =>
@@ -123,9 +128,12 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     handleMouse(event: TuiMouseEvent) {
       const tool = toolControls.find(control => event.y === control.y && event.x >= 2 && event.x < Math.min(5, control.width));
       if (event.type === "move") {
+        const linkChanged = linkHover.handleMouse(event);
         const next = !event.shift && !event.ctrl && !event.alt ? tool : undefined;
-        if (hoveredTool?.id !== next?.id) {
+        const record = processRows.find(row => row.y === event.y);
+        if (hoveredTool?.id !== next?.id || hoveredProcess?.key !== record?.key || hoveredProcess?.y !== record?.y || linkChanged) {
           hoveredTool = next;
+          hoveredProcess = record;
           return { handled: true, render: true };
         }
         return;
@@ -171,8 +179,11 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       return region?.rows.handleMouse?.({ ...event, y: event.y - region.y });
     },
     render(width: number, notices?: TurnNotices): string[] {
+      if (width !== hoverWidth) clearHover();
+      hoverWidth = width;
       promptControls = [];
       toolControls = [];
+      processRows = [];
       agentControls = [];
       pinnedTool = undefined;
       pinnedAgent = undefined;
@@ -180,7 +191,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       subagentControls = [];
       noticeRegions = [];
       agentExpiry = Infinity;
-      if (width <= 0) { clearHover(); return []; }
+      if (width <= 0) { clearHover(); return linkHover.render([], width); }
       const turns = getTurns();
       const toolIds = new Set(turns.flatMap(turn => (turn.agentCalls ?? []).map(call => call.id)));
       for (const id of expandedTools) if (!toolIds.has(id)) expandedTools.delete(id);
@@ -279,6 +290,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
             ? left + " ".repeat(width - visibleWidth(left) - visibleWidth(totals)) + totals
             : truncateToWidth(left, width));
           shown.forEach((entry, row) => {
+            processRows.push({ key: entry.id || `${index}:${entry.processIndex}`, y: lines.length });
             const title = entry.title;
             const text = title.split(/\r?\n/).find(line => line.trim())?.replace(/\s+/g, " ").trim() ?? "";
             const split = text.indexOf(" ");
@@ -384,8 +396,16 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         lines.push(...noticeRows);
       }
       if (hoveredTool && !toolControls.some(control => control.id === hoveredTool!.id)) clearHover();
+      if (hoveredProcess && !processRows.some(row => row.key === hoveredProcess!.key && row.y === hoveredProcess!.y)) clearHover();
       for (const deadline of agentDeadlines.values()) if (deadline > Date.now()) agentExpiry = Math.min(agentExpiry, deadline);
-      return lines;
+      const linkedRows = linkHover.render(lines, width);
+      const hovered = hoveredProcess;
+      const hoveredRow = hovered && processRows.find(row => row.key === hovered.key && row.y === hovered.y);
+      if (!hoveredRow) return linkedRows;
+      const result = [...linkedRows];
+      const line = result[hoveredRow.y];
+      result[hoveredRow.y] = paintExpandedHeading(theme, line + " ".repeat(Math.max(0, width - visibleWidth(line))));
+      return result;
     },
   };
 }
