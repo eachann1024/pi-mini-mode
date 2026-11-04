@@ -486,6 +486,16 @@ const fencedPath = '```text\nsee "' + file + '"\n```';
 
   // Repeated clipboard inserts have no text separators inside the native editor.
   editor.setText('');
+  editor.insertTextAtCursor(image);
+  for (const char of '这两块') editor.handleInput(char);
+  assert.equal(editor.getText(), `${image} 这两块`, 'text typed directly after an image chip gets a separating space on expand');
+  editor.setText('');
+  for (const char of '删除') editor.handleInput(char);
+  editor.insertTextAtCursor(image);
+  for (const char of '这两块') editor.handleInput(char);
+  assert.equal(editor.getText(), `删除 ${image} 这两块`, 'image chip without spaces on either side gets padded on both sides on expand');
+  assert.match(stripTerminalSequences(linkMessageFiles(editor.getText(), dir)), /^删除   #1 这两块$/, 'sent message keeps image chip recognition when typed without surrounding spaces');
+  editor.setText('');
   for (let i = 0; i < 3; i++) editor.insertTextAtCursor(image);
   await delay(30);
   assert.equal(editor.getText(), [image, image, image].join(' '), 'adjacent image nodes expand to separate attachment paths');

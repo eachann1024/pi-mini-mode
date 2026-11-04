@@ -104,7 +104,12 @@ export function linkMessageFiles(text: string, cwd: string): string {
         return existsSync(path) ? `${prefix}<${pathToFileURL(path).href}>${suffix}` : original;
       });
     }
-    const matches = filePaths(part).map(match => ({ ...match, image: /\.(png|jpe?g|gif|webp)$/i.test(match.path) && existsSync(localPath(match.path, cwd)), number: 0 }));
+    const spaced = [...part.matchAll(/(?:^|[\s"'`])((?:\/|~\/|\.\.?\/)[^\n"'`<>()[\]{}，。；！？]+?\.(?:png|jpe?g|gif|webp))(?=$|[\s"'`<>()[\]{}，。；！？])/gi)]
+      .map(match => ({ path: match[1], start: match.index + match[0].length - match[1].length, end: match.index + match[0].length }))
+      .filter(match => isAbsolute(match.path) && match.path.includes(" ") && existsSync(match.path));
+    const matches = [...spaced, ...filePaths(part).filter(match => !spaced.some(full => match.start >= full.start && match.start < full.end))]
+      .sort((a, b) => a.start - b.start)
+      .map(match => ({ ...match, image: /\.(png|jpe?g|gif|webp)$/i.test(match.path) && existsSync(localPath(match.path, cwd)), number: 0 }));
     for (const match of matches) if (match.image) match.number = ++imageNumber;
     for (const match of matches.reverse()) {
       const path = localPath(match.path, cwd);
