@@ -51,11 +51,32 @@ export function liveUI(ctx?: ExtensionContext): ExtensionContext["ui"] | undefin
 function wrapEditor(inner: EditorComponent, cwd: string, isEnabled: () => boolean, isInline: () => boolean, theme: ExtensionContext["ui"]["theme"], inlineState: Enhancements, onCursor: () => void, onHoverEditor: (editor: EditorComponent, event: TuiMouseEvent) => void, onEditorRender: () => void = () => {}): EditorComponent {
   const attachments = new Map<string, string>();
   const sources = new Map<string, string>();
-  const expand = (text: string) => text.replace(/\[img\d+\]/g, (label, index) => {
-    const path = sources.get(label) ?? attachments.get(label);
-    const next = /^\[img\d+\]/.exec(text.slice(index + label.length));
-    return path === undefined ? label : path + (next && attachments.has(next[0]) ? " " : "");
-  });
+  const expand = (text: string) => {
+    let result = "";
+    let cursor = 0;
+    for (const match of text.matchAll(/\[img\d+\]/g)) {
+      const label = match[0];
+      const index = match.index;
+      const path = sources.get(label) ?? attachments.get(label);
+      if (path === undefined) continue;
+      const chunk = text.slice(cursor, index);
+      const prev = result.length > 0 || chunk.length > 0 ? (chunk || result).slice(-1) : "";
+      const next = text[index + label.length] ?? "";
+      const quote = (prev === `"` || prev === `'` || prev === "`") && next === prev ? prev : "";
+      const before = quote ? (chunk.length > 1 ? chunk.slice(-2, -1) : result.slice(-1)) : prev;
+      const after = quote ? (text[index + label.length + 1] ?? "") : next;
+      const lead = before && !/\s/.test(before) ? " " : "";
+      const trail = after && !/\s/.test(after) ? " " : "";
+      if (quote) {
+        result += chunk.slice(0, -1) + lead + quote + path + quote + trail;
+        cursor = index + label.length + 1;
+      } else {
+        result += chunk + lead + path + trail;
+        cursor = index + label.length;
+      }
+    }
+    return result + text.slice(cursor);
+  };
   const compact = (text: string) => {
     if (!isEnabled()) return text;
     const replacements = imagePathsInLine(text).map(match => {
