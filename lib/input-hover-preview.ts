@@ -85,10 +85,11 @@ export async function requestPreview(state: Enhancements, path: string | undefin
     return;
   }
   const cells = getCellDimensions();
+  const lang = state.language?.() ?? "zh";
   const preview = await readPreview(path, state.cwd ?? process.cwd(), {
     widthPx: Math.max(1, (state.tui?.terminal.columns ?? 80) - 2) * cells.widthPx,
     heightPx: Math.max(1, (state.tui?.terminal.rows ?? 24) - 2) * cells.heightPx,
-  });
+  }, lang);
   if (token !== state.previewToken || !state.enabled()) return;
   setPreview(state, preview);
 }
@@ -107,9 +108,10 @@ function setPreview(state: Enhancements, preview: Preview | undefined): void {
     maxHeightCells: Math.max(1, (state.tui?.terminal.rows ?? 24) - 2),
     imageId: allocateImageId(), moveCursor: false,
   }) ?? undefined : undefined;
+  const lang = state.language?.() ?? "zh";
   state.preview = {
     path: preview?.path, graphic,
-    note: preview?.kind === "note" ? preview.note : graphic ? undefined : "终端未能生成图片预览",
+    note: preview?.kind === "note" ? preview.note : graphic ? undefined : (lang === "en" ? "Terminal cannot render image preview" : "终端未能生成图片预览"),
   };
   if (state.preview.path && !state.overlayReady) showOverlay(state);
   positionPreview(state);
@@ -123,7 +125,7 @@ function showOverlay(state: Enhancements): void {
   state.previewHandle = state.tui.showOverlay({
     render: width => {
       if (state.previewLayout !== imageLayoutKey()) setPreview(state, state.previewSource);
-      return previewLines(state.preview, state.theme!, width);
+      return previewLines(state.preview, state.theme!, width, state.language?.() ?? "zh");
     },
     invalidate: () => {},
   }, state.previewOptions);
@@ -133,7 +135,7 @@ export function positionPreview(state: Enhancements): void {
   if (!state.previewOptions || !state.tui || !state.theme) return;
   const { rows, columns } = state.tui.terminal;
   const width = Math.max(3, Math.min((state.preview.graphic?.columns ?? 26) + 2, columns || 80));
-  const height = Math.min(rows, previewLines(state.preview, state.theme, width).length);
+  const height = Math.min(rows, previewLines(state.preview, state.theme, width, state.language?.() ?? "zh").length);
   const { x, y } = state.previewAnchor ?? { x: 0, y: rows - 2 };
   const previewRow = y + 1 + height <= rows ? y + 1 : Math.max(0, y - height);
   // Keep hover previews out of the draft attachment band. If there is no safe

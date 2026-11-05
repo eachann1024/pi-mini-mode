@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, getCellDimensions, truncateToWidth } from "@earendil-works/pi-tui";
 import type { PreviewState } from "./input-enhancements-types.ts";
+import type { UiLanguage } from "./settings.ts";
 
 export function positionedGraphic(sequence: string, up: number, right: number): string {
   // Pi <=0.87's ANSI slicer needs an SGR terminator after relative motion.
@@ -19,7 +20,7 @@ export function imageLayoutKey(): string {
 }
 
 /** A tightly sized image frame. Draw after clearing its interior, never a path-only tooltip. */
-export function previewLines(preview: PreviewState, theme: ExtensionContext["ui"]["theme"], width: number): string[] {
+export function previewLines(preview: PreviewState, theme: ExtensionContext["ui"]["theme"], width: number, lang: UiLanguage = "zh"): string[] {
   if (!preview.path) return [];
   const graphic = preview.graphic;
   const innerWidth = Math.max(1, Math.min(width - 2, graphic?.columns ?? 26));
@@ -27,7 +28,7 @@ export function previewLines(preview: PreviewState, theme: ExtensionContext["ui"
   const lines = [border(`╭${"─".repeat(innerWidth)}╮`)];
   if (graphic) {
     for (let row = 0; row < graphic.rows; row++) lines.push(border("│") + " ".repeat(innerWidth) + border("│"));
-  } else lines.push(border("│") + truncateToWidth(preview.note ?? "无法预览图片", innerWidth, "", true) + border("│"));
+  } else lines.push(border("│") + truncateToWidth(preview.note ?? (lang === "en" ? "Cannot preview image" : "无法预览图片"), innerWidth, "", true) + border("│"));
   const draw = graphic ? positionedGraphic(graphic.sequence, graphic.rows, 1) : "";
   lines.push(draw + border(`╰${"─".repeat(innerWidth)}╯`));
   return lines;

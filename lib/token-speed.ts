@@ -1,3 +1,4 @@
+import type { UiLanguage } from "./settings.ts";
 import { finiteNumber, formatSpeed, formatUsd, outputSpeed, speedColor, DECODE_SPEED_MIN_OUTPUT, type SpeedColor, type UsageLike } from "./usage.ts";
 
 /** Footer redraw cadence while a turn is streaming. */
@@ -32,6 +33,50 @@ export interface SpeedMetric {
   value: string;
   color?: SpeedColor | "text" | "muted";
 }
+
+const SPEED_COPY: Record<UiLanguage, {
+  average: string;
+  live: string;
+  ttft: string;
+  decode: string;
+  output: string;
+  input: string;
+  cacheRead: string;
+  cacheWrite: string;
+  cacheWrite1h: string;
+  reasoning: string;
+  totalTokens: string;
+  cost: string;
+}> = {
+  zh: {
+    average: "平均速度",
+    live: "实时速度",
+    ttft: "首字吐字",
+    decode: "解码用时",
+    output: "输出 token",
+    input: "输入 token",
+    cacheRead: "缓存读取",
+    cacheWrite: "缓存写入",
+    cacheWrite1h: "写入 1h",
+    reasoning: "推理 token",
+    totalTokens: "合计 token",
+    cost: "费用",
+  },
+  en: {
+    average: "Avg speed",
+    live: "Live speed",
+    ttft: "First token",
+    decode: "Decode time",
+    output: "Output tokens",
+    input: "Input tokens",
+    cacheRead: "Cache read",
+    cacheWrite: "Cache write",
+    cacheWrite1h: "Cache write 1h",
+    reasoning: "Reasoning tokens",
+    totalTokens: "Total tokens",
+    cost: "Cost",
+  },
+};
 
 interface Sample {
   t: number;
@@ -148,7 +193,7 @@ export function createTokenSpeedTracker() {
   let liveBaseTokens = 0;
   let samples: Sample[] = [];
   let usage: UsageSnapshot = {};
-  let frozen: SpeedMetric[] | undefined;
+  let frozen: Record<UiLanguage, SpeedMetric[]> | undefined;
   let runTokens = 0;
   let runElapsedMs = 0;
   let currentModelKey = "__default__";
@@ -209,29 +254,30 @@ export function createTokenSpeedTracker() {
     return outputSpeed(settledCount(), decodeStartedAt ?? firstTokenAt, end);
   };
 
-  const collect = (): SpeedMetric[] => {
+  const collect = (lang: UiLanguage = "zh"): SpeedMetric[] => {
+    const copy = SPEED_COPY[lang] ?? SPEED_COPY.zh;
     const rows: SpeedMetric[] = [];
     const now = lastNow || Date.now();
     const average = runningAverage(now);
-    if (average !== undefined) rows.push({ label: "平均速度", value: formatSpeed(average, true), color: speedColor(average) });
-    if (streaming && lastLive !== undefined) rows.push({ label: "实时速度", value: formatSpeed(lastLive, true), color: speedColor(lastLive) });
+    if (average !== undefined) rows.push({ label: copy.average, value: formatSpeed(average, true), color: speedColor(average) });
+    if (streaming && lastLive !== undefined) rows.push({ label: copy.live, value: formatSpeed(lastLive, true), color: speedColor(lastLive) });
     const origin = turnStartedAt ?? assistantStartedAt;
     if (firstTokenAt !== undefined && origin !== undefined && firstTokenAt > origin) {
-      rows.push({ label: "首字吐字", value: formatDuration(firstTokenAt - origin), color: "text" });
+      rows.push({ label: copy.ttft, value: formatDuration(firstTokenAt - origin), color: "text" });
     }
     const decodeStart = streaming ? firstTokenAt : (decodeStartedAt ?? firstTokenAt);
     const decodeEnd = streaming ? now : segmentEndedAt;
     if (decodeStart !== undefined && decodeEnd !== undefined && decodeEnd - decodeStart >= SPEED_REFRESH_MS) {
-      rows.push({ label: "解码用时", value: formatDuration(decodeEnd - decodeStart), color: "text" });
+      rows.push({ label: copy.decode, value: formatDuration(decodeEnd - decodeStart), color: "text" });
     }
     const counts: Array<[keyof UsageSnapshot, string]> = [
-      ["output", "输出 token"],
-      ["input", "输入 token"],
-      ["cacheRead", "缓存读取"],
-      ["cacheWrite", "缓存写入"],
-      ["cacheWrite1h", "写入 1h"],
-      ["reasoning", "推理 token"],
-      ["totalTokens", "合计 token"],
+      ["output", copy.output],
+      ["input", copy.input],
+      ["cacheRead", copy.cacheRead],
+      ["cacheWrite", copy.cacheWrite],
+      ["cacheWrite1h", copy.cacheWrite1h],
+      ["reasoning", copy.reasoning],
+      ["totalTokens", copy.totalTokens],
     ];
     for (const [key, label] of counts) {
       const value = usage[key];
@@ -239,11 +285,11 @@ export function createTokenSpeedTracker() {
       rows.push({ label, value: formatCount(value), color: "text" });
     }
     if (usage.output === undefined && !streaming && settledCount() >= DECODE_SPEED_MIN_OUTPUT) {
-      rows.push({ label: "输出 token", value: formatCount(settledCount()), color: "text" });
+      rows.push({ label: copy.output, value: formatCount(settledCount()), color: "text" });
     }
-    if (usage.cost !== undefined && usage.cost > 0) rows.push({ label: "费用", value: formatUsd(usage.cost), color: "muted" });
+    if (usage.cost !== undefined && usage.cost > 0) rows.push({ label: copy.cost, value: formatUsd(usage.cost), color: "muted" });
     if (rows.length === 0 && displayed !== undefined) {
-      rows.push({ label: "平均速度", value: formatSpeed(displayed, true), color: speedColor(displayed) });
+      rows.push({ label: copy.average, value: formatSpeed(displayed, true), color: speedColor(displayed) });
     }
     return rows;
   };
@@ -435,7 +481,7 @@ export function createTokenSpeedTracker() {
       } else {
         displayed = lastReliable;
       }
-      frozen = collect();
+      frozen = { zh: collect("zh"), en: collect("en") };
       return average !== undefined;
     },
     noteNested(output: unknown, startedAt: number, endedAt: number): boolean {
@@ -453,9 +499,10 @@ export function createTokenSpeedTracker() {
     streaming(): boolean {
       return streaming;
     },
-    metrics(): SpeedMetric[] {
-      if (streaming && lastLive === undefined && frozen?.length) return frozen;
-      return collect();
+    metrics(lang: UiLanguage = "zh"): SpeedMetric[] {
+      const resolved = lang === "en" ? "en" : "zh";
+      if (streaming && lastLive === undefined && frozen?.[resolved]?.length) return frozen[resolved];
+      return collect(resolved);
     },
     reset() {
       displayed = undefined;

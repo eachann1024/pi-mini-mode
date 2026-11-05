@@ -93,7 +93,7 @@ export default function (pi: ExtensionAPI) {
   let saveChain: Promise<void> = Promise.resolve();
   const configPath = settingsPath();
   let updateBannerChecked = false;
-  let activeUpdateBanner: { sessionKey: string; version: string; collapsed: boolean } | undefined;
+  let activeUpdateBanner: { sessionKey: string; version: string; previousVersion?: string; collapsed: boolean } | undefined;
   const getSessionKey = (ctx: ExtensionContext) =>
     ctx.sessionManager.getSessionFile?.() ?? (ctx.sessionManager as { getSessionId?(): string | undefined }).getSessionId?.() ?? "";
 
@@ -187,6 +187,7 @@ export default function (pi: ExtensionAPI) {
         updateBanner: () => activeUpdateBanner && activeUpdateBanner.sessionKey === sessionKey
           ? {
               version: activeUpdateBanner.version,
+              previousVersion: activeUpdateBanner.previousVersion,
               collapsed: activeUpdateBanner.collapsed,
               toggle: () => {
                 if (!activeUpdateBanner) return;
@@ -204,12 +205,13 @@ export default function (pi: ExtensionAPI) {
       const hideStartupLine = (line: string) => line.replace(/\x1b\[[0-9;]*m/g, "").includes("No models match pattern");
       // Transcript hover wrappers must surround the compact widget handlers;
       // unmount in reverse order so neither adapter resurrects stale handlers.
-      restoreAgentWidgets = attachAgentWidgets(tui, theme, () => subAgentsExpanded, undefined, true);
+      restoreAgentWidgets = attachAgentWidgets(tui, theme, () => subAgentsExpanded, undefined, true, () => uiLanguage(settings));
       restoreTranscript = attachTranscript(tui, view, {
         turnCount: () => minimalTurns.length,
         supervisor: {
           theme,
           expanded: () => processExpanded,
+          language: () => uiLanguage(settings),
           handledRunIds: () => handledRunIds,
           onNotices: groups => {
             let changed = false;
@@ -453,7 +455,7 @@ export default function (pi: ExtensionAPI) {
     settings = loaded.settings;
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
-    cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"], () => settings["pi-mini-mode-image-preview"]);
+    cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"], () => settings["pi-mini-mode-image-preview"], () => uiLanguage(settings));
     thinkingStream.stop(activeMinimalTurn, "aborted");
     thinkingStream.reset();
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
@@ -479,7 +481,7 @@ export default function (pi: ExtensionAPI) {
         await saveSettings(settings, configPath).catch(() => {});
       }
       if (loaded.exists && versionChanged && ctx.mode === "tui" && ctx.hasUI && minimalTurns.length === 0) {
-        activeUpdateBanner = { sessionKey: currentSessionKey, version: PACKAGE_VERSION, collapsed: false };
+        activeUpdateBanner = { sessionKey: currentSessionKey, version: PACKAGE_VERSION, previousVersion: prevVersion, collapsed: false };
       }
     }
     mountMinimalOutput(ctx);
@@ -497,7 +499,7 @@ export default function (pi: ExtensionAPI) {
       refreshFooter = () => tui.requestRender();
       speedHover?.dispose();
       speedHover = attachSpeedHover(tui, theme, () => ({
-        metrics: settings["pi-mini-mode-speed-show"] ? speeds.metrics() : [],
+        metrics: settings["pi-mini-mode-speed-show"] ? speeds.metrics(uiLanguage(settings)) : [],
         hit: speedHitBox,
       }));
       const onBranchChange = footerData?.onBranchChange?.(() => tui.requestRender());

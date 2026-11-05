@@ -1,5 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { UiLanguage } from "./settings.ts";
 import { compactGoalCard, compactSupervisorNotice } from "./transcript-cards.ts";
 import { cacheMissLine, formatCacheTokens, isSupervisorReply, record, supervisorNotice } from "./transcript-notices.ts";
 
@@ -23,6 +24,7 @@ export interface NoticeOptions {
   supervisor?: {
     theme: ExtensionContext["ui"]["theme"];
     expanded: () => boolean;
+    language?: () => UiLanguage;
     handledRunIds?: () => Set<string>;
     onNotices?: (groups: Map<string | Component, { first: Component; messages: unknown[]; selected: unknown; notice: NonNullable<ReturnType<typeof supervisorNotice>> }>) => void;
   };
@@ -48,11 +50,12 @@ export function createTurnNoticeRenderer(chat: { children: Component[] }, option
   return width => {
     const notices = new Map<number, NoticeRows>();
     const expanded = options.supervisor?.expanded() ?? false;
+    const lang: UiLanguage = options.supervisor?.language?.() ?? "zh";
     if (expanded !== globalExpanded) { expandedNotices.clear(); globalExpanded = expanded; }
     const groups = new Map<string | Component, { first: Component; messages: unknown[]; selected: unknown; notice: NonNullable<ReturnType<typeof supervisorNotice>> }>();
     if (options.supervisor) for (const child of chat.children) {
       const message = supervisorEnvelope(child);
-      const notice = supervisorNotice(message);
+      const notice = supervisorNotice(message, lang);
       if (!notice) continue;
       const key = notice.key ?? child;
       const group = groups.get(key);
@@ -113,8 +116,8 @@ export function createTurnNoticeRenderer(chat: { children: Component[] }, option
         continue;
       }
       if (child.constructor.name === "CustomEntryComponent"
-        && !(options.supervisor && supervisorNotice(supervisorEnvelope(child)))) {
-        const goalRows = options.supervisor && compactGoalCard((child as unknown as { entry?: unknown }).entry, options.supervisor.theme, width, expandedNotices.get(child) ?? false);
+        && !(options.supervisor && supervisorNotice(supervisorEnvelope(child), lang))) {
+        const goalRows = options.supervisor && compactGoalCard((child as unknown as { entry?: unknown }).entry, options.supervisor.theme, width, expandedNotices.get(child) ?? false, lang);
         const rows = notices.get(turn) ?? [];
         if (!goalRows) {
           rows.push(...child.render(width));
@@ -133,7 +136,7 @@ export function createTurnNoticeRenderer(chat: { children: Component[] }, option
       if (child.constructor.name === "CustomMessageComponent" || child.constructor.name === "CustomEntryComponent") {
         const rows = notices.get(turn) ?? [];
         const message = supervisorEnvelope(child);
-        const notice = options.supervisor && supervisorNotice(message);
+        const notice = options.supervisor && supervisorNotice(message, lang);
         const key = notice ? notice.key ?? child : child;
         const group = groups.get(key);
         if (group && group.first !== child) continue;
@@ -144,11 +147,11 @@ export function createTurnNoticeRenderer(chat: { children: Component[] }, option
           const open = expandedNotices.get(key) ?? expanded;
           const label = group.notice.showLabel
             ? group.notice.label ?? ""
-            : groups.size > 1 ? group.notice.label || `任务 ${groupKeys.indexOf(key) + 1}` : "";
+            : groups.size > 1 ? group.notice.label || (lang === "en" ? `Task ${groupKeys.indexOf(key) + 1}` : `任务 ${groupKeys.indexOf(key) + 1}`) : "";
           const targets = controls.get(turn) ?? [];
           targets.push({ y: rows.length, width, key, expanded: open });
           controls.set(turn, targets);
-          rows.push(...compactSupervisorNotice(group.selected, options.supervisor.theme, width, open, label, group.messages)!);
+          rows.push(...compactSupervisorNotice(group.selected, options.supervisor.theme, width, open, label, group.messages, lang)!);
         } else rows.push(...child.render(width));
         notices.set(turn, rows);
         continue;

@@ -1,13 +1,14 @@
 import { Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { diagramMarkdown, isMarkdownProse, renderMinimalMarkdown } from "./minimal-markdown.ts";
+import type { UiLanguage } from "./settings.ts";
 import { clean, record, supervisorNotice, supervisorNoticeBody } from "./transcript-notices.ts";
 
 const renderMarkdownBody = (body: string, width: number, theme?: ExtensionContext["ui"]["theme"]) => isMarkdownProse(body)
   ? renderMinimalMarkdown(body, Math.max(1, width), getMarkdownTheme(), theme?.getBgAnsi?.("userMessageBg") ?? "", undefined, diagramMarkdown)
   : new Text(body, 0, 0).render(Math.max(1, width));
 
-export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["theme"], width: number, expanded: boolean): string[] | undefined {
+export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["theme"], width: number, expanded: boolean, lang: UiLanguage = "zh"): string[] | undefined {
   const item = record(entry);
   if (item?.customType !== "pi-codex-goal") return;
   const data = record(item.data);
@@ -17,7 +18,7 @@ export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["t
   // worth adding to the compact transcript.
   if (!objective || width <= 0) return;
   const status = typeof goal?.status === "string" ? clean(goal.status) : "active";
-  const control = truncateToWidth(expanded ? "[收起]" : "[详情]", width, "");
+  const control = truncateToWidth(lang === "en" ? (expanded ? "[Collapse]" : "[Details]") : (expanded ? "[收起]" : "[详情]"), width, "");
   const title = theme.fg(expanded ? "accent" : "muted", `${control} ◉ Goal · ${status}`);
   const hint = theme.fg(expanded ? "accent" : "muted", " · Ctrl+O");
   const summary = truncateToWidth(objective, Math.max(0, width - visibleWidth(title) - visibleWidth(hint) - 3), "…");
@@ -26,13 +27,13 @@ export function compactGoalCard(entry: unknown, theme: ExtensionContext["ui"]["t
   return rows;
 }
 
-export function compactSupervisorNotice(message: unknown, theme: ExtensionContext["ui"]["theme"], width: number, expanded: boolean, label = "", history: unknown[] = [message]): string[] | undefined {
-  const notice = supervisorNotice(message);
+export function compactSupervisorNotice(message: unknown, theme: ExtensionContext["ui"]["theme"], width: number, expanded: boolean, label = "", history: unknown[] = [message], lang: UiLanguage = "zh"): string[] | undefined {
+  const notice = supervisorNotice(message, lang);
   if (!notice) return;
   if (width <= 0) return [];
   const { state, color, summary } = notice;
   const effectiveLabel = label || (notice.showLabel ? notice.label ?? "" : "");
-  const control = truncateToWidth(expanded ? "[收起]" : "[详情]", width, "");
+  const control = truncateToWidth(lang === "en" ? (expanded ? "[Collapse]" : "[Details]") : (expanded ? "[收起]" : "[详情]"), width, "");
   const hint = " · Ctrl+O";
   let heading: string;
   let summaryText: string;
@@ -56,7 +57,7 @@ export function compactSupervisorNotice(message: unknown, theme: ExtensionContex
   if (expanded) {
     const bodies: string[] = [];
     for (const original of history) {
-      const body = supervisorNoticeBody(original);
+      const body = supervisorNoticeBody(original, lang);
       if (body && !bodies.includes(body)) bodies.push(body);
     }
     for (const body of bodies) {

@@ -375,11 +375,11 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
           const item = msg && typeof msg === "object" ? msg as Record<string, unknown> : undefined;
           const details = item?.details && typeof item.details === "object" ? item.details as Record<string, unknown> : undefined;
           if (item?.customType === "subagent_supervisor_request" && details?.reason === "progress_update") {
-            const progress = extractNoticeBody(msg);
+            const progress = extractNoticeBody(msg, lang);
             if (progress) latestProgress = progress;
             continue;
           }
-          const b = supervisorNoticeBody(msg);
+          const b = supervisorNoticeBody(msg, lang);
           if (b && !bodies.includes(b)) bodies.push(b);
         }
         if (!bodies.length && latestProgress) bodies.push(latestProgress);
@@ -501,11 +501,11 @@ export function liveAgentView(statuses: Record<string, unknown>[], theme: Theme,
         const item = msg && typeof msg === "object" ? msg as Record<string, unknown> : undefined;
         const details = item?.details && typeof item.details === "object" ? item.details as Record<string, unknown> : undefined;
         if (item?.customType === "subagent_supervisor_request" && details?.reason === "progress_update") {
-          const progress = extractNoticeBody(msg);
+          const progress = extractNoticeBody(msg, lang);
           if (progress) latestProgress = progress;
           continue;
         }
-        const b = supervisorNoticeBody(msg);
+        const b = supervisorNoticeBody(msg, lang);
         if (b && !bodies.includes(b)) bodies.push(b);
       }
       if (!bodies.length && latestProgress) bodies.push(latestProgress);

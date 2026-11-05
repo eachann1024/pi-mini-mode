@@ -4,6 +4,12 @@ import type { Enhancements } from "./input-enhancements-types.ts";
 import { editorImagePaths } from "./input-editor-paths.ts";
 import { imageLayoutKey, positionedGraphic } from "./input-image-graphics.ts";
 import { readPreview } from "./input-image-paths.ts";
+import type { UiLanguage } from "./settings.ts";
+
+const INLINE_COPY: Record<UiLanguage, { loading: string; cannotPreview: string }> = {
+  zh: { loading: "加载中", cannotPreview: "无法预览" },
+  en: { loading: "Loading", cannotPreview: "No preview" },
+};
 
 function draftImagePaths(editor: EditorComponent): string[] {
   const source = (editor as EditorComponent & { state?: { lines: string[] } }).state?.lines ?? editor.getText().split("\n");
@@ -27,8 +33,9 @@ export function syncInlineImages(state: Enhancements): void {
   for (const path of paths) {
     if (state.inlineImages.has(path) || state.inlinePending.has(path)) continue;
     const cwd = state.cwd ?? process.cwd();
+    const lang = state.language?.() ?? "zh";
     // Cell placement scales the image; keep a bounded copy independent of startup cell metrics.
-    const pending = readPreview(path, cwd).catch(() => undefined);
+    const pending = readPreview(path, cwd, undefined, lang).catch(() => undefined);
     state.inlinePending.set(path, pending);
     void pending.then(preview => {
       if (state.inlinePending.get(path) !== pending) return;
@@ -40,9 +47,10 @@ export function syncInlineImages(state: Enhancements): void {
   }
 }
 
-export function inlinePreviewLines(state: Pick<Enhancements, "editor" | "enabled" | "previewMode" | "inlineImages" | "inlinePending" | "inlineGraphics" | "tui">, theme: ExtensionContext["ui"]["theme"], width: number): string[] {
+export function inlinePreviewLines(state: Pick<Enhancements, "editor" | "enabled" | "previewMode" | "inlineImages" | "inlinePending" | "inlineGraphics" | "tui" | "language">, theme: ExtensionContext["ui"]["theme"], width: number): string[] {
   const paths = state.editor && state.enabled() && state.previewMode() === "inline" && width >= 12 ? draftImagePaths(state.editor) : [];
   if (!paths.length) { clearInlineGraphics(state); return []; }
+  const copy = INLINE_COPY[state.language?.() ?? "zh"] ?? INLINE_COPY.zh;
   const cardWidth = Math.min(14, width);
   // ponytail: cards are capped at one row; beyond viewport width show compact numbered tags, upgrade to a gallery when scrolling is supported.
   const count = Math.max(1, Math.floor((width + 2) / (cardWidth + 2)));
@@ -77,14 +85,14 @@ export function inlinePreviewLines(state: Pick<Enhancements, "editor" | "enabled
         return frame(`${top ? "╭" : "╰"}${"─".repeat(Math.floor(fill / 2))} ${caption} ${"─".repeat(Math.ceil(fill / 2))}${top ? "╮" : "╯"}`);
       };
       const top = rim(`  #${index + 1}`, true);
-      const size = preview?.kind === "image" ? `${preview.widthPx}x${preview.heightPx}` : state.inlinePending.has(path) ? "加载中" : "无法预览";
+      const size = preview?.kind === "image" ? `${preview.widthPx}x${preview.heightPx}` : state.inlinePending.has(path) ? copy.loading : copy.cannotPreview;
       return { graphic, preview, top, size, rim, frame };
     });
     // OMP's 12x4 inner grid; never grow a tall empty box for a wide image.
     const bodyHeight = 4;
     rows.push(cards.map(card => card.top).join("  "));
     for (let row = 0; row < bodyHeight; row++) rows.push(cards.map(card => {
-      const content = row === 0 && !card.graphic ? truncateToWidth(card.preview?.kind === "note" ? card.preview.note : card.size === "加载中" ? "加载中" : "无法预览", cardWidth - 4, "…") : "";
+      const content = row === 0 && !card.graphic ? truncateToWidth(card.preview?.kind === "note" ? card.preview.note : card.size === copy.loading ? copy.loading : copy.cannotPreview, cardWidth - 4, "…") : "";
       const left = card.graphic ? Math.floor((cardWidth - 2 - card.graphic.columns) / 2) : 0;
       return card.frame("│") + " ".repeat(left) + " ".repeat(cardWidth - 2 - left - visibleWidth(content)) + content + card.frame("│");
     }).join("  "));

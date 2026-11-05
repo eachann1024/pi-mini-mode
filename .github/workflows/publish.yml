@@ -109,5 +109,5 @@ jobs:
           NAME: ${{ steps.plan.outputs.name }}
           VERSION: ${{ steps.plan.outputs.version }}
         run: |
-          gh release create "v$VERSION" "$RUNNER_TEMP"/release/*.tgz --verify-tag --title "v$VERSION" --generate-notes \
-            --notes "npm: \`$NAME@$VERSION\` · 安装：\`pi install npm:$NAME\`"
+          NOTES="$(node -e "import('./lib/update-banner.ts').then(m => process.stdout.write(m.formatGitHubReleaseNotes(process.env.VERSION)))")"
+          gh release create "v$VERSION" "$RUNNER_TEMP"/release/*.tgz --verify-tag --title "v$VERSION" --notes "$NOTES"

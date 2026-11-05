@@ -1,6 +1,7 @@
 import { diagramMarkdown, renderMinimalMarkdown } from "./minimal-markdown.ts";
 import { plain } from "./agent-state.ts";
 import { agentSummary, liveAgentRows, runningGlyph, type AgentDeadlines } from "./agent-render.ts";
+import type { UiLanguage } from "./settings.ts";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
@@ -64,7 +65,7 @@ const isAgentFleetSummary = (lines: string[]) => {
 };
 
 /** Pi 0.85 widget containers: preserve unrelated widgets and their lifecycle. */
-export function attachAgentWidgets(tui: unknown, theme: Theme, expanded: () => boolean, statuses?: () => Record<string, unknown>[], inline = false): () => void {
+export function attachAgentWidgets(tui: unknown, theme: Theme, expanded: () => boolean, statuses?: () => Record<string, unknown>[], inline = false, language: () => UiLanguage = () => "zh"): () => void {
   const host = tui as { children?: Array<Component & { children?: Component[] }> };
   if (host.children?.length !== 7) return () => {};
   const restores: Array<() => void> = [];
@@ -75,7 +76,8 @@ export function attachAgentWidgets(tui: unknown, theme: Theme, expanded: () => b
     const descriptor = Object.getOwnPropertyDescriptor(container, "render");
     const mouseDescriptor = Object.getOwnPropertyDescriptor(container, "handleMouse");
     const render = (width: number) => {
-      const live = !inline && statuses ? liveAgentRows(statuses(), theme, width, expanded(), deadlines) : [];
+      const lang = language();
+      const live = !inline && statuses ? liveAgentRows(statuses(), theme, width, expanded(), deadlines, lang) : [];
       let inserted = false;
       const rows = container.children!.flatMap(child => {
         const original = child.render(width);
@@ -96,7 +98,8 @@ export function attachAgentWidgets(tui: unknown, theme: Theme, expanded: () => b
     const mouse: NonNullable<Component["handleMouse"]> = (event) => {
       let y = 0;
       let inserted = false;
-      const live = !inline && statuses ? liveAgentRows(statuses(), theme, event.width, expanded(), deadlines) : [];
+      const lang = language();
+      const live = !inline && statuses ? liveAgentRows(statuses(), theme, event.width, expanded(), deadlines, lang) : [];
 
       for (const child of container.children!) {
         const original = child.render(event.width);

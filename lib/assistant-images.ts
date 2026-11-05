@@ -73,7 +73,7 @@ export function imagePlaceholders(source: string, cwd: string): string {
   const spans = assistantImageSpans(source, cwd, true);
   for (let index = spans.length - 1; index >= 0; index--) {
     const span = spans[index];
-    out = out.slice(0, span.start) + fileLink(`  图片 ${index + 1}`, span.path, false) + out.slice(span.end);
+    out = out.slice(0, span.start) + fileLink(`  #${index + 1}`, span.path, false) + out.slice(span.end);
   }
   if (placeholdersCache.size >= IMAGE_CACHE_MAX) {
     const first = placeholdersCache.keys().next().value;
