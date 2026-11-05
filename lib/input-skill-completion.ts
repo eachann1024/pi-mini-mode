@@ -122,11 +122,12 @@ export function createSkillAutocompleteProvider(current: AutocompleteProvider, l
 export async function handleInput(state: Enhancements, event: InputEvent, ctx: ExtensionContext): Promise<InputEventResult | undefined> {
   if (!state.enabled() || event.source !== "interactive" || !event.text.includes("/skill:")) return undefined;
   const skills = readSkillCommands(state.pi);
+  const lang = state.language?.() ?? "zh";
   const text = await expandSkillTokens(
     event.text,
     skills,
     (path) => readFile(path, "utf8"),
-    (skill) => ctx.ui.notify(`无法读取技能文件：${skill.path}`, "warning"),
+    (skill) => ctx.ui.notify(lang === "en" ? `Cannot read skill file: ${skill.path}` : `无法读取技能文件：${skill.path}`, "warning"),
   );
   return text === undefined ? undefined : { action: "transform", text };
 }

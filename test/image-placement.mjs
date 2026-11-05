@@ -68,7 +68,7 @@ try {
   const firstImage = rows.findIndex(line => line.includes('\x1b_G'));
   assert.ok(firstImage > rows.findIndex(line => line.includes('BEFORE')), 'tool step has no inline image; assistant reply does');
   assert.equal(rows.filter(line => line.includes('\x1b_G')).length, 1);
-  assert.ok(rows.some(line => line.includes('图片 1') && line.includes('\x1b]8;;file:')), 'read path becomes a hover image chip');
+  assert.ok(rows.some(line => line.includes('  #1') && line.includes('\x1b]8;;file:')), 'read path becomes a hover image chip');
   const target = tui.previousScreen.findIndex(line => line.includes('\x1b_G'));
   assert.ok(target > 0);
   assert.deepEqual(placements(ansi).at(-1), { row: target, col: 0 }, 'first upload uses the transcript cursor, not the input dock');

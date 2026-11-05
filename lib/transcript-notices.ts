@@ -1,8 +1,62 @@
 import { stripVTControlCharacters } from "node:util";
+import type { UiLanguage } from "./settings.ts";
 
 export const record = (value: unknown): Record<string, unknown> | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 export const clean = (text: string) => stripVTControlCharacters(text).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
 export const isSupervisorReply = (message: unknown) => record(message)?.customType === "subagent_supervisor_reply";
+
+const NOTICE_COPY: Record<UiLanguage, {
+  toolFailures: string;
+  completionGuard: string;
+  internalState: string;
+  internalSummary: string;
+  failedState: string;
+  completedState: string;
+  subtaskFailed: string;
+  subtaskCompleted: string;
+  attentionState: string;
+  workflowFailedSummary: string;
+  waitingReply: string;
+  questionState: string;
+  decisionState: string;
+  progressState: string;
+  noSummary: string;
+}> = {
+  zh: {
+    toolFailures: "工具执行失败",
+    completionGuard: "任务完成受阻",
+    internalState: "内部协作",
+    internalSummary: "代理间沟通已收纳",
+    failedState: "执行失败",
+    completedState: "已完成",
+    subtaskFailed: "子任务失败",
+    subtaskCompleted: "子任务已完成",
+    attentionState: "需要关注",
+    workflowFailedSummary: "工作流包含失败子任务",
+    waitingReply: "等待回复",
+    questionState: "需要提问",
+    decisionState: "需要裁决",
+    progressState: "进度",
+    noSummary: "暂无摘要",
+  },
+  en: {
+    toolFailures: "Tool execution failed",
+    completionGuard: "Task completion blocked",
+    internalState: "Internal",
+    internalSummary: "Subagent communication folded",
+    failedState: "Failed",
+    completedState: "Completed",
+    subtaskFailed: "Subtask failed",
+    subtaskCompleted: "Subtask completed",
+    attentionState: "Needs attention",
+    workflowFailedSummary: "Workflow has failed subtasks",
+    waitingReply: "Waiting for reply",
+    questionState: "Question",
+    decisionState: "Decision needed",
+    progressState: "Progress",
+    noSummary: "No summary",
+  },
+};
 
 /** Structured interview questions are the prompt; IDs and reply hints stay out. */
 export function formatInterview(interview: unknown): string {
@@ -35,7 +89,8 @@ function withInterview(body: string, interview: unknown): string {
   return body ? `${body}\n${questions}` : questions;
 }
 
-export function extractNoticeBody(message: unknown): string {
+export function extractNoticeBody(message: unknown, lang: UiLanguage = "zh"): string {
+  const copy = NOTICE_COPY[lang] ?? NOTICE_COPY.zh;
   const item = record(message);
   if (!item) return typeof message === "string" ? clean(message) : "";
   const details = record(item.details);
@@ -52,7 +107,7 @@ export function extractNoticeBody(message: unknown): string {
     if (body) {
       let cleanBody = stripVTControlCharacters(body).replace(/^UPDATE:\s*/i, "").trim();
       const failureReason = typeof event?.reason === "string" && ["tool_failures", "completion_guard"].includes(event.reason)
-        ? event.reason === "tool_failures" ? "工具执行失败" : "任务完成受阻"
+        ? event.reason === "tool_failures" ? copy.toolFailures : copy.completionGuard
         : undefined;
       if (failureReason && !cleanBody.includes(failureReason)) cleanBody = `[${failureReason}] ${cleanBody}`;
       return withInterview(cleanBody, interview);
@@ -81,7 +136,8 @@ export function extractNoticeBody(message: unknown): string {
 }
 
 /** Only pi-subagents' known envelopes carry state; prose is never a status signal. */
-export function supervisorNotice(message: unknown) {
+export function supervisorNotice(message: unknown, lang: UiLanguage = "zh") {
+  const copy = NOTICE_COPY[lang] ?? NOTICE_COPY.zh;
   const item = record(message);
   if (item?.customType === "subagent_supervisor_reply") {
     const data = record(item.data);
@@ -99,9 +155,9 @@ export function supervisorNotice(message: unknown) {
       agent: data.agent,
       internal: true,
       alert: false,
-      state: "内部协作",
+      state: copy.internalState,
       color: "muted" as const,
-      summary: "代理间沟通已收纳",
+      summary: copy.internalSummary,
       body: stripVTControlCharacters(data.message).trim(),
     };
   }
@@ -126,9 +182,9 @@ export function supervisorNotice(message: unknown) {
       runIds,
       internal: false,
       alert: failed,
-      state: failed ? "执行失败" : "已完成",
+      state: failed ? copy.failedState : copy.completedState,
       color: failed ? "error" as const : "muted" as const,
-      summary: error || (failed ? "子任务失败" : "子任务已完成"),
+      summary: error || (failed ? copy.subtaskFailed : copy.subtaskCompleted),
       label: clean(header[2]),
       showLabel: true,
       body: content,
@@ -165,10 +221,10 @@ export function supervisorNotice(message: unknown) {
       runIds,
       internal: false,
       alert: failed || attention,
-      state: failed ? "执行失败" : attention ? "需要关注" : "已完成",
+      state: failed ? copy.failedState : attention ? copy.attentionState : copy.completedState,
       color: failed ? "error" as const : attention ? "warning" as const : "muted" as const,
-      summary: failed && status === "completed" ? "工作流包含失败子任务"
-        : clean(preview) || (failed ? "子任务失败" : attention ? "等待回复" : "子任务已完成"),
+      summary: failed && status === "completed" ? copy.workflowFailedSummary
+        : clean(preview) || (failed ? copy.subtaskFailed : attention ? copy.waitingReply : copy.subtaskCompleted),
       label: clean(header[2]),
       showLabel: true,
       body: content,
@@ -202,10 +258,10 @@ export function supervisorNotice(message: unknown) {
   const key = runId && Number.isInteger(index) && Number(index) >= 0
     && !data.nestedRunId && !data.nestingPath ? JSON.stringify([runId, index]) : undefined;
   return { key, runId, internal, alert: failed || attention,
-    state: failed ? "执行失败" : ask ? (details.reason === "interview_request" ? "需要提问" : "需要裁决")
-      : attention ? "需要关注" : internal ? "内部协作" : "进度",
+    state: failed ? copy.failedState : ask ? (details.reason === "interview_request" ? copy.questionState : copy.decisionState)
+      : attention ? copy.attentionState : internal ? copy.internalState : copy.progressState,
     color: failed ? "error" as const : attention ? "warning" as const : "muted" as const,
-    summary: internal ? "代理间沟通已收纳" : question || (ask ? interviewTitle || "等待回复" : "暂无摘要"),
+    summary: internal ? copy.internalSummary : question || (ask ? interviewTitle || copy.waitingReply : copy.noSummary),
     label: typeof data.label === "string" ? clean(data.label) : typeof data.taskPreview === "string" ? clean(data.taskPreview) : undefined,
     body: question,
     agent: typeof data.agent === "string" ? data.agent : undefined,
@@ -213,12 +269,12 @@ export function supervisorNotice(message: unknown) {
 }
 
 /** Progress is a status preview, not detail prose; decisions and failures remain inspectable. */
-export function supervisorNoticeBody(message: unknown): string {
+export function supervisorNoticeBody(message: unknown, lang: UiLanguage = "zh"): string {
   const item = record(message);
   if (item?.customType === "subagent_supervisor_request" && record(item.details)?.reason === "progress_update") return "";
-  const notice = supervisorNotice(message);
+  const notice = supervisorNotice(message, lang);
   if (item?.type === "custom" && item.customType === "subagent_supervisor_reply") return notice?.body ?? "";
-  return notice?.alert || notice?.internal ? extractNoticeBody(message) : "";
+  return notice?.alert || notice?.internal ? extractNoticeBody(message, lang) : "";
 }
 
 /** Pi writes one warning line per miss (`Cache miss…: N tokens re-billed`). */

@@ -2,6 +2,7 @@ import type { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent, OverlayHandle, OverlayOptions, renderImage, TUI } from "@earendil-works/pi-tui";
 import type { Preview } from "./input-image-paths.ts";
+import type { UiLanguage } from "./settings.ts";
 
 export interface PreviewState {
   path?: string;
@@ -38,6 +39,7 @@ export interface Enhancements {
   hoverLink?: { row: number; start: number; end: number; path: string };
   previewOptions?: OverlayOptions;
   previewMode: () => "hover" | "inline";
+  language?: () => UiLanguage;
   inlineImages: Map<string, Preview | undefined>;
   inlinePending: Map<string, Promise<Preview | undefined>>;
   inlineGraphics: Map<string, { layout: string } & NonNullable<ReturnType<typeof renderImage>>>;

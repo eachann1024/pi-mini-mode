@@ -44,8 +44,10 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
   // as a transcript identity check.
   const renderDescriptor = Object.getOwnPropertyDescriptor(document, "render");
   const mouseDescriptor = Object.getOwnPropertyDescriptor(document, "handleMouse");
+  const invalidateDescriptor = Object.getOwnPropertyDescriptor(document, "invalidate");
   const originalRender = document.render;
   const originalMouse = document.handleMouse;
+  const originalInvalidate = document.invalidate;
   const now = options.now ?? Date.now;
   const schedule = options.schedule ?? ((callback, delay) => {
     const timer = setTimeout(callback, delay);
@@ -103,8 +105,16 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
     if (event.y < viewOffset || event.y >= viewOffset + viewHeight) return;
     return view.handleMouse?.({ ...event, y: event.y - viewOffset, height: viewHeight });
   };
+  // Theme changes call ui.invalidate(), which reaches this document but not the
+  // minimal view: it is not a TUI child, and the widget invalidate is a no-op.
+  // Turn-line caches omit theme, so refresh them here. Native children still run.
+  const invalidate: NonNullable<Component["invalidate"]> = () => {
+    originalInvalidate?.call(document);
+    view.invalidate?.();
+  };
   document.render = render;
   document.handleMouse = mouse;
+  document.invalidate = invalidate;
   // Dock events never reach the document. Observe normalized events without
   // stealing wheel/selection or changing Pi's mouse protocol/listener order.
   const restoreDock = view.clearHover ? host.children.slice(1).map(child => {
@@ -161,6 +171,10 @@ export function attachTranscript(tui: unknown, view: TranscriptView, options: No
     if (document.handleMouse === mouse) {
       if (mouseDescriptor) Object.defineProperty(document, "handleMouse", mouseDescriptor);
       else { delete document.handleMouse; if (document.handleMouse !== originalMouse) document.handleMouse = originalMouse; }
+    }
+    if (document.invalidate === invalidate) {
+      if (invalidateDescriptor) Object.defineProperty(document, "invalidate", invalidateDescriptor);
+      else { delete (document as Partial<Component>).invalidate; if (document.invalidate !== originalInvalidate) document.invalidate = originalInvalidate; }
     }
   };
 }

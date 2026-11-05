@@ -18,6 +18,7 @@ import { installEditor, liveUI } from "./input-editor.ts";
 import { handleTerminalInput, requestPreview, setPointer } from "./input-hover-preview.ts";
 import { clearInlineGraphics, syncInlineImages } from "./input-inline-images.ts";
 import { createSkillAutocompleteProvider, handleInput, readSkillCommands } from "./input-skill-completion.ts";
+import type { UiLanguage } from "./settings.ts";
 
 export { MAX_PREVIEW_BYTES, imagePathsInLine, imagePathAtCursor, imageDirectoryUrl, readPreview } from "./input-image-paths.ts";
 export type { ImagePathMatch, PreviewImage, PreviewNote, Preview } from "./input-image-paths.ts";
@@ -31,12 +32,13 @@ export const INPUT_ENHANCEMENTS_SETTING = "pi-mini-mode-input-enhancements";
 
 let installed: Enhancements | undefined;
 
-export function installInputEnhancements(pi: ExtensionAPI, ctx: ExtensionContext, isEnabled: boolean | (() => boolean), previewMode: () => "hover" | "inline" = () => "hover"): InputEnhancementsCleanup {
+export function installInputEnhancements(pi: ExtensionAPI, ctx: ExtensionContext, isEnabled: boolean | (() => boolean), previewMode: () => "hover" | "inline" = () => "hover", language: () => UiLanguage = () => "zh"): InputEnhancementsCleanup {
   const enabled = typeof isEnabled === "function" ? isEnabled : () => isEnabled;
   if (installed && installed.pi !== pi) installed.cleanup();
   const state = installed?.pi === pi ? installed : (installed = createEnhancements(pi));
   state.enabled = enabled;
   state.previewMode = previewMode;
+  state.language = language;
   state.ctx = ctx;
   state.cwd = ctx.cwd;
   state.theme = ctx.hasUI ? ctx.ui.theme : undefined;

@@ -1116,20 +1116,34 @@ const bannerSavedAfterFirst = (await extension.loadSettings(extension.settingsPa
 assert.equal(bannerSavedAfterFirst.lastSeenVersion, extension.PACKAGE_VERSION, "lastSeenVersion is immediately updated on first session_start");
 const firstScreenRows = bannerDoc1.render(100).map(stripAnsi);
 const firstScreenText = firstScreenRows.join("\n");
-assert.match(firstScreenText, /pi-mini-mode v\d+\.\d+\.\d+ 更新摘要/, "Scheme C banner header is shown");
-assert.match(firstScreenText, /长会话折叠不卡顿/, "banner includes update item 1");
-assert.match(firstScreenText, /思考场景 Token 速度准确度修复/, "banner includes update item 2");
-assert.match(firstScreenText, /原生支持 pi -p 子代理过程树与分步用量/, "banner includes update item 3");
-assert.ok(firstScreenRows[0]?.startsWith("╭") && firstScreenRows.at(-1)?.startsWith("╰"), "Scheme C uses rounded thin box borders");
+assert.match(firstScreenText, /pi-mini-mode v\d+\.\d+\.\d+/, "banner header is shown");
+assert.match(firstScreenText, /\[收起\]/, "expanded banner header shows collapse affordance");
+assert.match(firstScreenText, /🌈 本次更新重点：/, "banner shows highlights line");
+assert.match(firstScreenText, /✨ 新功能/, "banner shows features section");
+assert.match(firstScreenText, /🐛 修复/, "banner shows fixes section");
+assert.ok(firstScreenRows[0]?.startsWith("╭") && firstScreenRows.at(-1)?.startsWith("╰"), "banner uses rounded thin box borders");
 
 // Clicking header folds and expands the update banner.
 bannerDoc1.handleMouse({ type: "click", button: "left", x: 6, y: 1, clickCount: 1 });
 const foldedRows = bannerDoc1.render(100).map(stripAnsi);
 assert.equal(foldedRows.length, 3, "folded banner collapses to 3-row compact box");
 assert.match(foldedRows[1], /\[展开\]/, "folded banner header shows expand affordance");
-assert.doesNotMatch(foldedRows.join("\n"), /长会话折叠不卡顿/, "folded banner hides item descriptions");
+assert.doesNotMatch(foldedRows.join("\n"), /本次更新重点/, "folded banner hides details");
 bannerDoc1.handleMouse({ type: "click", button: "left", x: 6, y: 1, clickCount: 1 });
-assert.match(bannerDoc1.render(100).map(stripAnsi).join("\n"), /长会话折叠不卡顿/, "clicking header again expands the banner");
+assert.match(bannerDoc1.render(100).map(stripAnsi).join("\n"), /🌈 本次更新重点：/, "clicking header again expands the banner");
+
+// Multi-day and English rendering.
+const multiRows = extension.renderUpdateBanner(theme, 100, { version: "2.0.19", previousVersion: "2.0.15", language: "zh" }).rows.map(stripAnsi);
+const multiText = multiRows.join("\n");
+assert.match(multiText, /2026-11-05\s+v2\.0\.18 – v2\.0\.19/, "same-day versions are merged into one block");
+assert.match(multiText, /2026-11-01\s+v2\.0\.17/, "multi-day banner shows 11-01 block");
+assert.match(multiText, /2026-10-28\s+v2\.0\.16/, "multi-day banner shows 10-28 block");
+assert.ok(multiRows.some(row => row.startsWith("├")), "days are separated by mid borders");
+const enText = extension.renderUpdateBanner(theme, 100, { version: "2.0.19", previousVersion: "2.0.18", language: "en" }).rows.map(stripAnsi).join("\n");
+assert.match(enText, /🌈 Highlights:/, "english highlights line");
+assert.match(enText, /✨ New/, "english features title");
+assert.match(enText, /🐛 Fixes/, "english fixes title");
+assert.match(enText, /\[Collapse\]/, "english collapse affordance");
 
 // 2) Second terminal open (new extension instance reading the same updated config): never shows the banner again.
 const bannerHandlers2 = new Map();

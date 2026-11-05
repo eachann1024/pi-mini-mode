@@ -187,14 +187,16 @@ export function retainAgentStatuses(previous: Record<string, unknown>[], current
   const retained = new Map(previous.map(status => [String(status.runId), status]));
   for (const status of new Map([...previous, ...current].map(status => [String(status.runId), status])).values()) {
     const saved = retained.get(String(status.runId));
-    const children = agentChildren([status]).map(child => {
-      const previous = saved && agentChildren([saved]).find(item => item.displayId === child.displayId);
+    const children = agentChildren([status]);
+    const previousChildren = saved && saved !== status ? agentChildren([saved]) : saved ? children : undefined;
+    const merged = children.map(child => {
+      const previous = previousChildren?.find(item => item.displayId === child.displayId);
       const sameAttempt = previous?.sessionFile === child.sessionFile && previous?.startedAt === child.startedAt;
       const finalOutput = childSessionData(child.sessionFile)?.finalOutput ?? child.finalOutput ?? (sameAttempt ? previous?.finalOutput : undefined);
       return { ...child, finalOutput, notice: child.notice ?? previous?.notice, noticeMessages: child.noticeMessages ?? previous?.noticeMessages };
     });
-    retained.set(String(status.runId), children.length
-      ? { ...status, steps: children, workflowChildren: undefined, children: undefined } : status);
+    retained.set(String(status.runId), merged.length
+      ? { ...status, steps: merged, workflowChildren: undefined, children: undefined } : status);
   }
   return [...retained.values()];
 }
@@ -218,38 +220,173 @@ export function readAgentStatuses(sessionId: string, root = process.env.PI_SUBAG
   } catch { return previous.filter(status => status.sessionId === sessionId); }
 }
 
-export function currentAgentStatuses(statuses: Record<string, unknown>[], callsOrIds: unknown[]): Record<string, unknown>[] {
+// Frames re-read every call output unless the source values are unchanged. Object calls
+// keep their extracted run ids in a WeakMap (collected with the call); short string ids use
+// a bounded LRU. Any edited source rescans that call. An append can create or destroy a
+// UUID word boundary, so a tail increment is not reused.
+const RUN_ID_PATTERN = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi;
+const STRING_RUN_CACHE_LIMIT = 256;
+const STRING_RUN_CACHE_MAX_LENGTH = 128;
+const stringRunCache = new Map<string, string | null>();
+type SourceSnap = { ref: unknown; text?: string };
+type CallSnap = { id: SourceSnap; output: SourceSnap; task: SourceSnap; action: SourceSnap; callId?: string; runIds: string[] };
+const callSnaps = new WeakMap<object, CallSnap>();
+
+function sourceSnap(value: unknown): SourceSnap {
+  if (typeof value === "string" || value == null) return { ref: value };
+  return { ref: value, text: String(value) };
+}
+function sourceText(snap: SourceSnap): string {
+  if (typeof snap.ref === "string") return snap.ref;
+  if (snap.ref == null) return "";
+  return snap.text ?? "";
+}
+function sameSource(value: unknown, snap: SourceSnap): boolean {
+  if (typeof value === "string" || value == null) return value === snap.ref;
+  return String(value) === snap.text;
+}
+function collectRunIds(text: string, seen: Set<string>, into: string[]) {
+  if (text.length < 36) return;
+  RUN_ID_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = RUN_ID_PATTERN.exec(text))) {
+    if (seen.has(match[1])) continue;
+    seen.add(match[1]);
+    into.push(match[1]);
+  }
+  RUN_ID_PATTERN.lastIndex = 0;
+}
+function firstRunId(text: string): string | null {
+  if (text.length < 36) return null;
+  RUN_ID_PATTERN.lastIndex = 0;
+  const match = RUN_ID_PATTERN.exec(text);
+  RUN_ID_PATTERN.lastIndex = 0;
+  return match?.[1] ?? null;
+}
+function cachedStringRunId(item: string): string | null {
+  if (item.length > STRING_RUN_CACHE_MAX_LENGTH) return firstRunId(item);
+  const cached = stringRunCache.get(item);
+  if (cached !== undefined) {
+    stringRunCache.delete(item);
+    stringRunCache.set(item, cached);
+    return cached;
+  }
+  const found = firstRunId(item);
+  stringRunCache.set(item, found);
+  if (stringRunCache.size > STRING_RUN_CACHE_LIMIT) {
+    const oldest = stringRunCache.keys().next().value;
+    if (oldest !== undefined) stringRunCache.delete(oldest);
+  }
+  return found;
+}
+function callSnap(item: object): CallSnap {
+  const call = item as Record<string, unknown>;
+  const cached = callSnaps.get(item);
+  if (cached && sameSource(call.id, cached.id) && sameSource(call.output, cached.output)
+    && sameSource(call.task, cached.task) && sameSource(call.action, cached.action)) return cached;
+  const output = sourceSnap(call.output);
+  const task = sourceSnap(call.task);
+  const action = sourceSnap(call.action);
+  const runIds: string[] = [];
+  const seen = new Set<string>();
+  collectRunIds(sourceText(output), seen, runIds);
+  collectRunIds(sourceText(task), seen, runIds);
+  collectRunIds(sourceText(action), seen, runIds);
+  const next: CallSnap = {
+    id: sourceSnap(call.id), output, task, action,
+    callId: typeof call.id === "string" ? call.id : undefined, runIds,
+  };
+  callSnaps.set(item, next);
+  return next;
+}
+type CallKeys = { callIds: Set<string>; runIds: Set<string> };
+function collectCallKeys(items: unknown[]): CallKeys {
   const callIds = new Set<string>();
   const runIds = new Set<string>();
-  for (const item of callsOrIds) {
+  for (const item of items) {
     if (typeof item === "string") {
       callIds.add(item);
-      const match = item.match(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i);
-      if (match) runIds.add(match[1]);
+      const runId = cachedStringRunId(item);
+      if (runId) runIds.add(runId);
     } else if (item && typeof item === "object") {
-      const call = item as Record<string, unknown>;
-      if (typeof call.id === "string") callIds.add(call.id);
-      const text = `${call.output ?? ""} ${call.task ?? ""} ${call.action ?? ""}`;
-      const matches = text.matchAll(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi);
-      for (const m of matches) runIds.add(m[1]);
+      const snap = callSnap(item);
+      if (snap.callId) callIds.add(snap.callId);
+      for (const runId of snap.runIds) runIds.add(runId);
     }
   }
-  const selected = new Set<string>();
-  for (const status of statuses) {
-    const runId = String(status.runId ?? "");
+  return { callIds, runIds };
+}
+
+type StatusHit = { status: Record<string, unknown>; index: number };
+type StatusIndex = { byRun: Map<string, StatusHit[]>; byTool: Map<string, string[]>; children: Map<string, string[]> };
+function indexStatuses(statuses: Record<string, unknown>[]): StatusIndex {
+  const byRun = new Map<string, StatusHit[]>();
+  const byTool = new Map<string, string[]>();
+  const children = new Map<string, string[]>();
+  for (let index = 0; index < statuses.length; index++) {
+    const status = statuses[index];
+    const selectKey = String(status.runId);
+    const bucket = byRun.get(selectKey);
+    if (bucket) bucket.push({ status, index });
+    else byRun.set(selectKey, [{ status, index }]);
+    const directKey = String(status.runId ?? "");
     const toolCallId = String(status.toolCallId ?? "");
-    if ((toolCallId && callIds.has(toolCallId)) || (runId && runIds.has(runId))) {
-      if (runId) selected.add(runId);
+    if (toolCallId && directKey) {
+      const tools = byTool.get(toolCallId);
+      if (tools) tools.push(directKey);
+      else byTool.set(toolCallId, [directKey]);
+    }
+    const parentId = String(status.parentWorkflowRunId ?? "");
+    if (parentId) {
+      const kids = children.get(parentId);
+      if (kids) kids.push(selectKey);
+      else children.set(parentId, [selectKey]);
     }
   }
-  for (let size = -1; size !== selected.size;) {
-    size = selected.size;
-    for (const status of statuses) {
-      const parentId = String(status.parentWorkflowRunId ?? "");
-      if (parentId && selected.has(parentId)) selected.add(String(status.runId));
+  return { byRun, byTool, children };
+}
+function selectRunIds(index: StatusIndex, keys: CallKeys): Set<string> {
+  const selected = new Set<string>();
+  for (const id of keys.callIds) {
+    const runs = index.byTool.get(id);
+    if (runs) for (const runId of runs) selected.add(runId);
+  }
+  for (const runId of keys.runIds) if (index.byRun.has(runId)) selected.add(runId);
+  if (selected.size === 0) return selected;
+  const queue = [...selected];
+  for (let i = 0; i < queue.length; i++) {
+    const kids = index.children.get(queue[i]);
+    if (!kids) continue;
+    for (const runId of kids) if (!selected.has(runId)) {
+      selected.add(runId);
+      queue.push(runId);
     }
   }
-  return statuses.filter(status => selected.has(String(status.runId)));
+  return selected;
+}
+function takeStatuses(index: StatusIndex, selected: Set<string>, claimed?: Set<string>): Record<string, unknown>[] {
+  const hits: StatusHit[] = [];
+  for (const runId of selected) {
+    const bucket = index.byRun.get(runId);
+    if (!bucket) continue;
+    for (const hit of bucket) {
+      const key = String(hit.status.runId ?? "");
+      if (claimed && key && claimed.has(key)) continue;
+      hits.push(hit);
+    }
+  }
+  if (hits.length > 1) hits.sort((a, b) => a.index - b.index);
+  if (claimed) for (const hit of hits) {
+    const key = String(hit.status.runId ?? "");
+    if (key) claimed.add(key);
+  }
+  return hits.map(hit => hit.status);
+}
+
+export function currentAgentStatuses(statuses: Record<string, unknown>[], callsOrIds: unknown[]): Record<string, unknown>[] {
+  if (statuses.length === 0 || callsOrIds.length === 0) return [];
+  const index = indexStatuses(statuses);
+  return takeStatuses(index, selectRunIds(index, collectCallKeys(callsOrIds)));
 }
 
 /** Associate each status only with the user turn that dispatched its tool call.
@@ -257,22 +394,21 @@ export function currentAgentStatuses(statuses: Record<string, unknown>[], callsO
  */
 export function agentStatusesByTurn(statuses: Record<string, unknown>[], turns: Array<{ agentCalls?: unknown[] }>): Map<number, Record<string, unknown>[]> {
   const assigned = new Map<number, Record<string, unknown>[]>();
+  if (statuses.length === 0) {
+    for (let index = 0; index < turns.length; index++) assigned.set(index, []);
+    return assigned;
+  }
+  const indexed = indexStatuses(statuses);
   const claimed = new Set<string>();
-  for (const [index, turn] of turns.entries()) {
-    const matched = currentAgentStatuses(statuses, turn.agentCalls ?? []).filter(status => {
-      const runId = String(status.runId ?? "");
-      return !runId || !claimed.has(runId);
-    });
-    assigned.set(index, matched);
-    for (const status of matched) {
-      const runId = String(status.runId ?? "");
-      if (runId) claimed.add(runId);
-    }
+  for (let index = 0; index < turns.length; index++) {
+    const calls = turns[index]?.agentCalls ?? [];
+    assigned.set(index, calls.length === 0 ? [] : takeStatuses(indexed, selectRunIds(indexed, collectCallKeys(calls)), claimed));
   }
   return assigned;
 }
 
 export function agentChildren(statuses: Record<string, unknown>[]): Record<string, unknown>[] {
+  if (statuses.length === 0) return [];
   const children = new Map<string, Record<string, unknown>>();
   const visit = (value: unknown, key: string) => {
     if (!value || typeof value !== "object") return;

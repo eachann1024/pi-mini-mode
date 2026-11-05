@@ -72,6 +72,24 @@ function keysEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
   return true;
 }
 
+/** First row with this y. Each control list is one record per rendered line, so y is unique. */
+function firstAtY<T extends { y: number }>(rows: readonly T[], y: number): T | undefined {
+  let lo = 0;
+  let hi = rows.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const rowY = rows[mid].y;
+    if (rowY < y) lo = mid + 1;
+    else if (rowY > y) hi = mid - 1;
+    else {
+      let index = mid;
+      while (index > 0 && rows[index - 1].y === y) index--;
+      return rows[index];
+    }
+  }
+  return undefined;
+}
+
 function isSubAgentChildRunning(child: Record<string, unknown>): boolean {
   const exit = typeof child.exitCode === "number" ? child.exitCode : undefined;
   const raw = String(child.status ?? child.state ?? "");
@@ -95,6 +113,7 @@ interface TurnRenderResult {
 
 export interface UpdateBannerState {
   version: string;
+  previousVersion?: string;
   collapsed: boolean;
   toggle: () => void;
 }
@@ -266,11 +285,12 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     promptChoices: () => promptControls.map(control => ({ ...control })),
     togglePrompt,
     handleMouse(event: TuiMouseEvent) {
-      const tool = toolControls.find(control => event.y === control.y && event.x >= 2 && event.x < Math.min(5, control.width));
+      const toolAt = firstAtY(toolControls, event.y);
+      const tool = toolAt && event.x >= 2 && event.x < Math.min(5, toolAt.width) ? toolAt : undefined;
       if (event.type === "move") {
         const linkChanged = linkHover.handleMouse(event);
         const next = !event.shift && !event.ctrl && !event.alt ? tool : undefined;
-        const record = processRows.find(row => row.y === event.y);
+        const record = firstAtY(processRows, event.y);
         if (hoveredTool?.id !== next?.id || hoveredProcess?.key !== record?.key || hoveredProcess?.y !== record?.y || linkChanged) {
           hoveredTool = next;
           hoveredProcess = record;
@@ -299,7 +319,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           }
         }
       }
-      const agent = agentControls.find(control => event.y === control.y && event.x >= 0 && event.x < control.width);
+      const agentAt = firstAtY(agentControls, event.y);
+      const agent = agentAt && event.x >= 0 && event.x < agentAt.width ? agentAt : undefined;
       if (agent && (event.clickCount ?? 1) === 1) {
         if (event.type === "press") return { handled: true };
         if (event.type === "click") {
@@ -310,7 +331,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           return { handled: true, render: true };
         }
       }
-      const control = promptControls.find(control => event.y === control.y && event.x >= control.x && event.x < control.x + control.width);
+      const promptAt = firstAtY(promptControls, event.y);
+      const control = promptAt && event.x >= promptAt.x && event.x < promptAt.x + promptAt.width ? promptAt : undefined;
       if (control && (event.clickCount ?? 1) === 1) {
         if (event.type === "press") return { handled: true };
         if (event.type === "click") {
@@ -318,7 +340,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           return { handled: true, render: true };
         }
       }
-      const sub = subagentControls.find(control => event.y === control.y && event.x >= 0 && event.x < control.width);
+      const subAt = firstAtY(subagentControls, event.y);
+      const sub = subAt && event.x >= 0 && event.x < subAt.width ? subAt : undefined;
       if (sub) {
         if (event.type === "press") return { handled: true };
         if (event.type === "click") {
@@ -386,6 +409,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       if (banner) {
         const renderedBanner = renderUpdateBanner(theme, width, {
           version: banner.version,
+          previousVersion: banner.previousVersion,
           language: lang,
           collapsed: banner.collapsed,
         });
@@ -459,8 +483,20 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           calls.length,
           subChildren.length,
         ];
+        const replies = turn.replies;
+        if (replies) for (let i = 0; i < replies.length; i++) key.push(replies[i]);
+        for (let i = 0; i < turn.process.length; i++) key.push(turn.process[i]);
+        const clocks = turn.thinkingClocks;
+        if (clocks) {
+          for (let i = 0; i < clocks.length; i++) {
+            const clock = clocks[i];
+            key.push(clock?.startedAt, clock?.endedAt);
+          }
+        }
+        const outcomes = turn.thinkingOutcomes;
+        if (outcomes) for (let i = 0; i < outcomes.length; i++) key.push(outcomes[i]);
         for (const c of calls) {
-          key.push(c.id, c.state, c.task, c.output?.length ?? -1, c.output, c.startedAt ?? -1, c.endedAt ?? -1);
+          key.push(c.id, c.state, c.task, c.output?.length ?? -1, c.output, c.startedAt ?? -1, c.endedAt ?? -1, c.name, c.tool, c.action, c.command);
         }
         for (const sub of subChildren) {
           key.push(
@@ -734,7 +770,8 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
       for (const deadline of agentDeadlines.values()) if (deadline > Date.now()) agentExpiry = Math.min(agentExpiry, deadline);
       const linkedRows = linkHover.render(lines, width);
       const hovered = hoveredProcess;
-      const hoveredRow = hovered && processRows.find(row => row.key === hovered.key && row.y === hovered.y);
+      const hoveredAt = hovered && firstAtY(processRows, hovered.y);
+      const hoveredRow = hoveredAt && hoveredAt.key === hovered.key ? hoveredAt : undefined;
       if (!hoveredRow) return linkedRows;
       const result = [...linkedRows];
       const line = result[hoveredRow.y];
