@@ -3,7 +3,29 @@ import { finiteNumber, formatSpeed, formatUsd, outputSpeed, speedColor, DECODE_S
 /** Footer redraw cadence while a turn is streaming. */
 export const SPEED_REFRESH_MS = 500;
 /** Recent window used for the live rate. Long enough to absorb one quiet chunk, short enough to follow the current pace. */
-export const SPEED_WINDOW_MS = 1_000;
+export const SPEED_WINDOW_MS = 2_500;
+
+const CALIBRATION_ALPHA = 0.3;
+const CALIBRATION_MIN = 0.5;
+const CALIBRATION_MAX = 2;
+const RELIABLE_MIN_ELAPSED_MS = 1_000;
+const RELIABLE_MIN_OUTPUT = 16;
+const SPIKE_MIN_TOKENS = 64;
+
+export type ModelIdentifier = string | { provider?: unknown; model?: unknown };
+
+function normalizeModelKey(model?: ModelIdentifier): string {
+  if (typeof model === "string") {
+    const trimmed = model.trim().replace(/^\/+|\/+$/g, "");
+    return trimmed || "__default__";
+  }
+  if (model && typeof model === "object") {
+    const provider = typeof model.provider === "string" ? model.provider.trim() : "";
+    const id = typeof model.model === "string" ? model.model.trim() : "";
+    return [provider, id].filter(Boolean).join("/") || "__default__";
+  }
+  return "__default__";
+}
 
 export interface SpeedMetric {
   label: string;
@@ -90,32 +112,51 @@ export interface StreamUpdate {
   output?: number;
   content?: unknown;
   usage?: UsageLike;
+  type?: string;
+  delta?: string;
 }
 
 /**
- * Live footer speed is the token rate over the last second, republished every
- * 500ms. Provider `usage.output` wins when it advances; streamed text keeps the
- * rate moving when that sample is stale. The finished turn replaces it with
- * the average decode speed.
+ * Live footer speed is the token rate over the last 2.5 seconds, republished
+ * every 500ms. Provider `usage.output` wins once it advances monotonically at
+ * least twice; streamed text keeps the rate moving otherwise. The finished
+ * turn replaces it with the reliable weighted decode speed across the run.
  */
 export function createTokenSpeedTracker() {
   let displayed: number | undefined;
+  let lastReliable: number | undefined;
   let lastLive: number | undefined;
   let streaming = false;
   let lastPublish = 0;
   let lastStreamAt = Number.NEGATIVE_INFINITY;
+  let lastTokenUpdateAt = Number.NEGATIVE_INFINITY;
   let lastNow = 0;
   let turnStartedAt: number | undefined;
   let assistantStartedAt: number | undefined;
   let firstTokenAt: number | undefined;
+  let decodeStartedAt: number | undefined;
   let segmentEndedAt: number | undefined;
   let providerOutput = 0;
+  let providerAdvances = 0;
+  let firstProviderSample: Sample | undefined;
+  let rawStreamTokens = 0;
   let streamTokens = 0;
+  let hasSeenDelta = false;
+  let firstSampleTokens = 0;
+  let firstSampleRawTokens = 0;
+  let liveBaseAt: number | undefined;
+  let liveBaseTokens = 0;
   let samples: Sample[] = [];
   let usage: UsageSnapshot = {};
   let frozen: SpeedMetric[] | undefined;
+  let runTokens = 0;
+  let runElapsedMs = 0;
+  let currentModelKey = "__default__";
+  const calibrationRatios = new Map<string, number>();
 
-  const liveCount = () => Math.max(providerOutput, streamTokens);
+  const calibrationRatio = () => calibrationRatios.get(currentModelKey) ?? 1;
+  const trustedProvider = () => (providerAdvances >= 2 ? providerOutput : 0);
+  const liveCount = () => Math.max(trustedProvider(), streamTokens);
 
   const pushSample = (at: number, tokens: number) => {
     const last = samples[samples.length - 1];
@@ -126,12 +167,12 @@ export function createTokenSpeedTracker() {
   };
 
   const liveRate = (now: number): number | undefined => {
-    if (firstTokenAt === undefined || now - firstTokenAt < SPEED_REFRESH_MS) return undefined;
+    if (liveBaseAt === undefined || now - liveBaseAt < SPEED_REFRESH_MS) return undefined;
     const tokens = liveCount();
-    const windowMs = Math.min(SPEED_WINDOW_MS, now - firstTokenAt);
+    const windowMs = Math.min(SPEED_WINDOW_MS, now - liveBaseAt);
     const cut = now - windowMs;
-    let baseT = firstTokenAt;
-    let baseTokens = 0;
+    let baseT = liveBaseAt;
+    let baseTokens = liveBaseTokens;
     for (const sample of samples) {
       if (sample.t <= cut) {
         baseT = sample.t;
@@ -157,12 +198,15 @@ export function createTokenSpeedTracker() {
     return changed;
   };
 
-  const settledCount = () => usage.output !== undefined && usage.output >= DECODE_SPEED_MIN_OUTPUT ? usage.output : liveCount();
+  const settledCount = () => usage.output !== undefined && usage.output >= DECODE_SPEED_MIN_OUTPUT
+    ? usage.output
+    : Math.max(providerOutput, streamTokens);
 
   const runningAverage = (now: number): number | undefined => {
-    const count = streaming ? liveCount() : settledCount();
-    const end = streaming ? now : (segmentEndedAt ?? now);
-    return outputSpeed(count, firstTokenAt, end);
+    if (streaming) return outputSpeed(liveCount(), firstTokenAt, now);
+    if (displayed !== undefined) return displayed;
+    const end = segmentEndedAt ?? now;
+    return outputSpeed(settledCount(), decodeStartedAt ?? firstTokenAt, end);
   };
 
   const collect = (): SpeedMetric[] => {
@@ -175,9 +219,10 @@ export function createTokenSpeedTracker() {
     if (firstTokenAt !== undefined && origin !== undefined && firstTokenAt > origin) {
       rows.push({ label: "首字吐字", value: formatDuration(firstTokenAt - origin), color: "text" });
     }
+    const decodeStart = streaming ? firstTokenAt : (decodeStartedAt ?? firstTokenAt);
     const decodeEnd = streaming ? now : segmentEndedAt;
-    if (firstTokenAt !== undefined && decodeEnd !== undefined && decodeEnd - firstTokenAt >= SPEED_REFRESH_MS) {
-      rows.push({ label: "解码用时", value: formatDuration(decodeEnd - firstTokenAt), color: "text" });
+    if (decodeStart !== undefined && decodeEnd !== undefined && decodeEnd - decodeStart >= SPEED_REFRESH_MS) {
+      rows.push({ label: "解码用时", value: formatDuration(decodeEnd - decodeStart), color: "text" });
     }
     const counts: Array<[keyof UsageSnapshot, string]> = [
       ["output", "输出 token"],
@@ -193,8 +238,8 @@ export function createTokenSpeedTracker() {
       if (value === undefined || value <= 0) continue;
       rows.push({ label, value: formatCount(value), color: "text" });
     }
-    if (usage.output === undefined && !streaming && liveCount() >= DECODE_SPEED_MIN_OUTPUT) {
-      rows.push({ label: "输出 token", value: formatCount(liveCount()), color: "text" });
+    if (usage.output === undefined && !streaming && settledCount() >= DECODE_SPEED_MIN_OUTPUT) {
+      rows.push({ label: "输出 token", value: formatCount(settledCount()), color: "text" });
     }
     if (usage.cost !== undefined && usage.cost > 0) rows.push({ label: "费用", value: formatUsd(usage.cost), color: "muted" });
     if (rows.length === 0 && displayed !== undefined) {
@@ -204,46 +249,138 @@ export function createTokenSpeedTracker() {
   };
 
   return {
+    onRunStart() {
+      runTokens = 0;
+      runElapsedMs = 0;
+    },
     onTurnStart(at: number) {
       lastNow = at;
       turnStartedAt = at;
     },
-    onAssistantStart(at: number) {
+    onAssistantStart(at: number, model?: ModelIdentifier) {
       lastNow = at;
       streaming = true;
       lastPublish = at;
       lastStreamAt = Number.NEGATIVE_INFINITY;
+      lastTokenUpdateAt = Number.NEGATIVE_INFINITY;
       assistantStartedAt = at;
       firstTokenAt = undefined;
+      decodeStartedAt = undefined;
       segmentEndedAt = undefined;
       providerOutput = 0;
+      providerAdvances = 0;
+      firstProviderSample = undefined;
+      rawStreamTokens = 0;
       streamTokens = 0;
+      hasSeenDelta = false;
+      firstSampleTokens = 0;
+      firstSampleRawTokens = 0;
+      liveBaseAt = undefined;
+      liveBaseTokens = 0;
       samples = [];
       usage = {};
       lastLive = undefined;
+      currentModelKey = normalizeModelKey(model);
     },
     onStream(update: StreamUpdate): boolean {
       if (!streaming || update.at < lastStreamAt) return false;
-      const nextProvider = update.output !== undefined && update.output >= providerOutput ? update.output : providerOutput;
-      const nextStream = Math.max(streamTokens, estimateContentTokens(update.content));
-      const nextTokens = Math.max(nextProvider, nextStream);
+      let prevCount = liveCount();
+
+      if (update.output !== undefined && update.output > providerOutput) {
+        providerAdvances += 1;
+        providerOutput = update.output;
+        if (providerAdvances === 1) {
+          firstProviderSample = { t: update.at, tokens: update.output };
+        } else if (providerAdvances === 2 && firstProviderSample) {
+          if (firstTokenAt === undefined || firstProviderSample.t < firstTokenAt) {
+            firstTokenAt = firstProviderSample.t;
+            decodeStartedAt = firstProviderSample.t;
+            firstSampleTokens = firstProviderSample.tokens;
+            firstSampleRawTokens = firstProviderSample.tokens;
+            liveBaseAt = firstProviderSample.t;
+            liveBaseTokens = firstProviderSample.tokens;
+            lastTokenUpdateAt = firstProviderSample.t;
+            pushSample(firstProviderSample.t, firstProviderSample.tokens);
+          } else if (liveBaseAt === firstProviderSample.t) {
+            liveBaseTokens = Math.max(liveBaseTokens, firstProviderSample.tokens);
+            firstSampleTokens = Math.max(firstSampleTokens, firstProviderSample.tokens);
+            pushSample(firstProviderSample.t, liveBaseTokens);
+          }
+          prevCount = Math.max(prevCount, firstProviderSample.tokens);
+          firstProviderSample = undefined;
+        }
+      }
+
+      const isDeltaType = update.type === undefined
+        || update.type === "text_delta"
+        || update.type === "thinking_delta"
+        || update.type === "toolcall_delta";
+      const isBoundaryType = update.type !== undefined
+        && (/(?:^|_)(?:start|end)$/.test(update.type) || update.type === "done" || update.type === "error");
+
+      let nextRawStream = rawStreamTokens;
+      if (typeof update.delta === "string" && isDeltaType) {
+        hasSeenDelta = true;
+        nextRawStream += estimateTextTokens(update.delta);
+      } else if (!hasSeenDelta && !isBoundaryType && update.content !== undefined) {
+        nextRawStream = Math.max(rawStreamTokens, estimateContentTokens(update.content));
+      }
+      const nextStream = nextRawStream * calibrationRatio();
+      const nextTokens = Math.max(trustedProvider(), nextStream);
+
       // Regressing or repeated samples must not move the clock. The 500ms timer
       // still decays the live rate when tokens actually stop arriving.
-      if (nextTokens <= liveCount() && liveCount() > 0) return false;
+      if (nextTokens <= prevCount && prevCount > 0) return false;
+
       lastStreamAt = update.at;
       lastNow = update.at;
-      providerOutput = nextProvider;
+      rawStreamTokens = nextRawStream;
       streamTokens = nextStream;
       readUsage(update.usage, usage);
+
       if (nextTokens > 0) {
-        if (firstTokenAt === undefined) firstTokenAt = update.at;
-        pushSample(update.at, nextTokens);
+        if (firstTokenAt === undefined) {
+          firstTokenAt = update.at;
+          decodeStartedAt = update.at;
+          firstSampleTokens = nextTokens;
+          firstSampleRawTokens = nextRawStream;
+          liveBaseAt = update.at;
+          liveBaseTokens = nextTokens;
+          pushSample(update.at, nextTokens);
+        } else if (update.at === firstTokenAt && samples.length <= 1) {
+          firstSampleTokens = nextTokens;
+          firstSampleRawTokens = nextRawStream;
+          liveBaseAt = update.at;
+          liveBaseTokens = nextTokens;
+          pushSample(update.at, nextTokens);
+        } else {
+          const singleDelta = nextTokens - prevCount;
+          const cut = update.at - SPEED_WINDOW_MS;
+          let windowBaseTokens = liveBaseTokens;
+          for (const sample of samples) {
+            if (sample.t <= cut) windowBaseTokens = sample.tokens;
+            else break;
+          }
+          const otherWindowDeltas = Math.max(0, prevCount - windowBaseTokens);
+          const isMidStreamSpike = singleDelta > SPIKE_MIN_TOKENS && (
+            (otherWindowDeltas > 0 && singleDelta > otherWindowDeltas)
+            || (otherWindowDeltas === 0 && update.at - lastTokenUpdateAt > SPEED_WINDOW_MS)
+          );
+          if (isMidStreamSpike) {
+            liveBaseAt = update.at;
+            liveBaseTokens = nextTokens;
+            samples = [{ t: update.at, tokens: nextTokens }];
+          } else {
+            pushSample(update.at, nextTokens);
+          }
+        }
+        lastTokenUpdateAt = update.at;
       }
       return publish(update.at);
     },
     refresh(at: number): boolean {
       lastNow = at;
-      if (streaming && firstTokenAt !== undefined) pushSample(at, liveCount());
+      if (streaming && liveBaseAt !== undefined) pushSample(at, liveCount());
       return publish(at);
     },
     onAssistantEnd(finalUsage: UsageLike | undefined, at: number): boolean {
@@ -252,16 +389,52 @@ export function createTokenSpeedTracker() {
       streaming = false;
       segmentEndedAt = at;
       readUsage(finalUsage, usage);
+      const visible = rawStreamTokens > 0 ? streamTokens : liveCount();
       const reported = finiteNumber(finalUsage?.output);
       if (reported !== undefined && reported >= providerOutput) providerOutput = reported;
       if (usage.output === undefined && providerOutput > 0) usage.output = providerOutput;
       const count = reported !== undefined && reported >= DECODE_SPEED_MIN_OUTPUT
         ? reported
-        : liveCount();
+        : Math.max(providerOutput, streamTokens);
+
+      if (
+        (usage.reasoning === undefined || usage.reasoning === 0)
+        && reported !== undefined
+        && reported >= 64
+        && rawStreamTokens > 0
+      ) {
+        const rawRatio = reported / rawStreamTokens;
+        if (rawRatio > CALIBRATION_MIN && rawRatio < CALIBRATION_MAX) {
+          const prevRatio = calibrationRatio();
+          const nextRatio = Math.min(
+            CALIBRATION_MAX,
+            Math.max(CALIBRATION_MIN, prevRatio * (1 - CALIBRATION_ALPHA) + rawRatio * CALIBRATION_ALPHA),
+          );
+          calibrationRatios.set(currentModelKey, nextRatio);
+        }
+      }
+
       if (count > 0 && firstTokenAt === undefined) firstTokenAt = assistantStartedAt ?? at;
-      const average = outputSpeed(count, firstTokenAt, at);
+      const hiddenOrBurst = count - visible > Math.max(32, 0.35 * count)
+        || firstSampleTokens > 0.5 * count
+        || firstSampleRawTokens > 0.5 * count;
+      decodeStartedAt = hiddenOrBurst ? (assistantStartedAt ?? firstTokenAt) : firstTokenAt;
+
+      const elapsedMs = decodeStartedAt !== undefined ? at - decodeStartedAt : 0;
+      const reliable = count >= RELIABLE_MIN_OUTPUT && elapsedMs >= RELIABLE_MIN_ELAPSED_MS;
       lastLive = undefined;
-      if (average !== undefined) displayed = average;
+      let average: number | undefined;
+      if (reliable) {
+        runTokens += count;
+        runElapsedMs += elapsedMs;
+        average = outputSpeed(runTokens, 0, runElapsedMs);
+        if (average !== undefined) {
+          displayed = average;
+          lastReliable = average;
+        }
+      } else {
+        displayed = lastReliable;
+      }
       frozen = collect();
       return average !== undefined;
     },
@@ -270,6 +443,7 @@ export function createTokenSpeedTracker() {
       const rate = outputSpeed(output, startedAt, endedAt);
       if (rate === undefined) return false;
       displayed = rate;
+      lastReliable = rate;
       lastNow = endedAt;
       return true;
     },
@@ -285,20 +459,35 @@ export function createTokenSpeedTracker() {
     },
     reset() {
       displayed = undefined;
+      lastReliable = undefined;
       lastLive = undefined;
       streaming = false;
       lastPublish = 0;
       lastStreamAt = Number.NEGATIVE_INFINITY;
+      lastTokenUpdateAt = Number.NEGATIVE_INFINITY;
       lastNow = 0;
       turnStartedAt = undefined;
       assistantStartedAt = undefined;
       firstTokenAt = undefined;
+      decodeStartedAt = undefined;
       segmentEndedAt = undefined;
       providerOutput = 0;
+      providerAdvances = 0;
+      firstProviderSample = undefined;
+      rawStreamTokens = 0;
       streamTokens = 0;
+      hasSeenDelta = false;
+      firstSampleTokens = 0;
+      firstSampleRawTokens = 0;
+      liveBaseAt = undefined;
+      liveBaseTokens = 0;
       samples = [];
       usage = {};
       frozen = undefined;
+      runTokens = 0;
+      runElapsedMs = 0;
+      currentModelKey = "__default__";
+      calibrationRatios.clear();
     },
   };
 }
