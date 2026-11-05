@@ -139,12 +139,23 @@ export function piLoopSummary(question: string): string | undefined {
   return prompt ? `${title} · ${prompt}` : title;
 }
 
+function entryTimestamp(entry: { timestamp?: unknown; message?: { timestamp?: unknown } } | null | undefined): number | undefined {
+  for (const cand of [entry?.message?.timestamp, entry?.timestamp]) {
+    if (typeof cand === "number" && Number.isFinite(cand)) return cand;
+    if (typeof cand === "string") {
+      const t = Date.parse(cand);
+      if (Number.isFinite(t)) return t;
+    }
+  }
+  return undefined;
+}
+
 /** Rebuild turns on the selected session branch. */
 export function minimalTurnsFromBranch(branch: readonly unknown[]): MinimalTurn[] {
   const turns: MinimalTurn[] = [];
   let turn: MinimalTurn | undefined;
   for (const rawEntry of branch) {
-    const entry = rawEntry as { type?: string; message?: { role?: string; content?: unknown; usage?: UsageLike; stopReason?: string; errorMessage?: string } } | null;
+    const entry = rawEntry as { timestamp?: unknown; type?: string; message?: { timestamp?: unknown; role?: string; content?: unknown; usage?: UsageLike; stopReason?: string; errorMessage?: string } } | null;
     if (entry?.type !== "message" || !entry.message) continue;
     const { role, content } = entry.message;
     if (role === "user") {
@@ -162,6 +173,8 @@ export function minimalTurnsFromBranch(branch: readonly unknown[]): MinimalTurn[
       if (call) {
         call.state = result.isError ? "error" : "done";
         call.output = contentText(content) || "Call returned (no text output)";
+        const endedAt = entryTimestamp(entry);
+        if (endedAt !== undefined) call.endedAt = endedAt;
         continue;
       }
       pushProcess(turn, "output", content);
@@ -178,7 +191,10 @@ export function minimalTurnsFromBranch(branch: readonly unknown[]): MinimalTurn[
           && (entry.message.stopReason === "error" || entry.message.stopReason === "aborted") ? entry.message.stopReason : "done";
       } else if (item.type === "toolCall") {
         if (item.name) {
-          (turn.agentCalls ??= []).push(agentCall(String(item.id), String(item.name), item.arguments ?? item.input));
+          const created = agentCall(String(item.id), String(item.name), item.arguments ?? item.input);
+          const startedAt = entryTimestamp(entry);
+          if (startedAt !== undefined) created.startedAt = startedAt;
+          (turn.agentCalls ??= []).push(created);
           pushProcess(turn, "call", String(item.id));
           const path = (item.arguments as { path?: string })?.path;
           if (path && /(?:^|\/)SKILL\.md$/i.test(path)) pushProcess(turn, "skill", path.split("/").at(-2));

@@ -64,8 +64,15 @@ export interface CacheWaste {
   missCount: number;
 }
 
+let cachedWaste: { len: number; first: unknown; last: unknown; value: CacheWaste } | undefined;
+
 /** Same noise floor as Pi's cache-miss notice. Compaction resets the baseline. */
 export function cacheWaste(entries: ReadonlyArray<{ type?: unknown; message?: { role?: unknown; usage?: UsageLike } }>): CacheWaste {
+  const first = entries[0];
+  const last = entries.at(-1);
+  if (cachedWaste && cachedWaste.len === entries.length && cachedWaste.first === first && cachedWaste.last === last) {
+    return { ...cachedWaste.value };
+  }
   let prev = 0;
   let reported = false;
   const totals = { missedTokens: 0, missCount: 0 };
@@ -83,18 +90,50 @@ export function cacheWaste(entries: ReadonlyArray<{ type?: unknown; message?: { 
     }
     if (prompt > 0) { prev = prompt; reported ||= cacheRead + cacheWrite > 0; }
   }
-  return totals;
+  cachedWaste = { len: entries.length, first, last, value: totals };
+  return { ...totals };
 }
+
+let cachedSessionUsage: { sm: unknown; key: string; first: unknown; last: unknown; value: SessionUsage } | undefined;
 
 /** Aggregate persisted, finalized usage once per active-branch entry. */
 export function sessionUsage(ctx: ExtensionContext): SessionUsage {
-  return ctx.sessionManager.getBranch().reduce((total, entry) => {
+  const sm = ctx.sessionManager as { getLeafId?(): string | null; getEntries?(): unknown[]; getBranch(): Array<{ type?: unknown; message?: unknown }> };
+  const hasFastKey = typeof sm.getLeafId === "function" && typeof sm.getEntries === "function";
+  if (hasFastKey) {
+    const entries = sm.getEntries!();
+    const key = `${sm.getLeafId!() ?? ""}:${entries.length}`;
+    const first = entries[0];
+    const last = entries.at(-1);
+    if (cachedSessionUsage && cachedSessionUsage.sm === sm && cachedSessionUsage.key === key && cachedSessionUsage.first === first && cachedSessionUsage.last === last) {
+      return { ...cachedSessionUsage.value };
+    }
+    const value = sm.getBranch().reduce((total, entry) => {
+      if (entry.type !== "message") return total;
+      const message = entry.message as { role?: unknown; usage?: UsageLike };
+      return message.role === "assistant" || message.role === "toolResult"
+        ? addUsage(total, message.usage)
+        : total;
+    }, { ...EMPTY_USAGE });
+    cachedSessionUsage = { sm, key, first, last, value };
+    return { ...value };
+  }
+  const branch = sm.getBranch();
+  const key = `b:${branch.length}`;
+  const first = branch[0];
+  const last = branch.at(-1);
+  if (cachedSessionUsage && cachedSessionUsage.sm === sm && cachedSessionUsage.key === key && cachedSessionUsage.first === first && cachedSessionUsage.last === last) {
+    return { ...cachedSessionUsage.value };
+  }
+  const value = branch.reduce((total, entry) => {
     if (entry.type !== "message") return total;
     const message = entry.message as { role?: unknown; usage?: UsageLike };
     return message.role === "assistant" || message.role === "toolResult"
       ? addUsage(total, message.usage)
       : total;
   }, { ...EMPTY_USAGE });
+  cachedSessionUsage = { sm, key, first, last, value };
+  return { ...value };
 }
 
 export function cacheHit(usage: SessionUsage): number | undefined {
@@ -114,12 +153,6 @@ export function speedColor(speed: number | undefined): SpeedColor {
 export function formatSpeed(speed: number, showUnit: boolean): string {
   const value = speed.toFixed(speed >= 100 ? 0 : 1);
   return showUnit ? `${value} tok/s` : value;
-}
-
-export interface ActiveGeneration {
-  firstTokenAt?: number;
-  output: number;
-  lastSampleAt: number;
 }
 
 /** Hide sub-100ms bursts (batched usage) and 1-token completions; they are not a decode rate. */

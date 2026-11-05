@@ -8,8 +8,20 @@ import { commitImageCursor } from "./image-placement.ts";
 const parser = new Marked();
 export interface AssistantImageSpan { start: number; end: number; path: string }
 
+const spansCache = new Map<string, AssistantImageSpan[]>();
+const placeholdersCache = new Map<string, string>();
+const IMAGE_CACHE_MAX = 800;
+
+export function clearAssistantImageCaches(): void {
+  spansCache.clear();
+  placeholdersCache.clear();
+}
+
 /** Parse image syntax before bare paths, retaining source offsets for placement. */
 export function assistantImageSpans(source: string, cwd: string, allowMissing = false): AssistantImageSpan[] {
+  const cacheKey = `${allowMissing ? 1 : 0}|${cwd}|${source}`;
+  const cached = spansCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const spans: AssistantImageSpan[] = [];
   let cursor = 0;
   let offset = 0;
@@ -40,20 +52,35 @@ export function assistantImageSpans(source: string, cwd: string, allowMissing = 
       spans.push({ start: match.start, end: match.end, path: localPath(match.path, cwd) });
     }
   }
-  return spans.filter(span => existsSync(span.path) || (allowMissing
+  const result = spans.filter(span => existsSync(span.path) || (allowMissing
     && !/[*?]/.test(span.path)
     && /^(?:!\[|\/|~\/|\.{1,2}\/|[a-z]:[\\/])/i.test(source.slice(span.start, span.end))))
     .sort((a, b) => a.start - b.start);
+  if (spansCache.size >= IMAGE_CACHE_MAX) {
+    const first = spansCache.keys().next().value;
+    if (first !== undefined) spansCache.delete(first);
+  }
+  spansCache.set(cacheKey, result);
+  return result;
 }
 
 /** Keep explicit image references compact even after clipboard files have expired. */
 export function imagePlaceholders(source: string, cwd: string): string {
+  const cacheKey = `${cwd}|${source}`;
+  const cached = placeholdersCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  let out = source;
   const spans = assistantImageSpans(source, cwd, true);
   for (let index = spans.length - 1; index >= 0; index--) {
     const span = spans[index];
-    source = source.slice(0, span.start) + fileLink(`  图片 ${index + 1}`, span.path, false) + source.slice(span.end);
+    out = out.slice(0, span.start) + fileLink(`  图片 ${index + 1}`, span.path, false) + out.slice(span.end);
   }
-  return source;
+  if (placeholdersCache.size >= IMAGE_CACHE_MAX) {
+    const first = placeholdersCache.keys().next().value;
+    if (first !== undefined) placeholdersCache.delete(first);
+  }
+  placeholdersCache.set(cacheKey, out);
+  return out;
 }
 
 /** Load once outside render, then reuse Pi's Image IDs and complete height rows. */

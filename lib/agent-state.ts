@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { addUsage, EMPTY_USAGE, finiteNumber, type SessionUsage, type UsageLike } from "./usage.ts";
 
 export const plain = (text: string) => text.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "").replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trim();
 
@@ -12,10 +13,43 @@ export function stripAcceptanceReport(output: string): string {
     .trimEnd();
 }
 
+export interface ChildSessionStep {
+  at: number;
+  name: string;
+  value: string;
+  input: number;
+}
+
+export interface ChildSessionInfo {
+  stamp: string;
+  sessionId: string;
+  model: string;
+  thinking: string;
+  finalOutput: string;
+  latestText: string;
+  inputs: Array<{ name: string; value: string }>;
+  usage: SessionUsage;
+  turns: number;
+  steps: ChildSessionStep[];
+  startedAt?: number;
+  endedAt?: number;
+  terminalState?: "complete" | "failed";
+}
+
+function entryTimestampMs(entry: { timestamp?: unknown }, message?: { timestamp?: unknown }): number | undefined {
+  if (typeof entry.timestamp === "number" && Number.isFinite(entry.timestamp)) return entry.timestamp;
+  if (typeof entry.timestamp === "string") {
+    const parsed = Date.parse(entry.timestamp);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (typeof message?.timestamp === "number" && Number.isFinite(message.timestamp)) return message.timestamp;
+  return undefined;
+}
+
 /** Recover the child's own prose and raw tool inputs from its session, never from activity previews. */
-const childSessionCache = new Map<string, { stamp: string; thinking: string; finalOutput: string; latestText: string; inputs: Array<{ name: string; value: string }> }>();
+const childSessionCache = new Map<string, ChildSessionInfo>();
 const singleLine = (value: string) => plain(value).replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ");
-export function childSessionData(sessionFile: unknown) {
+export function childSessionData(sessionFile: unknown): ChildSessionInfo | undefined {
   if (typeof sessionFile !== "string") return undefined;
   try {
     const stat = statSync(sessionFile);
@@ -23,36 +57,105 @@ export function childSessionData(sessionFile: unknown) {
     let cached = childSessionCache.get(sessionFile);
     if (!cached || cached.stamp !== stamp) {
       const inputs: Array<{ name: string; value: string }> = [];
+      const steps: ChildSessionStep[] = [];
+      let sessionId = "";
+      let model = "";
       let thinking = "";
       let finalOutput = "";
       let latestText = "";
+      let usage: SessionUsage = { ...EMPTY_USAGE };
+      let turns = 0;
+      let startedAt: number | undefined;
+      let endedAt: number | undefined;
+      let terminalState: "complete" | "failed" | undefined;
       for (const line of readFileSync(sessionFile, "utf8").split(/\r?\n/)) {
         try {
-          const entry = JSON.parse(line) as { type?: string; thinkingLevel?: string; message?: { role?: string; stopReason?: string; channel?: string; content?: Array<{ type?: string; text?: string; name?: string; input?: Record<string, unknown>; arguments?: Record<string, unknown> } | null> } };
+          const entry = JSON.parse(line) as {
+            type?: string;
+            id?: string;
+            timestamp?: unknown;
+            provider?: string;
+            modelId?: string;
+            thinkingLevel?: string;
+            usage?: UsageLike;
+            message?: {
+              role?: string;
+              provider?: string;
+              model?: string;
+              thinkingLevel?: string;
+              timestamp?: unknown;
+              usage?: UsageLike;
+              stopReason?: string;
+              channel?: string;
+              content?: Array<{ type?: string; text?: string; name?: string; input?: Record<string, unknown>; arguments?: Record<string, unknown> } | null>;
+            };
+          };
+          const entryAt = entryTimestampMs(entry, entry.message);
+          if (entryAt !== undefined) {
+            startedAt ??= entryAt;
+            endedAt = Math.max(endedAt ?? entryAt, entryAt);
+          }
+          if (entry.type === "session" && typeof entry.id === "string") sessionId = entry.id;
+          if (entry.type === "model_change" && typeof entry.modelId === "string" && entry.modelId) {
+            model = typeof entry.provider === "string" && entry.provider && !entry.modelId.startsWith(`${entry.provider}/`)
+              ? `${entry.provider}/${entry.modelId}` : entry.modelId;
+          }
           if (entry.type === "thinking_level_change" && /^(off|minimal|low|medium|high|xhigh|max)$/.test(entry.thinkingLevel ?? "")) thinking = entry.thinkingLevel!;
+          if (entry.type === "usage") usage = addUsage(usage, (entry.usage ?? entry) as UsageLike);
+          if (entry.message?.role === "user") {
+            terminalState = undefined;
+            continue;
+          }
+          if (entry.message?.role === "toolResult") {
+            terminalState = undefined;
+            if (entry.message.usage) usage = addUsage(usage, entry.message.usage);
+            continue;
+          }
           if (entry.message?.role !== "assistant") continue;
           const message = entry.message;
+          turns++;
+          usage = addUsage(usage, message.usage);
+          if (typeof message.model === "string" && message.model) {
+            model = typeof message.provider === "string" && message.provider && !message.model.startsWith(`${message.provider}/`)
+              ? `${message.provider}/${message.model}` : message.model;
+          }
+          if (!thinking && typeof message.thinkingLevel === "string" && /^(off|minimal|low|medium|high|xhigh|max)$/.test(message.thinkingLevel)) {
+            thinking = message.thinkingLevel;
+          }
+          const msgInput = Math.max(0, (finiteNumber(message.usage?.input) ?? 0) + (finiteNumber(message.usage?.cacheRead) ?? 0) + (finiteNumber(message.usage?.cacheWrite) ?? 0));
+          const stepAt = entryAt ?? startedAt ?? stat.mtimeMs;
           const content = Array.isArray(message.content) ? message.content : [];
+          const hasToolCall = content.some(block => block?.type === "toolCall");
           const text = content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block!.text).join("\n\n").trim();
           // Pi persists no channel: only a stopped assistant text reply is a final answer.
           finalOutput = entry.type === "message" && message.stopReason === "stop"
             && (message.channel === undefined || message.channel === "final")
-            && !content.some(block => block?.type === "toolCall")
+            && !hasToolCall
             ? text : "";
+          terminalState = !hasToolCall && message.stopReason === "stop" ? "complete"
+            : /^(error|aborted)$/.test(message.stopReason ?? "") ? "failed"
+            : undefined;
           // Narration attached to a tool call is still the child's own prose; it
           // is the only body a running or tool-ended child has.
           if (entry.type === "message" && text) latestText = text;
+          let turnInputAssigned = false;
           for (const call of content) {
             if (!call) continue;
             if (call.type !== "toolCall" || typeof call.name !== "string") continue;
             const input = call.arguments ?? call.input ?? {};
             const value = [input.path, input.command, input.pattern, input.query, input.task, input.prompt]
               .find((candidate): candidate is string => typeof candidate === "string") ?? "";
-            if (value) inputs.push({ name: call.name, value: singleLine(value) });
+            const cleanValue = value ? singleLine(value) : "";
+            if (cleanValue) inputs.push({ name: call.name, value: cleanValue });
+            const stepVal = call.name === "grep" && typeof input.pattern === "string" && typeof input.path === "string"
+              ? `${singleLine(input.pattern)} ${singleLine(input.path)}`
+              : cleanValue;
+            steps.push({ at: stepAt, name: call.name, value: stepVal, input: turnInputAssigned ? 0 : msgInput });
+            turnInputAssigned = true;
           }
         } catch { /* A concurrently written session can end with a partial line. */ }
       }
-      cached = { stamp, thinking, finalOutput, latestText, inputs };
+      cached = { stamp, sessionId, model, thinking, finalOutput, latestText, inputs, usage, turns, steps, startedAt, endedAt, terminalState };
       childSessionCache.set(sessionFile, cached);
     }
     return cached;

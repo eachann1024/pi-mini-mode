@@ -65,14 +65,24 @@ export function filePaths(text: string) {
 // BEL survives Markdown's backslash-escape parsing, unlike the ST terminator.
 export const fileLink = (text: string, path: string, underline = true) => `\x1b]8;;${pathToFileURL(path).href}\x07${underline ? `\x1b[4m${text}\x1b[24m` : text}\x1b]8;;\x07`;
 
+const linkToolFilesCache = new Map<string, string>();
+const FILE_LINK_CACHE_MAX = 800;
+
+export function clearFileLinkCaches(): void {
+  linkToolFilesCache.clear();
+}
+
 /** Shorten only visible tool labels; OSC 8 targets retain the complete original path. */
 export function linkToolFiles(text: string, cwd: string, compact: boolean): string {
+  const hyperlinks = inputCapabilities().hyperlinks;
+  const cacheKey = `${compact ? 1 : 0}|${hyperlinks ? 1 : 0}|${cwd}|${text}`;
+  const cached = linkToolFilesCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const shorten = (label: string) => compact ? label
     .replace(/\/var\/folders\/[^\s]*\/otty-paste\//g, "…/otty-paste/")
     .replace(/node_modules\/@earendil-works\//g, "…/") : label;
-  const hyperlinks = inputCapabilities().hyperlinks;
   // Image chips already carry a complete target; never shorten or relink it.
-  return text.split(/(\x1b\]8;[^\x07]*\x07[\s\S]*?\x1b\]8;;\x07)/g).map((part, index) => {
+  const out = text.split(/(\x1b\]8;[^\x07]*\x07[\s\S]*?\x1b\]8;;\x07)/g).map((part, index) => {
     if (index % 2) return part;
     if (!hyperlinks) return shorten(part);
     // A path tool's entire argument can contain spaces or punctuation without quotes.
@@ -89,6 +99,12 @@ export function linkToolFiles(text: string, cwd: string, compact: boolean): stri
     }
     return result + shorten(part.slice(offset));
   }).join("");
+  if (linkToolFilesCache.size >= FILE_LINK_CACHE_MAX) {
+    const first = linkToolFilesCache.keys().next().value;
+    if (first !== undefined) linkToolFilesCache.delete(first);
+  }
+  linkToolFilesCache.set(cacheKey, out);
+  return out;
 }
 
 /** Display-only: normalize local targets without changing persisted messages or remote URLs. */

@@ -9,7 +9,7 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
-const { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallRows, agentStatusesByTurn, attachAgentWidgets, restyleAgentWidget, liveAgentRows, readAgentStatuses, currentAgentStatuses, liveAgentView, agentCallDisplay, isAgentTool, RUNNING_FRAMES, runningGlyph } = await import('../lib/agent-view.ts');
+const { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentCallRows, agentStatusesByTurn, attachAgentWidgets, restyleAgentWidget, liveAgentRows, readAgentStatuses, currentAgentStatuses, liveAgentView, agentCallDisplay, isAgentTool, RUNNING_FRAMES, runningGlyph, parsePrintInvocations, locatePrintSession, printAgentStatuses, childSessionData } = await import('../lib/agent-view.ts');
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -192,7 +192,7 @@ for (const name of ['dark', 'light']) {
   liveHost.children[5].addChild(new Text('⠇ Async agents · background', 0, 0));
   assert.deepEqual(liveHost.children[5].render(100), [], 'native panel stays hidden below editor too');
   restoreLive();
-  assert.equal(new Set(RUNNING_FRAMES.map((_, i) => runningGlyph(i * 100))).size, RUNNING_FRAMES.length);
+  assert.equal(new Set(RUNNING_FRAMES.map((_, i) => runningGlyph(i * 250))).size, RUNNING_FRAMES.length);
   const starting = [{ runId: 'starting', workflowChildren: { children: [{ childId: 'a', agent: 'scout', state: 'running' }] } }];
   assert.equal(liveAgentRows(starting, theme, 100).length, 2, 'inventory visible before steps are populated');
   const outputStatus = [{ runId: 'details', steps: [{ agent: 'scout', recentOutput: ['FIRST_DETAIL', 'LATEST'], status: 'running' }] }];
@@ -654,5 +654,219 @@ try {
   assert.equal([...clean(narrow.rows.slice(1).join(''))].filter(ch => ch === '中').length, 60, 'narrow terminals still keep every literal character');
   assert.ok(narrow.rows.every(row => visibleWidth(row) <= 5));
 } finally { rmSync(bodyRoot, { recursive: true, force: true }); }
+
+// parsePrintInvocations: single, &&/& parallel, --model/--thinking/--session-id, heredoc/<<<, and non-print fallback.
+{
+  const single = parsePrintInvocations('pi -p "检查 lib/agent-render.ts 里 Sub Agent 的行格式" --model claude-sonnet-4-6 --thinking low');
+  assert.equal(single.length, 1);
+  assert.equal(single[0].prompt, '检查 lib/agent-render.ts 里 Sub Agent 的行格式');
+  assert.equal(single[0].model, 'claude-sonnet-4-6');
+  assert.equal(single[0].thinking, 'low');
+
+  const parallel = parsePrintInvocations(
+    'cd /tmp/work && FOO=1 /usr/local/bin/pi -p \'Task A\' --model gpt-5.4 --thinking medium --session-id sid-111 & npx -y pi --print $' + "'Task\\nB'" + ' --mode json --session-dir /tmp/sessions && wait'
+  );
+  assert.equal(parallel.length, 2);
+  assert.equal(parallel[0].prompt, 'Task A');
+  assert.equal(parallel[0].model, 'gpt-5.4');
+  assert.equal(parallel[0].thinking, 'medium');
+  assert.equal(parallel[0].sessionId, 'sid-111');
+  assert.equal(parallel[0].cwd, '/tmp/work');
+  assert.equal(parallel[1].prompt, 'Task\nB');
+  assert.equal(parallel[1].sessionDir, '/tmp/sessions');
+
+  const heredoc = parsePrintInvocations('pi -p --model sonnet <<\'EOF\'\n第一行提示\n第二行提示\nEOF');
+  assert.equal(heredoc.length, 1);
+  assert.equal(heredoc[0].prompt, '第一行提示\n第二行提示');
+
+  const hereString = parsePrintInvocations('pi -p <<< "单行输入提示"');
+  assert.equal(hereString.length, 1);
+  assert.equal(hereString[0].prompt, '单行输入提示');
+
+  for (const nonPrint of [
+    'ls -la && git status',
+    'pi "interactive prompt without -p"',
+    'pi install @foo/bar -p',
+    'pi -p --help',
+    'echo "pi -p fake"',
+    'pi -p "unterminated quote',
+  ]) {
+    assert.deepEqual(parsePrintInvocations(nonPrint), [], `non-print command must return []: ${nonPrint}`);
+  }
+}
+
+// locatePrintSession & childSessionData & liveAgentView B-version table (SubAgent + pi -p).
+const printRoot = mkdtempSync(join(tmpdir(), 'mini-print-agent-'));
+try {
+  const sessDir = join(printRoot, 'sessions');
+  mkdirSync(sessDir, { recursive: true });
+  const nowBase = Date.parse('2026-10-10T12:48:28.000Z');
+  const writeSession = (fileName, id, prompt, model, thinking, steps, finalText, usage) => {
+    const file = join(sessDir, fileName);
+    const lines = [
+      { type: 'session', version: 3, id, timestamp: new Date(nowBase).toISOString(), cwd: printRoot },
+      { type: 'model_change', id: 'm1', parentId: null, timestamp: new Date(nowBase + 10).toISOString(), provider: '9router', modelId: model },
+      { type: 'thinking_level_change', id: 't1', parentId: 'm1', timestamp: new Date(nowBase + 20).toISOString(), thinkingLevel: thinking },
+      { type: 'message', id: 'u1', parentId: 't1', timestamp: new Date(nowBase + 100).toISOString(), message: { role: 'user', content: [{ type: 'text', text: prompt }], timestamp: nowBase + 100 } },
+      ...steps.map((s, idx) => ({
+        type: 'message',
+        id: `a-${idx}`,
+        parentId: 'u1',
+        timestamp: new Date(nowBase + s.offsetMs).toISOString(),
+        message: {
+          role: 'assistant',
+          model,
+          stopReason: 'toolUse',
+          timestamp: nowBase + s.offsetMs,
+          usage: s.usage,
+          content: [{ type: 'toolCall', id: `tc-${idx}`, name: s.name, arguments: s.args }],
+        },
+      })),
+      {
+        type: 'message',
+        id: 'afinal',
+        parentId: 'u1',
+        timestamp: new Date(nowBase + 18000).toISOString(),
+        message: {
+          role: 'assistant',
+          model,
+          stopReason: 'stop',
+          timestamp: nowBase + 18000,
+          usage,
+          content: [{ type: 'text', text: finalText }],
+        },
+      },
+    ];
+    writeFileSync(file, lines.map(l => JSON.stringify(l)).join('\n') + '\n');
+    return file;
+  };
+
+  const sessA = writeSession(
+    '2026-10-10T12-48-28-407Z_01a125db-8ef7-709b-9cbb-e2235dc7a704.jsonl',
+    '01a125db-8ef7-709b-9cbb-e2235dc7a704',
+    '检查 lib/agent-render.ts 里 Sub Agent 的行格式与折叠控制逻辑',
+    'claude-sonnet-4-6',
+    'low',
+    [
+      { offsetMs: 1000, name: 'read', args: { path: 'lib/agent-render.ts' }, usage: { input: 1200, output: 400, cacheRead: 7200, cacheWrite: 0, totalTokens: 8800, cost: { total: 0.005 } } },
+      { offsetMs: 4000, name: 'grep', args: { pattern: 'liveAgentView', path: 'lib/' }, usage: { input: 900, output: 800, cacheRead: 8900, cacheWrite: 0, totalTokens: 10600, cost: { total: 0.006 } } },
+      { offsetMs: 11000, name: 'read', args: { path: 'lib/agent-state.ts' }, usage: { input: 1400, output: 1200, cacheRead: 11400, cacheWrite: 0, totalTokens: 14000, cost: { total: 0.007 } } },
+    ],
+    '已核对 `liveAgentView`：当前只接收 `agentChildren(statuses)`，需要在 `callsFromEntry` 阶段合并 `pi -p` 调用。',
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } },
+  );
+
+  const sessB = writeSession(
+    '2026-10-10T12-48-29-100Z_8f91c04a-1111-2222-3333-444455556666.jsonl',
+    '8f91c04a-1111-2222-3333-444455556666',
+    '检查 lib/agent-render.ts 里 Sub Agent 的并行第二任务',
+    'gpt-5.4',
+    'medium',
+    [
+      { offsetMs: 2000, name: 'read', args: { path: 'lib/minimal-output.ts' }, usage: { input: 3600, output: 900, cacheRead: 10000, cacheWrite: 0, totalTokens: 14500, cost: { total: 0.01 } } },
+      { offsetMs: 9000, name: 'grep', args: { pattern: 'subAgents', path: 'lib/' }, usage: { input: 3600, output: 800, cacheRead: 10000, cacheWrite: 0, totalTokens: 14400, cost: { total: 0.01 } } },
+    ],
+    'SubAgent 汇总正常。',
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { total: 0 } },
+  );
+
+  // Verify childSessionData extraction
+  const dataA = childSessionData(sessA);
+  assert.equal(dataA.sessionId, '01a125db-8ef7-709b-9cbb-e2235dc7a704');
+  assert.equal(dataA.model, 'claude-sonnet-4-6');
+  assert.equal(dataA.thinking, 'low');
+  assert.equal(dataA.turns, 4);
+  assert.equal(dataA.steps.length, 3);
+  assert.equal(dataA.steps[0].name, 'read');
+  assert.equal(dataA.steps[0].input, 8400);
+  assert.equal(dataA.usage.input, 3500);
+  assert.equal(dataA.usage.cacheRead, 27500);
+  assert.equal(dataA.usage.output, 2400);
+
+  // Verify locatePrintSession matching, caching, and parallel claimed set isolation
+  const claimed = new Set();
+  const locatedById = locatePrintSession({ prompt: '任意提示', sessionId: '01a125db-8ef7-709b-9cbb-e2235dc7a704', sessionDir: sessDir }, printRoot, nowBase, claimed, 'call-id#0', true);
+  assert.equal(locatedById, sessA);
+  assert.ok(claimed.has(sessA));
+
+  // Parallel prefix match must skip already-claimed sessA and pick sessB
+  const locatedParallel = locatePrintSession({ prompt: '检查 lib/agent-render.ts 里 Sub Agent 的', sessionDir: sessDir }, printRoot, nowBase, claimed, 'call-id#1', true);
+  assert.equal(locatedParallel, sessB);
+  assert.ok(claimed.has(sessB));
+
+  // Cached lookup returns sessA even with a fresh claimed set
+  const freshClaimed = new Set();
+  assert.equal(locatePrintSession({ prompt: 'changed', sessionDir: '/nonexistent' }, printRoot, nowBase, freshClaimed, 'call-id#0', true), sessA);
+  assert.ok(freshClaimed.has(sessA));
+
+  // Build mixed statuses: one pi -p and one SubAgent
+  const callObj = {
+    id: 'bash-print-1',
+    name: 'bash',
+    tool: 'bash',
+    command: `pi -p "检查 lib/agent-render.ts 里 Sub Agent 的行格式与折叠控制逻辑" --session-dir "${sessDir}" --session-id 01a125db-8ef7-709b-9cbb-e2235dc7a704`,
+    task: `pi -p "检查 lib/agent-render.ts 里 Sub Agent 的行格式与折叠控制逻辑"`,
+    state: 'done',
+    startedAt: nowBase,
+    endedAt: nowBase + 18000,
+  };
+  const printStatuses = printAgentStatuses(callObj, printRoot, new Set());
+  assert.equal(printStatuses.length, 1);
+  const subAgentStatus = {
+    runId: 'sub-1',
+    mode: 'single',
+    state: 'complete',
+    startedAt: nowBase,
+    endedAt: nowBase + 41000,
+    steps: [{
+      runId: 'sub-1',
+      agent: 'worker',
+      source: 'SubAgent',
+      task: '扫描 extensions/footer-status.ts 中 refreshAgents 的轮询触发条件',
+      status: 'complete',
+      sessionFile: sessB,
+      startedAt: nowBase,
+      endedAt: nowBase + 41000,
+    }],
+  };
+  const mixedStatuses = [...printStatuses, subAgentStatus];
+
+  // Collapsed table at 120 cols (zh)
+  const controls = [];
+  const table120 = liveAgentView(mixedStatuses, testTheme, 120, false, false, new Map(), nowBase + 45000, new Set(['bash-print-1#0']), controls, 'zh');
+  const rows120 = table120.rows.map(clean);
+  assert.ok(rows120.every(row => row.startsWith('│ ')), 'table rows stay on the Agent tree rail');
+  assert.match(rows120[0], /Sub Agent · 2 个 · 完成 2 · Ctrl\+S 收起\s+用时\s+步骤\s+输入\s+输出\s+缓存/);
+  assert.doesNotMatch(rows120[0], /来源|任务/);
+  assert.match(rows120[1], /⌄ ✓\s+pi -p\s+.*0:18\s+3\s+31\.0k\s+2\.4k\s+89%/);
+  assert.ok(rows120[1].trimEnd().length < 110, 'numbers stay near the task instead of the far edge');
+  assert.match(rows120.join('\n'), /claude-sonnet-4-6 · low · 会话 01a125db · 4 轮 · \$0\.018/);
+  assert.match(rows120.join('\n'), /0:01\s+read\s+lib\/agent-render\.ts\s+↑8\.4k/);
+  assert.match(rows120.join('\n'), /0:04\s+grep\s+liveAgentView lib\/\s+↑9\.8k/);
+  assert.match(rows120.join('\n'), /缓存读 27\.5k · 缓存写 0 · 未命中 3\.5k/);
+  assert.match(rows120.at(-2), /› ✓\s+SubAgent\s+.*0:41\s+2\s+27\.2k\s+1\.7k\s+74%/);
+  assert.match(rows120.at(-1), /合计\s+5\s+58\.2k\s+4\.1k\s+82%/);
+  assert.equal(controls.length, 2, 'subagentControls populated for both pi -p and SubAgent rows');
+  const single = liveAgentView(printStatuses, testTheme, 120, false, false, new Map(), nowBase + 45000, new Set(), [], 'zh').rows.map(clean);
+  assert.doesNotMatch(single.join('\n'), /合计/, 'a single child has no total row');
+
+  // English localization check
+  const tableEn = liveAgentView(mixedStatuses, testTheme, 120, false, false, new Map(), nowBase + 45000, new Set(), [], 'en').rows.map(clean);
+  assert.match(tableEn[0], /Time\s+Steps\s+In\s+Out\s+Cache/);
+  assert.match(tableEn.at(-1), /Total\s+5\s+58\.2k\s+4\.1k\s+82%/);
+
+  // Narrow width column hiding order: Cache -> Out -> Steps -> In -> fallback
+  const headerAt = w => liveAgentView(mixedStatuses, testTheme, w, false, false, new Map(), nowBase + 45000).rows.map(clean).find(row => /用时/.test(row))?.trimEnd() ?? '';
+  assert.match(headerAt(68), /步骤\s+输入\s+输出$/);
+  assert.doesNotMatch(headerAt(68), /缓存/);
+  assert.match(headerAt(60), /步骤\s+输入$/);
+  assert.doesNotMatch(headerAt(60), /输出|缓存/);
+  assert.match(headerAt(52), /用时\s+输入$/);
+  assert.doesNotMatch(headerAt(52), /步骤|输出|缓存/);
+  assert.match(headerAt(40), /用时$/);
+  assert.doesNotMatch(headerAt(40), /输入|步骤|输出|缓存/);
+  const fallback24 = liveAgentView(mixedStatuses, testTheme, 24, false, false, new Map(), nowBase + 45000).rows.map(clean);
+  assert.match(fallback24[0], /^├─ ✓/);
+} finally { rmSync(printRoot, { recursive: true, force: true }); }
 
 console.log('Agent views: aggregation, failure, live widgets, restore, dark/light, widths PASS');

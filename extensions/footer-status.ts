@@ -1,4 +1,4 @@
-import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentStatusesByTurn, attachAgentWidgets, readAgentStatuses } from "../lib/agent-view.ts";
+import { AGENT_STATUS_ENTRY, savedAgentStatuses, retainAgentStatuses, agentChildren, agentCall, agentStatusesByTurn, attachAgentWidgets, readAgentStatuses, isPrintAgentCall } from "../lib/agent-view.ts";
 import { getAgentDir, SettingsManager, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { matchesKey, isKeyRelease, isKeyRepeat, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { attachTranscript } from "../lib/transcript-adapter.ts";
@@ -16,6 +16,7 @@ import { statusLine } from "../lib/footer-line.ts";
 import { contentText, minimalTurnsFromBranch, processText, pushProcess, skillNames, type MinimalTurn } from "../lib/minimal-turns.ts";
 import { minimalOutputComponent } from "../lib/minimal-output.ts";
 import { createThinkingStream } from "../lib/thinking-stream.ts";
+import { PACKAGE_VERSION, isNewerVersion } from "../lib/update-banner.ts";
 
 // Preserve the existing module entry points for consumers and focused checks.
 export { SETTINGS_FILE_NAME, DEFAULT_SETTINGS, FOOTER_FIELDS, FOOTER_STYLE_OPTIONS, settingsPath, parseSettings, settingsNeedBackfill, loadSettings, saveSettings, settingsItems, type MiniLensSettings } from "../lib/settings.ts";
@@ -25,6 +26,7 @@ export { SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 export { isPlannotatorPlanningStatus, planCapsule, settingsPreviewLine, statusLine } from "../lib/footer-line.ts";
 export { formatElapsed, formatToolElapsed, formatThinkingElapsed, minimalTurnsFromBranch, type MinimalTurn, type ThinkingClock } from "../lib/minimal-turns.ts";
 export { minimalOutputComponent } from "../lib/minimal-output.ts";
+export { PACKAGE_VERSION, UPDATE_RELEASE_DATE, isNewerVersion, renderUpdateBanner } from "../lib/update-banner.ts";
 
 /** Pi /model and other selectors own Ctrl+S; the editor exposes getText. */
 export function focusedSelectorOwnsKeys(tui?: { getFocusedComponent?(): unknown } | null): boolean {
@@ -90,6 +92,10 @@ export default function (pi: ExtensionAPI) {
   pi.registerMarkdownTransformer?.(messageLinks);
   let saveChain: Promise<void> = Promise.resolve();
   const configPath = settingsPath();
+  let updateBannerChecked = false;
+  let activeUpdateBanner: { sessionKey: string; version: string; collapsed: boolean } | undefined;
+  const getSessionKey = (ctx: ExtensionContext) =>
+    ctx.sessionManager.getSessionFile?.() ?? (ctx.sessionManager as { getSessionId?(): string | undefined }).getSessionId?.() ?? "";
 
   const refresh = () => refreshFooter?.();
   const refreshMinimalOutput = () => refreshMinimal?.();
@@ -136,7 +142,7 @@ export default function (pi: ExtensionAPI) {
       refreshMinimal = () => tui.requestRender();
       // Retain children under their originating user turn, including while idle,
       // after a follow-up user message, and when rebuilding a saved session.
-      const sessionKey = ctx.sessionManager.getSessionFile?.() ?? ctx.sessionManager.getSessionId?.() ?? "";
+      const sessionKey = getSessionKey(ctx);
       let statuses = savedAgentStatuses(ctx.sessionManager.getBranch());
       const persisted = new Map(statuses.map(status => [String(status.runId), JSON.stringify(status)]));
       const saveStatuses = () => {
@@ -178,6 +184,17 @@ export default function (pi: ExtensionAPI) {
         cwd: () => ctx.cwd,
         requestRender: () => tui.requestRender(),
         write: data => tui.terminal.write(data),
+        updateBanner: () => activeUpdateBanner && activeUpdateBanner.sessionKey === sessionKey
+          ? {
+              version: activeUpdateBanner.version,
+              collapsed: activeUpdateBanner.collapsed,
+              toggle: () => {
+                if (!activeUpdateBanner) return;
+                activeUpdateBanner.collapsed = !activeUpdateBanner.collapsed;
+                tui.requestRender();
+              },
+            }
+          : undefined,
       }, () => settings["pi-mini-mode-minimal-record-limit"], () => uiLanguage(settings));
       // Native info notifications use dim; warning/error notifications retain
       // their position in the transcript. No plugin names or message matching.
@@ -234,16 +251,24 @@ export default function (pi: ExtensionAPI) {
       }
       if (restoreTranscript) {
         promptView = view;
+        let lastWaitFrame = -1;
         waitingTimer = setInterval(() => {
+          const now = Date.now();
           let changed = false;
-          if (Date.now() - lastStatusRead >= 1000) {
+          const hasRunningPrint = minimalTurns.some(turn => (turn.agentCalls ?? []).some(call => call.state === "running" && isPrintAgentCall(call)));
+          if (now - lastStatusRead >= 1000) {
             const next = retainAgentStatuses(statuses, readAgentStatuses(sessionKey, undefined, statuses));
-            changed = JSON.stringify(next) !== JSON.stringify(statuses);
+            changed = JSON.stringify(next) !== JSON.stringify(statuses) || hasRunningPrint;
             statuses = next;
             saveStatuses();
-            lastStatusRead = Date.now();
+            lastStatusRead = now;
           }
-          if (changed || Date.now() >= view.agentExpiry() || activeMinimalTurn?.running || agentChildren(statuses).some(child => /^(running|active|starting|queued|pending)$/.test(String(child.status ?? child.state)))) tui.requestRender();
+          const frame = Math.floor(now / 250);
+          const activeAnim = hasRunningPrint || activeMinimalTurn?.running || agentChildren(statuses).some(child => /^(running|active|starting|queued|pending)$/.test(String(child.status ?? child.state)));
+          if (changed || now >= view.agentExpiry() || (activeAnim && frame !== lastWaitFrame)) {
+            lastWaitFrame = frame;
+            tui.requestRender();
+          }
         }, 100);
         waitingTimer.unref();
       }
@@ -349,6 +374,8 @@ export default function (pi: ExtensionAPI) {
               if (!isRecordLimit(entry)) throw new TypeError("Invalid record limit");
             } else if (key === "pi-mini-mode-language") {
               if (!isUiLanguage(entry)) throw new TypeError("Invalid language");
+            } else if (key === "lastSeenVersion") {
+              if (entry !== undefined && (typeof entry !== "string" || !/^\d+\.\d+\.\d+$/.test(entry))) throw new TypeError("Invalid version");
             } else if (isLegacyMinimalSetting(key) && typeof entry === "boolean") {
               // Accept stale settings pages; these former child switches no longer gate output.
               continue;
@@ -424,7 +451,6 @@ export default function (pi: ExtensionAPI) {
     };
     const loaded = await loadSettings(configPath);
     settings = loaded.settings;
-    if (loaded.exists && loaded.backfilled) await persistSettings(ctx);
     messageCwd = ctx.cwd;
     // 输入增强只在会话中生效，会话开始时再加载；传 getter 让开关变更即时生效，重复调用是幂等的。
     cleanupInputEnhancements = installInputEnhancements(pi, ctx, () => settings["pi-mini-mode-input-enhancements"], () => settings["pi-mini-mode-image-preview"]);
@@ -434,6 +460,28 @@ export default function (pi: ExtensionAPI) {
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
     minimalToolOutputIndices.clear();
+    const currentSessionKey = getSessionKey(ctx);
+    if (updateBannerChecked) {
+      activeUpdateBanner = undefined;
+      if (settings.lastSeenVersion !== PACKAGE_VERSION) {
+        settings = { ...settings, lastSeenVersion: PACKAGE_VERSION };
+      }
+    } else {
+      updateBannerChecked = true;
+      const prevVersion = settings.lastSeenVersion;
+      const versionChanged = isNewerVersion(PACKAGE_VERSION, prevVersion);
+      if (prevVersion !== PACKAGE_VERSION) {
+        settings = { ...settings, lastSeenVersion: PACKAGE_VERSION };
+      }
+      if (loaded.exists && (loaded.backfilled || prevVersion !== PACKAGE_VERSION)) {
+        await persistSettings(ctx);
+      } else if (!loaded.exists && typeof ctx.ui.select !== "function") {
+        await saveSettings(settings, configPath).catch(() => {});
+      }
+      if (loaded.exists && versionChanged && ctx.mode === "tui" && ctx.hasUI && minimalTurns.length === 0) {
+        activeUpdateBanner = { sessionKey: currentSessionKey, version: PACKAGE_VERSION, collapsed: false };
+      }
+    }
     mountMinimalOutput(ctx);
     ctx.ui.setFooter((tui, theme, footerData) => {
       restoreScrollbar?.();
@@ -453,6 +501,7 @@ export default function (pi: ExtensionAPI) {
         hit: speedHitBox,
       }));
       const onBranchChange = footerData?.onBranchChange?.(() => tui.requestRender());
+      let cachedFooterUsage: { key: string; last: unknown; usage: ReturnType<typeof sessionUsage>; waste: ReturnType<typeof cacheWaste> } | undefined;
       return {
         dispose() {
           onBranchChange?.();
@@ -476,8 +525,17 @@ export default function (pi: ExtensionAPI) {
               mountMinimalOutput(ctx);
             });
           }
+          const sm = ctx.sessionManager as { getLeafId?(): string | null; getEntries?(): unknown[]; getBranch(): any[] };
+          const hasFastKey = typeof sm.getLeafId === "function" && typeof sm.getEntries === "function";
+          const entries = hasFastKey ? sm.getEntries!() : sm.getBranch();
+          const usageKey = hasFastKey ? `${sm.getLeafId!() ?? ""}:${entries.length}` : `b:${entries.length}`;
+          const lastEntry = entries.at(-1);
+          if (!cachedFooterUsage || cachedFooterUsage.key !== usageKey || cachedFooterUsage.last !== lastEntry) {
+            const branch = hasFastKey ? sm.getBranch() : entries;
+            cachedFooterUsage = { key: usageKey, last: lastEntry, usage: sessionUsage(ctx), waste: cacheWaste(branch) };
+          }
           const speed = speeds.displayed();
-          const line = statusLine(ctx, theme, width, sessionUsage(ctx), settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.(), footerData?.getGitBranch?.(), cacheWaste(ctx.sessionManager.getBranch()));
+          const line = statusLine(ctx, theme, width, cachedFooterUsage.usage, settings, speed, undefined, mcpCount, footerData?.getExtensionStatuses?.(), footerData?.getGitBranch?.(), cachedFooterUsage.waste);
           const speedText = settings["pi-mini-mode-speed-show"] && speed !== undefined
             ? formatSpeed(speed, settings["pi-mini-mode-speed-unit-show"])
             : "";
@@ -561,12 +619,13 @@ export default function (pi: ExtensionAPI) {
     pendingMinimalFinal = "";
     // Keep the last completed average visible until this response produces a live sample.
     // Tool-call-only assistant messages therefore cannot erase a useful rate.
-    speeds.onAssistantStart(Date.now());
+    speeds.onAssistantStart(Date.now(), event.message as { provider?: unknown; model?: unknown });
     startSpeedTimer();
   });
   pi.on("message_update", (event) => {
     const partial = (event.assistantMessageEvent as { partial?: { usage?: UsageLike; content?: Array<Record<string, unknown>> } }).partial;
-    if (speeds.onStream({ at: Date.now(), output: finiteNumber(partial?.usage?.output), content: partial?.content, usage: partial?.usage })) {
+    const streamEvent = event.assistantMessageEvent as { type?: string; delta?: string } | undefined;
+    if (speeds.onStream({ at: Date.now(), output: finiteNumber(partial?.usage?.output), content: partial?.content, usage: partial?.usage, type: streamEvent?.type, delta: streamEvent?.delta })) {
       refresh();
       speedHover?.relayout();
     }
@@ -683,7 +742,7 @@ export default function (pi: ExtensionAPI) {
     const startedAt = finiteNumber((event as { timestamp?: unknown }).timestamp) ?? Date.now();
     speeds.onTurnStart(startedAt);
   });
-  pi.on("agent_start", refresh);
+  pi.on("agent_start", () => { speeds.onRunStart(); refresh(); });
   pi.on("agent_end", refresh);
   pi.on("agent_settled", () => {
     if (!activeMinimalTurn) return;

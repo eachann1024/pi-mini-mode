@@ -146,7 +146,7 @@ assert.ok(connectedOutput.length > 1, "non-final output still wraps");
 assert.ok(connectedOutput.slice(1).every(row => row.startsWith("│")), "wrapped output keeps the tree rail");
 for (const accent of ["\x1b[34m", "\x1b[35m"]) {
   const theme = { ...minimalTheme, fg: (token, text) => token === "accent" ? `${accent}${text}\x1b[39m` : text };
-  for (const [state, glyph] of [["running", "⠋"], ["done", "●"], ["error", "✕"]]) {
+  for (const state of ["running", "done", "error"]) {
     const turn = { question: "status", process: ["call status"], agentCalls: [{ id: "status", name: "bash", task: "check", state }] };
     const view = extension.minimalOutputComponent(theme, () => [turn], () => true);
     const rendered = view.render(100).join("\n");
@@ -283,6 +283,19 @@ const controlTurn = { question: '', process: ['call control'], agentCalls: [cont
 assert.doesNotMatch(extension.minimalOutputComponent(minimalTheme, () => [controlTurn]).render(100).join('\n'), /subagent|Executable agents|worker/);
 assert.doesNotMatch(extension.minimalOutputComponent(minimalTheme, () => [controlTurn], () => true).render(100).join('\n'), /Control subagent|RAW_DIAGNOSTIC/);
 assert.equal(controlCall.output, 'Executable agents (capabilities):\nRAW_DIAGNOSTIC');
+const printTurn = extension.minimalTurnsFromBranch([
+  { type: "message", message: { role: "user", content: "Run print agent" } },
+  { type: "message", timestamp: "2026-10-10T12:48:28.000Z", message: { role: "assistant", content: [
+    { type: "toolCall", id: "read-1", name: "read", arguments: { path: "README.md" } },
+    { type: "toolCall", id: "print-1", name: "bash", arguments: { command: "pi -p \"检查 lib/agent-render.ts\" --no-session --model claude-sonnet-4-6 --thinking low" } },
+  ] } },
+  { type: "message", timestamp: "2026-10-10T12:48:29.000Z", message: { role: "toolResult", toolCallId: "read-1", content: [{ type: "text", text: "ok" }] } },
+  { type: "message", timestamp: "2026-10-10T12:48:46.000Z", message: { role: "toolResult", toolCallId: "print-1", content: [{ type: "text", text: "PRINT_AGENT_FINAL_ANSWER" }] } },
+]);
+const printRendered = extension.minimalOutputComponent(minimalTheme, () => printTurn, () => false, () => true, () => false, new Map(), t => t, undefined, () => 6, () => "zh").render(120).map(stripAnsi).join("\n");
+assert.match(printRendered, /Sub Agent · 1 个 · 完成 1 · Ctrl\+S 展开/);
+assert.match(printRendered, /pi -p\s+检查 lib\/agent-render\.ts/);
+assert.doesNotMatch(printRendered, /│ .*bash pi -p/, "pi -p bash call is moved out of normal tool rows into Sub Agent table");
 const restoredTurns = extension.minimalTurnsFromBranch(Array.from({ length: 7 }, (_, i) => [
   { type: "message", message: { role: "user", content: `question-${i}` } },
   { type: "message", message: { role: "toolResult", content: [{ type: "text", text: "tool output" }] } },
@@ -489,8 +502,8 @@ now = 10_500;
 handlers.get("message_update")({ assistantMessageEvent: { partial: { usage: { output: 100 } } } }, ctx);
 now = 11_000;
 lines = footer.render(140);
-assert.match(lines[0], /20\.0 tok\/s$/, "streaming speed is the recent window, not the turn average, and ignores regressing samples");
-assert.ok(colorTexts.some(([color, text]) => color === "warning" && text === "20.0 tok/s"), "live speed uses semantic threshold colors");
+assert.match(lines[0], /30\.0 tok\/s$/, "streaming speed is the recent window, not the turn average, and ignores regressing samples");
+assert.ok(colorTexts.some(([color, text]) => color === "success" && text === "30.0 tok/s"), "live speed uses semantic threshold colors");
 assert.equal(extension.speedColor(30), "success", "fast threshold is success");
 assert.equal(extension.speedColor(10), "warning", "medium threshold is warning");
 assert.equal(extension.speedColor(9.9), "error", "slow speed is error");
@@ -537,7 +550,7 @@ assert.ok(staleSpeed && Number(staleSpeed[1]) > 2, "streamed text advances the l
 now = 21_000;
 handlers.get("message_end")({ message: { role: "assistant", usage: { output: 80, input: 10 } } }, ctx);
 lines = footer.render(140);
-assert.match(lines[0], /80\.0 tok\/s$/, "the finished turn shows provider output divided by decode time");
+assert.match(lines[0], /50\.0 tok\/s$/, "the finished turn shows weighted average across the run");
 branch = [...branch, { type: "message", message: { role: "toolResult", usage: { input: 50_000, output: 80, cacheRead: 10_000, cacheWrite: 0, totalTokens: 60_080, cost: { total: 0.01 } } } }];
 const totals = extension.sessionUsage(ctx);
 assert.deepEqual(totals, { totalTokens: 175_080, input: 125_000, output: 10_080, cacheRead: 35_000, cacheWrite: 5_000, cost: 0.02234 }, "session totals aggregate finalized assistant and nested tool usage exactly once");
@@ -974,7 +987,7 @@ assert.doesNotMatch(previews[0]?.[0] ?? "", /Cached 25K|◇ MCP 3/, "onboarding 
 assert.match(previews[0]?.[0] ?? "", /默认开启输入增强和极简输出.*以后可用 \/pi-mini-mode-settings 修改。/, "onboarding describes defaults accurately");
 assert.equal(customCalls, 0, "Keep defaults does not force a settings dialog");
 const savedDefaults = (await onboardingExtension.loadSettings(onboardingExtension.settingsPath(onboardingDir))).settings;
-assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true }, "Keep defaults persists every enabled field and completes onboarding");
+assert.deepEqual(savedDefaults, { ...onboardingExtension.DEFAULT_SETTINGS, onboardingCompleted: true, lastSeenVersion: onboardingExtension.PACKAGE_VERSION }, "Keep defaults persists every enabled field and completes onboarding");
 assert.deepEqual([...onboardingCommands.keys()], ["pi-mini-mode-settings"], "slash menu exposes only settings");
 
 const emptyFileDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-empty-onboarding-"));
@@ -1038,6 +1051,142 @@ for (const [name, choices, readError, writeError] of [
   assert.equal((await onboardingExtension.loadSettings(onboardingExtension.settingsPath(dir))).exists, false, `${name}: onboarding not persisted`);
   if (readError || writeError) assert.equal(notices.at(-1)?.level, "error", `${name}: failure is reported`);
 }
+
+// Update banner: strictly shown once on first empty terminal session after upgrading an existing install.
+assert.equal(extension.isNewerVersion("2.0.19", "2.0.18"), true);
+assert.equal(extension.isNewerVersion("2.0.18", "2.0.18"), false);
+assert.equal(extension.isNewerVersion("2.0.18", "2.0.19"), false);
+assert.equal(extension.isNewerVersion("2.0.19", undefined), true);
+
+const bannerDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-banner-"));
+process.env.PI_MINI_MODE_AGENT_DIR = bannerDir;
+await extension.saveSettings({
+  ...extension.DEFAULT_SETTINGS,
+  onboardingCompleted: true,
+  "pi-mini-mode-language": "zh",
+  lastSeenVersion: "2.0.18",
+}, extension.settingsPath(bannerDir));
+
+const makeBannerTui = () => {
+  const b = (children = []) => ({ children, render: () => [], invalidate() {} });
+  const d = b([b(), b(), b()]);
+  return {
+    doc: d,
+    tui: {
+      children: [d, b(), b(), b(), b([{ getText() {}, render: () => [], invalidate() {} }]), b(), b()],
+      requestRender() {},
+      terminal: { write() {} },
+    },
+  };
+};
+
+// 1) First terminal open after upgrade: renders Scheme C update banner and immediately persists lastSeenVersion.
+const bannerHandlers1 = new Map();
+extension.default({
+  events,
+  appendEntry() {},
+  on(name, handler) { bannerHandlers1.set(name, handler); },
+  registerCommand() {},
+  registerShortcut() {},
+});
+const { doc: bannerDoc1, tui: bannerTui1 } = makeBannerTui();
+let activeSessionId = "session-1";
+const bannerCtx1 = {
+  ...ctx,
+  cwd: bannerDir,
+  mode: "tui",
+  hasUI: true,
+  sessionManager: {
+    getBranch: () => [],
+    getSessionId: () => activeSessionId,
+  },
+  ui: {
+    ...ctx.ui,
+    onTerminalInput() { return () => {}; },
+    setWidget(_key, factory) { if (factory) factory(bannerTui1, theme); },
+    setFooter() {},
+    notify() {},
+    getEditorComponent() {},
+    setEditorComponent() {},
+    addAutocompleteProvider() {},
+  },
+};
+await bannerHandlers1.get("session_start")({}, bannerCtx1);
+const bannerSavedAfterFirst = (await extension.loadSettings(extension.settingsPath(bannerDir))).settings;
+assert.equal(bannerSavedAfterFirst.lastSeenVersion, extension.PACKAGE_VERSION, "lastSeenVersion is immediately updated on first session_start");
+const firstScreenRows = bannerDoc1.render(100).map(stripAnsi);
+const firstScreenText = firstScreenRows.join("\n");
+assert.match(firstScreenText, /pi-mini-mode v\d+\.\d+\.\d+ 更新摘要/, "Scheme C banner header is shown");
+assert.match(firstScreenText, /长会话折叠不卡顿/, "banner includes update item 1");
+assert.match(firstScreenText, /思考场景 Token 速度准确度修复/, "banner includes update item 2");
+assert.match(firstScreenText, /原生支持 pi -p 子代理过程树与分步用量/, "banner includes update item 3");
+assert.ok(firstScreenRows[0]?.startsWith("╭") && firstScreenRows.at(-1)?.startsWith("╰"), "Scheme C uses rounded thin box borders");
+
+// Clicking header folds and expands the update banner.
+bannerDoc1.handleMouse({ type: "click", button: "left", x: 6, y: 1, clickCount: 1 });
+const foldedRows = bannerDoc1.render(100).map(stripAnsi);
+assert.equal(foldedRows.length, 3, "folded banner collapses to 3-row compact box");
+assert.match(foldedRows[1], /\[展开\]/, "folded banner header shows expand affordance");
+assert.doesNotMatch(foldedRows.join("\n"), /长会话折叠不卡顿/, "folded banner hides item descriptions");
+bannerDoc1.handleMouse({ type: "click", button: "left", x: 6, y: 1, clickCount: 1 });
+assert.match(bannerDoc1.render(100).map(stripAnsi).join("\n"), /长会话折叠不卡顿/, "clicking header again expands the banner");
+
+// 2) Second terminal open (new extension instance reading the same updated config): never shows the banner again.
+const bannerHandlers2 = new Map();
+extension.default({
+  events: { on() { return () => {}; } },
+  appendEntry() {},
+  on(name, handler) { bannerHandlers2.set(name, handler); },
+  registerCommand() {},
+  registerShortcut() {},
+});
+const { doc: bannerDoc2, tui: bannerTui2 } = makeBannerTui();
+const bannerCtx2 = {
+  ...bannerCtx1,
+  ui: {
+    ...bannerCtx1.ui,
+    setWidget(_key, factory) { if (factory) factory(bannerTui2, theme); },
+  },
+};
+await bannerHandlers2.get("session_start")({}, bannerCtx2);
+assert.deepEqual(bannerDoc2.render(100), [], "second terminal open does not render the update banner");
+
+// 3) Same process /new switches to a new session: banner disappears.
+activeSessionId = "session-2";
+await bannerHandlers1.get("session_start")({}, bannerCtx1);
+assert.deepEqual(bannerDoc1.render(100), [], "/new session switch clears the update banner");
+
+// 4) Fresh install (config file does not exist): does not show banner on first launch and records lastSeenVersion.
+const freshBannerDir = await mkdtemp(join(tmpdir(), "pi-mini-mode-fresh-banner-"));
+process.env.PI_MINI_MODE_AGENT_DIR = freshBannerDir;
+const freshHandlers = new Map();
+extension.default({
+  events: { on() { return () => {}; } },
+  appendEntry() {},
+  on(name, handler) { freshHandlers.set(name, handler); },
+  registerCommand() {},
+  registerShortcut() {},
+});
+const { doc: freshDoc, tui: freshTui } = makeBannerTui();
+const freshCtx = {
+  ...bannerCtx1,
+  cwd: freshBannerDir,
+  ui: {
+    ...bannerCtx1.ui,
+    setWidget(_key, factory) { if (factory) factory(freshTui, theme); },
+    async select() { return "保留默认"; },
+  },
+};
+await freshHandlers.get("session_start")({}, freshCtx);
+assert.deepEqual(freshDoc.render(100), [], "fresh install does not show update banner on first launch");
+const freshSaved = (await extension.loadSettings(extension.settingsPath(freshBannerDir))).settings;
+assert.equal(freshSaved.lastSeenVersion, extension.PACKAGE_VERSION, "fresh install records lastSeenVersion");
+bannerHandlers1.get("session_shutdown")?.({}, bannerCtx1);
+bannerHandlers2.get("session_shutdown")?.({}, bannerCtx2);
+freshHandlers.get("session_shutdown")?.({}, freshCtx);
+
+await rm(bannerDir, { recursive: true, force: true });
+await rm(freshBannerDir, { recursive: true, force: true });
 
 await rm(configDir, { recursive: true, force: true });
 await rm(runtimeDir, { recursive: true, force: true });
