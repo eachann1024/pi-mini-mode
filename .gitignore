@@ -5,3 +5,13 @@ node_modules/
 dist/
 .npmrc
 .mcp.json
+
+# Added by maotou cleanup
+tmp/
+.cache/
+*.tmp
+*.dump
+*.har
+debug*
+*.debug
+*.trace
