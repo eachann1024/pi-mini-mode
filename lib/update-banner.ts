@@ -3,7 +3,7 @@ import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works
 import { readFileSync } from "node:fs";
 import type { UiLanguage } from "./settings.ts";
 
-export const UPDATE_RELEASE_DATE = "2026-11-05";
+export const UPDATE_RELEASE_DATE = "2026-11-17";
 const MIN_BANNER_VERSION = "2.0.19";
 
 export function isNewerVersion(current: string, previous?: string): boolean {
@@ -46,6 +46,24 @@ interface ReleaseEntry {
 }
 
 export const RELEASE_HISTORY: readonly ReleaseEntry[] = [
+  {
+    version: "2.0.21",
+    date: "2026-11-17",
+    zh: {
+      highlights: "排障调查与多方案决策支持圆角语义胶囊与底部快速选方案，日常对话保持零干扰。",
+      features: [
+        "语义诊断胶囊：按需高亮「亲眼确认」「合理推测」「? 还没查」等可信度标签，支持圆角胶囊与方角纯色块切换",
+        "底部方案速选栏：存在多方案待拍板时支持上下键或点击一键发送，直接打字互不干扰",
+      ],
+    },
+    en: {
+      highlights: "On-demand semantic diagnostic pills and a quick option picker for investigations, keeping normal chat untouched.",
+      features: [
+        "Semantic diagnostic pills highlight Observed, Inferred, and Unverified claims with rounded or square terminal styles",
+        "Bottom decision dock lets you pick numbered options via Up/Down or click without blocking freeform typing",
+      ],
+    },
+  },
   {
     version: "2.0.20",
     date: "2026-11-05",

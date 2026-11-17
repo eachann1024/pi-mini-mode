@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-type RGB = [number, number, number];
-function ansiColor(ansi: string): RGB | undefined {
+export type RGB = [number, number, number];
+export function ansiColor(ansi: string): RGB | undefined {
   const rgb = ansi.match(/(?:38|48);2;(\d+);(\d+);(\d+)/);
   if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
   const indexed = ansi.match(/(?:38|48);5;(\d+)/);

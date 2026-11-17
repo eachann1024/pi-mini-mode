@@ -1,5 +1,6 @@
 import { Marked, Markdown, visibleWidth, type DefaultTextStyle, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { render } from "grok-mermaid";
+import { renderSemanticBadge, transformSemanticBadges, type BadgeStyle, type BadgeThemeLike } from "./semantic-badges.ts";
 
 const parser = new Marked();
 
@@ -15,7 +16,16 @@ const REGISTERED_LANGUAGES = new Set([
 ]);
 const ANSI_FOREGROUND = /\x1b\[(?:38;(?:2;\d+;\d+;\d+|5;\d+)|3[0-9]|9[0-7])m/g;
 
-export function minimalMarkdownTheme(base: MarkdownTheme, codeBackground = ""): MarkdownTheme {
+export interface SemanticBadgeRenderOptions {
+  theme: BadgeThemeLike;
+  style?: BadgeStyle;
+}
+
+export function minimalMarkdownTheme(
+  base: MarkdownTheme,
+  codeBackground = "",
+  badges?: SemanticBadgeRenderOptions,
+): MarkdownTheme {
   // Inline prose arrives with its default foreground already applied. Remove
   // those foreground codes before wrapping, otherwise they override emphasis.
   const emphasis = (text: string) => base.heading(text.replace(/\x1b\[(?:38;(?:2;\d+;\d+;\d+|5;\d+)|3[0-9]|9[0-7])m/g, ""));
@@ -23,6 +33,7 @@ export function minimalMarkdownTheme(base: MarkdownTheme, codeBackground = ""): 
   const neutralCode = (text: string) => base.codeBlock(text).replace(ANSI_FOREGROUND, "");
   return {
     ...base,
+    code: text => (badges ? renderSemanticBadge(text, badges.theme, badges.style ?? "round") : undefined) ?? base.code(text),
     bold: text => emphasis(base.bold(text)),
     italic: text => emphasis(base.italic(text)),
     codeBlock: neutralCode,
@@ -40,9 +51,16 @@ export function minimalMarkdownTheme(base: MarkdownTheme, codeBackground = ""): 
 
 /** Render Markdown with A's code-only background, after native wrapping has settled. */
 export function renderMinimalMarkdown(source: string, width: number, base: MarkdownTheme, codeBackground: string,
-  defaultTextStyle?: DefaultTextStyle, transform?: (source: string, available: number) => string): string[] {
-  const rows = new Markdown(source, 0, 0, minimalMarkdownTheme(base, codeBackground), defaultTextStyle,
-    transform ? { transform } : undefined).render(width);
+  defaultTextStyle?: DefaultTextStyle, transform?: (source: string, available: number) => string,
+  badges?: SemanticBadgeRenderOptions): string[] {
+  const combinedTransform = badges
+    ? (raw: string, available: number) => {
+        const next = transform ? transform(raw, available) : raw;
+        return transformSemanticBadges(next);
+      }
+    : transform;
+  const rows = new Markdown(source, 0, 0, minimalMarkdownTheme(base, codeBackground, badges), defaultTextStyle,
+    combinedTransform ? { transform: combinedTransform } : undefined).render(width);
   if (!codeBackground) return rows;
   return rows.map(row => row.startsWith(codeBackground)
     ? `${row}${" ".repeat(Math.max(0, width - visibleWidth(row)))}\x1b[49m`
