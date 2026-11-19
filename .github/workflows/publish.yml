@@ -44,7 +44,7 @@ jobs:
           if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' 2>/dev/null; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            node_bin="$(find "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/node" -maxdepth 3 -type d -path '*/24.*/*/bin' 2>/dev/null | sort -V | tail -n 1)"
+            node_bin="$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"/node/24.*/*/bin 2>/dev/null | sort -V | tail -n 1 || true)"
             if [ -n "$node_bin" ]; then
               echo "$node_bin" >> "$GITHUB_PATH"
               echo "found=true" >> "$GITHUB_OUTPUT"
@@ -82,14 +82,13 @@ jobs:
           if [ "$(npm --version | cut -d. -f1)" -lt 11 ]; then
             npm install --global npm@11 --registry=https://registry.npmjs.org --no-audit --no-fund
           fi
-      - name: Cache npm
+      - name: Cache node_modules
+        id: cache-deps
         if: steps.plan.outputs.action == 'publish'
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            npm-${{ runner.os }}-
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('package-lock.json') }}
       - name: Prepare release commit
         id: commit
         if: steps.plan.outputs.action == 'publish'
@@ -104,8 +103,9 @@ jobs:
             git commit -m "chore(release): v$VERSION [skip ci]"
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - run: npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
-        if: steps.plan.outputs.action == 'publish'
+      - name: Install dependencies
+        if: steps.plan.outputs.action == 'publish' && steps.cache-deps.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
         if: steps.plan.outputs.action == 'publish'
       - name: Pack and tag the exact release source

@@ -48,7 +48,7 @@ jobs:
           if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' 2>/dev/null; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            node_bin="$(find "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/node" -maxdepth 3 -type d -path '*/24.*/*/bin' 2>/dev/null | sort -V | tail -n 1)"
+            node_bin="$(ls -d "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"/node/24.*/*/bin 2>/dev/null | sort -V | tail -n 1 || true)"
             if [ -n "$node_bin" ]; then
               echo "$node_bin" >> "$GITHUB_PATH"
               echo "found=true" >> "$GITHUB_OUTPUT"
@@ -60,12 +60,13 @@ jobs:
         if: steps.node.outputs.found != 'true'
         with:
           node-version: '24'
-      - name: Cache npm
+      - name: Cache node_modules
+        id: cache-deps
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            npm-${{ runner.os }}-
-      - run: npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
