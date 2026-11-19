@@ -76,19 +76,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/release"
           npm pack "$NAME@$VERSION" --pack-destination "$RUNNER_TEMP/release"
           gh release create "v$VERSION" "$RUNNER_TEMP"/release/*.tgz --verify-tag --title "v$VERSION" --generate-notes
-      - name: Ensure npm >= 11
+      - name: Ensure npm >= 11.5.1 for OIDC Trusted Publishing
         if: steps.plan.outputs.action == 'publish'
         run: |
-          if [ "$(npm --version | cut -d. -f1)" -lt 11 ]; then
+          if ! node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$(npm --version)"; then
             npm install --global npm@11 --registry=https://registry.npmjs.org --no-audit --no-fund
           fi
-      - name: Cache node_modules
-        id: cache-deps
+      - name: Cache npm
         if: steps.plan.outputs.action == 'publish'
         uses: actions/cache@v4
         with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('package-lock.json') }}
+          path: ~/.npm
+          key: publish-npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json', 'package-lock.json') }}
+          restore-keys: |
+            publish-npm-${{ runner.os }}-${{ runner.arch }}-
       - name: Prepare release commit
         id: commit
         if: steps.plan.outputs.action == 'publish'
@@ -104,8 +105,8 @@ jobs:
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
-        if: steps.plan.outputs.action == 'publish' && steps.cache-deps.outputs.cache-hit != 'true'
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        if: steps.plan.outputs.action == 'publish'
+        run: npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
       - run: npm run check
         if: steps.plan.outputs.action == 'publish'
       - name: Pack and tag the exact release source
