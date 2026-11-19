@@ -42,12 +42,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Cache Node 24
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.tool_cache }}/node/24.*
-          key: node-24-${{ runner.os }}-${{ runner.arch }}
+      - name: Use preinstalled Node 24
+        id: node
+        run: |
+          if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' 2>/dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            node_bin="$(find "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/node" -maxdepth 3 -type d -path '*/24.*/*/bin' 2>/dev/null | sort -V | tail -n 1)"
+            if [ -n "$node_bin" ]; then
+              echo "$node_bin" >> "$GITHUB_PATH"
+              echo "found=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
       - uses: actions/setup-node@v4
+        if: steps.node.outputs.found != 'true'
         with:
           node-version: '24'
       - name: Cache npm

@@ -38,15 +38,30 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Cache Node 24
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.tool_cache }}/node/24.*
-          key: node-24-${{ runner.os }}-${{ runner.arch }}
+      - name: Use preinstalled Node 24
+        id: node
+        run: |
+          if node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' 2>/dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            node_bin="$(find "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}/node" -maxdepth 3 -type d -path '*/24.*/*/bin' 2>/dev/null | sort -V | tail -n 1)"
+            if [ -n "$node_bin" ]; then
+              echo "$node_bin" >> "$GITHUB_PATH"
+              echo "found=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
       - uses: actions/setup-node@v4
+        if: steps.node.outputs.found != 'true'
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
+      - name: Configure npm auth when using preinstalled Node
+        if: steps.node.outputs.found == 'true'
+        run: |
+          printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\nregistry=https://registry.npmjs.org/\n' > "$RUNNER_TEMP/.npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc" >> "$GITHUB_ENV"
       - name: Decide version
         id: plan
         run: node .github/scripts/pi-release.mjs
