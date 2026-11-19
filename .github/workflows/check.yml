@@ -3,8 +3,30 @@ name: Check
 on:
   push:
     branches: [main]
+    paths:
+      - 'extensions/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'themes/**'
+      - '!themes/README.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/check.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'extensions/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'themes/**'
+      - '!themes/README.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '.github/workflows/check.yml'
   workflow_dispatch:
 
 permissions:
@@ -20,9 +42,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Node 24
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/node/24.*
+          key: node-24-${{ runner.os }}-${{ runner.arch }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-      - run: npm ci --ignore-scripts
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
       - run: npm run check
