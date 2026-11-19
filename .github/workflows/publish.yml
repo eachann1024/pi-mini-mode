@@ -38,6 +38,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+      - name: Cache Node 24
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/node/24.*
+          key: node-24-${{ runner.os }}-${{ runner.arch }}
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -56,8 +61,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/release"
           npm pack "$NAME@$VERSION" --pack-destination "$RUNNER_TEMP/release"
           gh release create "v$VERSION" "$RUNNER_TEMP"/release/*.tgz --verify-tag --title "v$VERSION" --generate-notes
-      - run: npm install --global npm@11 --registry=https://registry.npmjs.org
+      - name: Ensure npm >= 11
         if: steps.plan.outputs.action == 'publish'
+        run: |
+          if [ "$(npm --version | cut -d. -f1)" -lt 11 ]; then
+            npm install --global npm@11 --registry=https://registry.npmjs.org --no-audit --no-fund
+          fi
+      - name: Cache npm
+        if: steps.plan.outputs.action == 'publish'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
       - name: Prepare release commit
         id: commit
         if: steps.plan.outputs.action == 'publish'
@@ -72,7 +89,7 @@ jobs:
             git commit -m "chore(release): v$VERSION [skip ci]"
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
         if: steps.plan.outputs.action == 'publish'
       - run: npm run check
         if: steps.plan.outputs.action == 'publish'
