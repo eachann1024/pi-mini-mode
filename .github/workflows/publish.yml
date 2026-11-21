@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: npm-release-${{ github.repository }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   RELEASE_PATHS: extensions lib themes package.json package-lock.json
