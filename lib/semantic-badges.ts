@@ -120,7 +120,9 @@ export function isDecisionBadgeText(source: string): boolean {
   return false;
 }
 
-function transformInlineSegment(line: string): string {
+type BadgeRewrite = (candidate: string, parsed: ParsedSemanticBadge, inCode: boolean) => string | undefined;
+
+function rewriteInlineSegment(line: string, rewrite: BadgeRewrite): string {
   let result = "";
   let index = 0;
   while (index < line.length) {
@@ -133,7 +135,9 @@ function transformInlineSegment(line: string): string {
         result += line.slice(index);
         break;
       }
-      result += line.slice(index, close + ticks);
+      const inner = line.slice(index + ticks, close).trim();
+      const parsed = inner.length <= 34 ? parseSemanticBadge(inner) : undefined;
+      result += (parsed && rewrite(inner, parsed, true)) ?? line.slice(index, close + ticks);
       index = close + ticks;
       continue;
     }
@@ -142,8 +146,9 @@ function transformInlineSegment(line: string): string {
       if (close > index + 1 && close - index <= 34) {
         const next = line[close + 1] ?? "";
         const candidate = line.slice(index, close + 1);
-        if (next !== "(" && next !== "[" && next !== ":" && parseSemanticBadge(candidate)) {
-          result += `\`${candidate}\``;
+        const parsed = next !== "(" && next !== "[" && next !== ":" ? parseSemanticBadge(candidate) : undefined;
+        if (parsed) {
+          result += rewrite(candidate, parsed, false) ?? candidate;
           index = close + 1;
           continue;
         }
@@ -155,8 +160,8 @@ function transformInlineSegment(line: string): string {
   return result;
 }
 
-/** Wrap standalone semantic badge tokens outside code fences and links into inline code spans. */
-export function transformSemanticBadges(source: string): string {
+/** Apply a badge rewrite to prose lines, leaving fenced code blocks and reference definitions alone. */
+function rewriteSemanticBadges(source: string, rewrite: BadgeRewrite): string {
   if (!source.includes("[")) return source;
   const lines = source.split("\n");
   let fenceChar = "";
@@ -178,9 +183,33 @@ export function transformSemanticBadges(source: string): string {
       continue;
     }
     if (fenceChar || /^ {0,3}\[[^\]]+\]:/.test(line) || !line.includes("[")) continue;
-    lines[i] = transformInlineSegment(line);
+    lines[i] = rewriteInlineSegment(line, rewrite);
   }
   return lines.join("\n");
+}
+
+/** Wrap standalone semantic badge tokens outside code fences and links into inline code spans. */
+export function transformSemanticBadges(source: string): string {
+  return rewriteSemanticBadges(source, (candidate, _parsed, inCode) => (inCode ? undefined : `\`${candidate}\``));
+}
+
+const PLAIN_ICON: Record<BadgeTone, string> = {
+  success: "✅", error: "❌", warning: "❓", action: "👉", info: "🔎", muted: "⏭️",
+};
+
+/** Emoji + text form of a badge for surfaces that cannot paint pills. */
+export function plainBadgeLabel(parsed: ParsedSemanticBadge): string {
+  const raw = parsed.label.trim();
+  const text = raw.replace(/^(?:[✓✔★×✕?？●⑂~»⏭!]\s*)+/u, "").trim() || raw;
+  let icon = PLAIN_ICON[parsed.tone];
+  if (raw.startsWith("★")) icon = "⭐";
+  else if (parsed.tone === "error" && raw.startsWith("!")) icon = "⚠️";
+  return `${icon} ${text}`;
+}
+
+/** Degrade badge tokens (bare or backtick-wrapped) to bold emoji text, e.g. history shown without pills. */
+export function plainSemanticBadges(source: string): string {
+  return rewriteSemanticBadges(source, (_candidate, parsed) => `**${plainBadgeLabel(parsed)}**`);
 }
 
 const DARK_PALETTE: Record<BadgeTone, { bg: RGB; fg: RGB }> = {
@@ -255,20 +284,4 @@ export function renderSemanticBadge(raw: string, theme: BadgeThemeLike, style: B
     return `\x1b[49m${capFg}${CAP_LEFT}${bgCode}${fgCode}\x1b[1m${parsed.label}\x1b[22m\x1b[49m${capFg}${CAP_RIGHT}\x1b[39m`;
   }
   return `${bgCode}${fgCode}\x1b[1m ${parsed.label} \x1b[22m\x1b[49m\x1b[39m`;
-}
-
-export const TRIAGE_PROMPT_MARKER = "<!-- pi-mini-mode:semantic-triage -->";
-
-export const TRIAGE_SYSTEM_PROMPT = `${TRIAGE_PROMPT_MARKER}
-## Diagnostic & Trade-off Reporting (on-demand only)
-Keep routine edits, coding tasks, and simple Q&A completely normal—do not add scoreboards, badges, or option menus to ordinary replies.
-ONLY when investigating a failure/bug, auditing deployment/change risks, or presenting trade-off options that require a user decision:
-1. Open with a one-sentence plain conclusion stating what stopped/happened and whether the current system is safe.
-2. When multiple checks/stages apply, summarize status on one line with inline badge spans: \`[✓ 正常 N]\` \`[× 失败 N]\` \`[? 还没查 N]\` \`[● 等你定 1]\` (or English \`[✓ Done N]\` \`[× Failed N]\` \`[? Unverified N]\` \`[● Needs you 1]\`).
-3. Separate evidence certainty in a \`├─\` / \`└─\` list using \`[!亲眼确认]\` (\`[!Observed]\`), \`[!合理推测]\` (\`[!Inferred]\`), and \`[? 还没查]\` (\`[? Unverified]\`), and flag cross-module impact with \`[!影响范围]\` (\`[!Shared]\`).
-4. When asking the user to choose between 2–4 options, include \`[● 等你定 1]\` (or \`[● Needs you 1]\`), list numbered options \`1. **Title** \`[★ 推荐]\` — trade-off\` (mark risky ones \`[! 高风险]\` / \`[! Destructive]\`), and propose a safe, reversible next step.`;
-
-export function appendTriageGuidance(systemPrompt: string): string {
-  if (!systemPrompt || systemPrompt.includes(TRIAGE_PROMPT_MARKER)) return systemPrompt;
-  return `${systemPrompt}\n\n${TRIAGE_SYSTEM_PROMPT}`;
 }

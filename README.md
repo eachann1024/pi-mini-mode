@@ -80,7 +80,7 @@ Enable **Minimal output** in `/pi-mini-mode-settings`.
 - **Tool details on demand.** Expand a tool or thinking entry, including the latest thinking, using its fold control. Thinking starts collapsed and only expands or collapses manually, including while running. Tool details show saved text, not the original custom renderer or image output.
 - **Readable summaries.** Long tool rows keep the command beginning and put the ellipsis at the end; expanding reveals the complete long or multiline input. Live thinking follows the latest returned summary, while completed thinking previews its beginning and expands to the full received text. Empty summaries show their actual state without repeating a tool command; failures and interruptions stop the thinking clock.
 - **Room for the answer.** Final Markdown streams without extra headings or backgrounds. Failures and interruptions stay explicit. Folding changes presentation, not stored session messages.
-- **Diagnostic pills & quick option picker.** During root-cause investigations and trade-off decisions, evidence certainty (`Observed`, `Inferred`, `? Unverified`) renders as rounded or square semantic pills, and numbered choices appear in a bottom picker (`↑/↓` or click to send, while typing freely in the editor stays unobstructed). Routine chat stays plain.
+- **Surface-aware investigation replies.** Only for root-cause investigations, risk reviews and real decisions, replies open with a one-line verdict and separate `Observed` / `Inferred` / `Unverified` evidence and options. The format follows the viewer: in the fullscreen minimal transcript markers render as rounded or square pills and numbered choices appear in a bottom picker (`↑/↓` or click to send); GUI hosts such as T3 Code, Pi's native transcript and other RPC clients get emoji + bold Markdown instead of raw tags. The guide is a structured system-prompt section, so it never forces a full prompt rewrite. Routine chat stays plain.
 
 Turn **Minimal output** off in settings to restore native Pi history.
 
@@ -155,6 +155,7 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
   "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-semantic-badges": true,
   "pi-mini-mode-badge-style": "round",
+  "pi-mini-mode-report-guide": true,
   "pi-mini-mode-input-enhancements": true,
   "onboardingCompleted": true
 }
@@ -178,7 +179,8 @@ Settings are stored globally at Pi's agent directory (normally `~/.pi/agent/pi-m
 | `pi-mini-mode-speed-show` | `true` | Generation speed at the far right |
 | `pi-mini-mode-speed-unit-show` | `true` | Generation-speed sub-setting: append `tok/s` to the numeric value |
 | `pi-mini-mode-minimal-show` | `true` | Minimal output; off restores Pi's default conversation history |
-| `pi-mini-mode-semantic-badges` | `true` | On-demand semantic diagnostic pills and bottom option picker |
+| `pi-mini-mode-semantic-badges` | `true` | Paint status markers as pills plus the bottom option picker in the fullscreen minimal transcript; off shows emoji + bold |
+| `pi-mini-mode-report-guide` | `true` | Ask for structured investigation/decision replies, formatted for the current surface; off injects nothing |
 | `pi-mini-mode-badge-style` | `"round"` | Diagnostic pill shape: `"round"` (Powerline caps) or `"square"` |
 | `pi-mini-mode-input-enhancements` | `true` | Image previews, inline skills, and message file links |
 | `onboardingCompleted` | `false` initially | Internal marker that prevents another first-run prompt |

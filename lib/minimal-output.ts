@@ -6,7 +6,7 @@ import { assistantImageSpans, clearAssistantImageCaches, createAssistantImages, 
 import { clearFileLinkCaches, linkToolFiles } from "./file-links.ts";
 import { createLinkHover } from "./link-hover.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "./minimal-markdown.ts";
-import type { BadgeStyle } from "./semantic-badges.ts";
+import { plainSemanticBadges, type BadgeStyle } from "./semantic-badges.ts";
 import { minimalSurface, paintExpandedHeading } from "./minimal-theme.ts";
 import { formatElapsed, formatThinkingElapsed, formatToolElapsed, piLoopSummary, type MinimalTurn } from "./minimal-turns.ts";
 import { clearPrintAgentCaches } from "./print-agent.ts";
@@ -142,7 +142,10 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
     const hit = lruGet(markdownCache, key);
     if (hit !== undefined) return [...hit];
     const rows = renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
-      { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(placeholderText(diagramMarkdown(source, available))),
+      { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => {
+        const next = transformText(placeholderText(diagramMarkdown(source, available)));
+        return !process && !badgeCfg.enabled ? plainSemanticBadges(next) : next;
+      },
       badgeCfg.enabled ? { theme, style: badgeCfg.style } : undefined);
     lruSet(markdownCache, key, rows);
     return [...rows];

@@ -16,7 +16,8 @@ import { statusLine } from "../lib/footer-line.ts";
 import { contentText, minimalTurnsFromBranch, processText, pushProcess, skillNames, type MinimalTurn } from "../lib/minimal-turns.ts";
 import { minimalOutputComponent } from "../lib/minimal-output.ts";
 import { createDecisionDock, extractDecisionPrompt } from "../lib/decision-dock.ts";
-import { appendTriageGuidance, isBadgeStyle } from "../lib/semantic-badges.ts";
+import { isBadgeStyle, plainSemanticBadges } from "../lib/semantic-badges.ts";
+import { applyReportGuide, resolveReportProfile } from "../lib/report-guide.ts";
 import { createThinkingStream } from "../lib/thinking-stream.ts";
 import { PACKAGE_VERSION, isNewerVersion } from "../lib/update-banner.ts";
 
@@ -28,7 +29,8 @@ export { SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 export { isPlannotatorPlanningStatus, planCapsule, settingsPreviewLine, statusLine } from "../lib/footer-line.ts";
 export { formatElapsed, formatToolElapsed, formatThinkingElapsed, minimalTurnsFromBranch, type MinimalTurn, type ThinkingClock } from "../lib/minimal-turns.ts";
 export { minimalOutputComponent } from "../lib/minimal-output.ts";
-export { isBadgeStyle, parseSemanticBadge, renderSemanticBadge, transformSemanticBadges, appendTriageGuidance, type BadgeStyle, type BadgeTone } from "../lib/semantic-badges.ts";
+export { isBadgeStyle, parseSemanticBadge, plainSemanticBadges, renderSemanticBadge, transformSemanticBadges, type BadgeStyle, type BadgeTone } from "../lib/semantic-badges.ts";
+export { applyReportGuide, reportGuide, resolveReportProfile, REPORT_SECTION, type ReportProfile } from "../lib/report-guide.ts";
 export { extractDecisionPrompt, createDecisionDock, type DecisionChoice, type DecisionPrompt } from "../lib/decision-dock.ts";
 export { PACKAGE_VERSION, UPDATE_RELEASE_DATE, isNewerVersion, renderUpdateBanner } from "../lib/update-banner.ts";
 
@@ -94,7 +96,11 @@ export default function (pi: ExtensionAPI) {
   let liveCtx: ExtensionContext | undefined;
   let messageCwd = process.cwd();
   const messageLinks = (text: string) => settings["pi-mini-mode-input-enhancements"] ? linkMessageFiles(text, messageCwd) : text;
-  pi.registerMarkdownTransformer?.(messageLinks);
+  // Pi's native transcript cannot paint pills, so legacy badge tokens degrade to bold emoji text there.
+  pi.registerMarkdownTransformer?.((text, info) => {
+    const linked = messageLinks(text);
+    return info?.messageType === "assistant" ? plainSemanticBadges(linked) : linked;
+  });
   let saveChain: Promise<void> = Promise.resolve();
   const configPath = settingsPath();
   let updateBannerChecked = false;
@@ -110,9 +116,16 @@ export default function (pi: ExtensionAPI) {
     onSubmit: (replyText) => pi.sendUserMessage?.(replyText),
     requestRender: () => refreshMinimalOutput(),
   });
+  /**
+   * Pills and the decision dock exist only while the minimal fullscreen transcript is mounted;
+   * RPC/GUI hosts, Pi's native transcript and non-fullscreen TUI all show plain Markdown.
+   */
+  const capsulesRendered = (ctx: Pick<ExtensionContext, "mode"> | undefined) =>
+    settings["pi-mini-mode-minimal-show"] && settings["pi-mini-mode-semantic-badges"] && !nativeOutput
+      && ctx?.mode === "tui" && Boolean(restoreTranscript);
   const syncDecisionDock = () => {
     const lastTurn = minimalTurns.at(-1);
-    const enabled = settings["pi-mini-mode-minimal-show"] && settings["pi-mini-mode-semantic-badges"] && !nativeOutput && liveCtx?.mode === "tui";
+    const enabled = capsulesRendered(liveCtx);
     const prompt = enabled && !activeMinimalTurn?.running && lastTurn && !lastTurn.running
       ? extractDecisionPrompt(lastTurn.final, minimalTurns.length - 1)
       : undefined;
@@ -611,14 +624,16 @@ export default function (pi: ExtensionAPI) {
     if (activeMinimalTurn) { refreshMinimalOutput(); return; }
     syncMinimalBranch(event, ctx);
   });
-  pi.on("before_agent_start", (event) => {
+  pi.on("before_agent_start", (event, ctx) => {
     if (activeMinimalTurn) {
       for (const name of skillNames(event.prompt)) pushProcess(activeMinimalTurn, "skill", name);
       refreshMinimalOutput();
     }
-    if (settings["pi-mini-mode-minimal-show"] && settings["pi-mini-mode-semantic-badges"] && !nativeOutput && typeof event.systemPrompt === "string" && event.systemPrompt) {
-      return { systemPrompt: appendTriageGuidance(event.systemPrompt) };
-    }
+    const profile = resolveReportProfile({
+      guideEnabled: settings["pi-mini-mode-report-guide"],
+      capsulesRendered: capsulesRendered(ctx ?? liveCtx),
+    });
+    return applyReportGuide(event, profile);
   });
   pi.on("ui_prompt_start", (event) => {
     activeUIPrompt = event;
