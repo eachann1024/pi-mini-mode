@@ -630,7 +630,8 @@ export default function (pi: ExtensionAPI) {
       refreshMinimalOutput();
     }
     const profile = resolveReportProfile({
-      guideEnabled: settings["pi-mini-mode-report-guide"],
+      // Headless runs (print/json: subagents, background forks) feed machines, not people.
+      guideEnabled: settings["pi-mini-mode-report-guide"] && Boolean((ctx ?? liveCtx)?.hasUI),
       capsulesRendered: capsulesRendered(ctx ?? liveCtx),
     });
     return applyReportGuide(event, profile);

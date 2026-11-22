@@ -46,7 +46,7 @@ export function reportGuide(profile: ReportProfile): string {
   return `${SCOPE}\n${profile === "capsule" ? CAPSULE : MARKDOWN}`;
 }
 
-type PromptOptionsLike = { sections?: Record<string, string> } | undefined;
+type PromptOptionsLike = { sections?: Record<string, string>; forceSystemPrompt?: string } | undefined;
 
 /**
  * Install (or remove) the guide for one run.
@@ -58,7 +58,8 @@ export function applyReportGuide(
   profile: ReportProfile | undefined,
 ): { systemPrompt: string } | undefined {
   const options = event.systemPromptOptions as PromptOptionsLike;
-  if (options && options.sections && typeof options.sections === "object") {
+  // A forced prompt (set by an earlier handler) ignores sections, so append to it instead.
+  if (options && options.sections && typeof options.sections === "object" && options.forceSystemPrompt === undefined) {
     if (profile) options.sections[REPORT_SECTION] = reportGuide(profile);
     else delete options.sections[REPORT_SECTION];
     return undefined;
