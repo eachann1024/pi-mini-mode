@@ -79,7 +79,6 @@ pi install git:github.com/eachann1024/pi-mini-mode
 - **过程是一棵树，而非满屏输出。** 思考、工具与技能读取汇入同一棵时间顺序树，显示最新摘要，包括最新一条思考；`Ctrl+O` 展开／收起完整过程，新问题默认收起。
 - **工具详情，按需展开。** 点击工具或思考条目的折叠控件，最新一条思考也可以展开。思考默认收起，进行中与结束后均只由手动操作展开或收起。工具详情展示保存的文本，不还原原生自定义渲染器或图片输出。
 - **把空间留给答案。** 最终 Markdown 流式呈现，不添加额外标题或背景。失败和中断明确标记；折叠只改变显示，不删除原始会话消息。
-- **按显示位置适配的排障汇报。** 只在排查故障、风险审查或真正需要拍板时，让回复先给一句结论，再区分「亲眼确认」「合理推测」「还没查」与可选方案。格式跟随显示位置：全屏极简输出里渲染为圆角或方角彩色胶囊，并在输入框上方提供上下键与点击速选；T3 Code 等图形界面、Pi 原生输出和其他 RPC 客户端改用表情加粗体，不再出现生硬的方括号标签。说明以结构化系统提示词分段注入，不会整段改写提示词；日常对话保持原样。
 
 在设置中关闭 **极简输出** 即恢复 Pi 原生历史。
 
@@ -144,9 +143,6 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500
   "pi-mini-mode-speed-show": true,
   "pi-mini-mode-speed-unit-show": true,
   "pi-mini-mode-minimal-show": true,
-  "pi-mini-mode-semantic-badges": true,
-  "pi-mini-mode-badge-style": "round",
-  "pi-mini-mode-report-guide": true,
   "pi-mini-mode-input-enhancements": true,
   "onboardingCompleted": true
 }
@@ -170,9 +166,6 @@ deepseek-v4-flash  high  Total 45K  Cached 25K  CH 40.0%  $0.012  ◇ MCP 3  500
 | `pi-mini-mode-speed-show` | `true` | 显示最新生成速度 |
 | `pi-mini-mode-speed-unit-show` | `true` | 速度子设置：在数字后追加 `tok/s` |
 | `pi-mini-mode-minimal-show` | `true` | 极简输出总开关；关闭则恢复 Pi 默认历史显示 |
-| `pi-mini-mode-semantic-badges` | `true` | 全屏极简输出中把状态标记渲染为胶囊并提供底部方案速选；关闭显示为表情加粗体 |
-| `pi-mini-mode-report-guide` | `true` | 排障与决策时按显示位置注入汇报格式说明；关闭则完全不注入 |
-| `pi-mini-mode-badge-style` | `"round"` | 胶囊样式：`"round"`（圆角）或 `"square"`（方角纯色块） |
 | `pi-mini-mode-input-enhancements` | `true` | 图片预览、行内技能补全与展开、消息文件链接 |
 | `onboardingCompleted` | 初始为 `false` | 防止再次显示首次设置提示的内部标记 |
 

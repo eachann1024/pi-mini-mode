@@ -3,7 +3,6 @@ import type { SettingItem } from "@earendil-works/pi-tui";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { isBadgeStyle, type BadgeStyle } from "./semantic-badges.ts";
 
 export const SETTINGS_FILE_NAME = "pi-mini-mode.json";
 
@@ -25,10 +24,6 @@ export interface MiniLensSettings {
   "pi-mini-mode-speed-unit-show": boolean;
   "pi-mini-mode-minimal-show": boolean;
   "pi-mini-mode-minimal-record-limit": number;
-  "pi-mini-mode-semantic-badges": boolean;
-  "pi-mini-mode-badge-style": BadgeStyle;
-  /** Ask the model for structured investigation/decision replies, formatted for the surface that shows them. */
-  "pi-mini-mode-report-guide": boolean;
   "pi-mini-mode-input-enhancements": boolean;
   "pi-mini-mode-image-preview": "hover" | "inline";
   onboardingCompleted: boolean;
@@ -70,9 +65,6 @@ export const DEFAULT_SETTINGS: Readonly<MiniLensSettings> = {
   "pi-mini-mode-speed-unit-show": true,
   "pi-mini-mode-minimal-show": true,
   "pi-mini-mode-minimal-record-limit": 6,
-  "pi-mini-mode-semantic-badges": true,
-  "pi-mini-mode-badge-style": "round",
-  "pi-mini-mode-report-guide": true,
   "pi-mini-mode-input-enhancements": true,
   "pi-mini-mode-image-preview": "inline",
   onboardingCompleted: false,
@@ -83,12 +75,10 @@ export const FOOTER_FIELDS = ["project-branch", "model", "thinking", "branch", "
 export const FOOTER_STYLE_OPTIONS = ["context-dots", "speed-unit"] as const;
 
 export const COPY = {
-  preview: "预览（示例数据）", minimal: "极简输出", semanticBadges: "语义诊断胶囊", reportGuide: "排障汇报格式",
+  preview: "预览（示例数据）", minimal: "极简输出",
   model: "显示模型", thinking: "显示思考等级", total: "显示会话总 token", cached: "显示会话缓存 token", miss: "显示缓存 miss", totalLabel: "Total", cachedLabel: "Cached", cacheHitLabel: "CH", cacheHit: "显示缓存命中率 (CH)", price: "显示会话价格", mcp: "显示已启用 MCP 服务器", context: "显示上下文 token 与进度条", dots: "↳ 使用点阵进度条", percent: "显示上下文百分比", speed: "显示最近生成速度", speedUnit: "↳ 显示 tok/s 单位", inputEnhancements: "输入增强",
   totalDescription: "Total：当前会话分支上的全部 token，含工具上报的 LLM 用量。", cachedDescription: "Cached：累计 cache-read + cache-write token（包含在 Total 中）。", cacheHitDescription: "CH（cache hit）：cache-read / (input + cache-read)。Cache write 不计入此比率。",
   enableMinimalDescription: "开启统一折叠思考、工具和技能过程；关闭恢复 Pi 默认会话历史。",
-  semanticBadgesDescription: "全屏极简输出下，把排障回复里的状态标记渲染成彩色胶囊，并在底部提供方案快速选择；关闭后标记显示为表情加粗体。",
-  reportGuideDescription: "仅在排障、风险审查或需要你拍板时，让模型先给一句结论、区分证据可信度并列出方案。格式自动适配显示位置：全屏终端用胶囊标记，T3 Code 等图形界面与原生输出用表情加粗体；日常对话不受影响。关闭则不再注入该说明。",
   inputEnhancementsDescription: "原生 Ctrl+V 粘贴图片（Windows/WSL：Alt+V）；图片显示为 [image1] 标签，默认在输入框上方显示内联卡片（可切换光标悬停模式）。空白后 / 选择技能并在光标处插入。左键用系统默认应用打开图片标签或文件路径；全屏右键在文件管理器中定位并选中该文件。预览及点击需终端支持。关闭仅恢复原生行为。",
   tuiRequired: "/pi-mini-mode-settings 需要 TUI 模式", saveFailed: "无法保存 Pi Mini Mode 设置", onboarding: "默认开启输入增强和极简输出；极简输出需要全屏模式。仅显示分支、缓存 token 和 MCP 服务数默认关闭。选择「打开浏览器设置」可调整字段、预览方式和功能开关；推荐配置会保存主题和全屏模式。以后可用 /pi-mini-mode-settings 修改。", keepDefaults: "保留默认", configureNow: "打开浏览器设置", applyRecommended: "应用推荐配置", chooseTheme: "选择主题（主题立即应用；全屏模式需重启 Pi）", themeSaved: "已保存主题和全屏模式。请重启 Pi 以启用全屏；项目设置或命令行参数可能覆盖全局设置。", themeSaveFailed: "无法保存推荐的 Pi 主题和全屏模式；未完成首次配置。", themeApplyFailed: "推荐设置已保存，但当前主题未能立即应用；请重启 Pi。",
 } as const;
@@ -114,8 +104,6 @@ export function parseSettings(value: unknown): MiniLensSettings {
   for (const id of SETTING_IDS) {
     if (id === "pi-mini-mode-image-preview") {
       if (candidate[id] === "hover" || candidate[id] === "inline") settings[id] = candidate[id];
-    } else if (id === "pi-mini-mode-badge-style") {
-      if (isBadgeStyle(candidate[id])) settings[id] = candidate[id];
     } else if (id === "pi-mini-mode-minimal-record-limit") {
       if (isRecordLimit(candidate[id])) settings[id] = candidate[id];
     } else if (isBoolean(candidate[id])) settings[id] = candidate[id];
@@ -165,6 +153,7 @@ export async function saveSettings(settings: MiniLensSettings, path = settingsPa
 export const LEGACY_MINIMAL_SETTING_IDS = [
   "pi-mini-mode-minimal-thinking-show", "pi-mini-mode-minimal-tools-show", "pi-mini-mode-minimal-output-show",
   "pi-mini-mode-minimal-skills-show", "pi-mini-mode-agent-usage-show", "pi-mini-mode-agent-shortcut-show",
+  "pi-mini-mode-semantic-badges", "pi-mini-mode-badge-style", "pi-mini-mode-report-guide",
 ] as const;
 
 export function isLegacyMinimalSetting(id: string): boolean {
@@ -173,14 +162,14 @@ export function isLegacyMinimalSetting(id: string): boolean {
 
 export function settingsItems(settings: MiniLensSettings): SettingItem[] {
   const values = ["on", "off"];
-  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "lastSeenVersion" | "footerOrder" | "pi-mini-mode-language" | "pi-mini-mode-image-preview" | "pi-mini-mode-badge-style" | "pi-mini-mode-minimal-record-limit">, string> = {
+  const labels: Record<Exclude<keyof MiniLensSettings, "onboardingCompleted" | "lastSeenVersion" | "footerOrder" | "pi-mini-mode-language" | "pi-mini-mode-image-preview" | "pi-mini-mode-minimal-record-limit">, string> = {
     "pi-mini-mode-project-branch-show": "显示项目名称和分支（互斥）",
     "pi-mini-mode-branch-show": "仅显示分支（思考等级后，互斥）",
-    "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-cache-miss-show": COPY.miss, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-semantic-badges": COPY.semanticBadges, "pi-mini-mode-report-guide": COPY.reportGuide, "pi-mini-mode-input-enhancements": COPY.inputEnhancements,
+    "pi-mini-mode-model-show": COPY.model, "pi-mini-mode-thinking-show": COPY.thinking, "pi-mini-mode-session-tokens-show": COPY.total, "pi-mini-mode-cache-tokens-show": COPY.cached, "pi-mini-mode-cache-miss-show": COPY.miss, "pi-mini-mode-ch-show": COPY.cacheHit, "pi-mini-mode-cost-show": COPY.price, "pi-mini-mode-mcp-show": COPY.mcp, "pi-mini-mode-context-show": COPY.context, "pi-mini-mode-context-dots-show": COPY.dots, "pi-mini-mode-context-percent-show": COPY.percent, "pi-mini-mode-speed-show": COPY.speed, "pi-mini-mode-speed-unit-show": COPY.speedUnit, "pi-mini-mode-minimal-show": COPY.minimal, "pi-mini-mode-input-enhancements": COPY.inputEnhancements,
   };
   return (Object.keys(labels) as Array<keyof typeof labels>).map((id) => ({
     id, label: labels[id],
-    description: id === "pi-mini-mode-minimal-show" ? COPY.enableMinimalDescription : id === "pi-mini-mode-semantic-badges" ? COPY.semanticBadgesDescription : id === "pi-mini-mode-report-guide" ? COPY.reportGuideDescription : id === "pi-mini-mode-input-enhancements" ? COPY.inputEnhancementsDescription : id === "pi-mini-mode-session-tokens-show" ? COPY.totalDescription : id === "pi-mini-mode-cache-tokens-show" ? COPY.cachedDescription : id === "pi-mini-mode-ch-show" ? COPY.cacheHitDescription : undefined,
+    description: id === "pi-mini-mode-minimal-show" ? COPY.enableMinimalDescription : id === "pi-mini-mode-input-enhancements" ? COPY.inputEnhancementsDescription : id === "pi-mini-mode-session-tokens-show" ? COPY.totalDescription : id === "pi-mini-mode-cache-tokens-show" ? COPY.cachedDescription : id === "pi-mini-mode-ch-show" ? COPY.cacheHitDescription : undefined,
     currentValue: settings[id] ? values[0] : values[1], values,
   }));
 }

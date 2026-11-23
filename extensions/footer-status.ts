@@ -15,9 +15,6 @@ import { addUsage, cacheWaste, EMPTY_USAGE, finiteNumber, formatSpeed, sessionUs
 import { statusLine } from "../lib/footer-line.ts";
 import { contentText, minimalTurnsFromBranch, processText, pushProcess, skillNames, type MinimalTurn } from "../lib/minimal-turns.ts";
 import { minimalOutputComponent } from "../lib/minimal-output.ts";
-import { createDecisionDock, extractDecisionPrompt } from "../lib/decision-dock.ts";
-import { isBadgeStyle, plainSemanticBadges } from "../lib/semantic-badges.ts";
-import { applyReportGuide, resolveReportProfile } from "../lib/report-guide.ts";
 import { createThinkingStream } from "../lib/thinking-stream.ts";
 import { PACKAGE_VERSION, isNewerVersion } from "../lib/update-banner.ts";
 
@@ -29,9 +26,6 @@ export { SPEED_REFRESH_MS } from "../lib/token-speed.ts";
 export { isPlannotatorPlanningStatus, planCapsule, settingsPreviewLine, statusLine } from "../lib/footer-line.ts";
 export { formatElapsed, formatToolElapsed, formatThinkingElapsed, minimalTurnsFromBranch, type MinimalTurn, type ThinkingClock } from "../lib/minimal-turns.ts";
 export { minimalOutputComponent } from "../lib/minimal-output.ts";
-export { isBadgeStyle, parseSemanticBadge, plainSemanticBadges, renderSemanticBadge, transformSemanticBadges, type BadgeStyle, type BadgeTone } from "../lib/semantic-badges.ts";
-export { applyReportGuide, reportGuide, resolveReportProfile, REPORT_SECTION, type ReportProfile } from "../lib/report-guide.ts";
-export { extractDecisionPrompt, createDecisionDock, type DecisionChoice, type DecisionPrompt } from "../lib/decision-dock.ts";
 export { PACKAGE_VERSION, UPDATE_RELEASE_DATE, isNewerVersion, renderUpdateBanner } from "../lib/update-banner.ts";
 
 /** Pi /model and other selectors own Ctrl+S; the editor exposes getText. */
@@ -93,14 +87,9 @@ export default function (pi: ExtensionAPI) {
   let speedTimer: ReturnType<typeof setInterval> | undefined;
   let settings: MiniLensSettings = { ...DEFAULT_SETTINGS };
   let cleanupInputEnhancements: InputEnhancementsCleanup | undefined;
-  let liveCtx: ExtensionContext | undefined;
   let messageCwd = process.cwd();
   const messageLinks = (text: string) => settings["pi-mini-mode-input-enhancements"] ? linkMessageFiles(text, messageCwd) : text;
-  // Pi's native transcript cannot paint pills, so legacy badge tokens degrade to bold emoji text there.
-  pi.registerMarkdownTransformer?.((text, info) => {
-    const linked = messageLinks(text);
-    return info?.messageType === "assistant" ? plainSemanticBadges(linked) : linked;
-  });
+  pi.registerMarkdownTransformer?.(messageLinks);
   let saveChain: Promise<void> = Promise.resolve();
   const configPath = settingsPath();
   let updateBannerChecked = false;
@@ -110,29 +99,7 @@ export default function (pi: ExtensionAPI) {
 
   const refresh = () => refreshFooter?.();
   const refreshMinimalOutput = () => refreshMinimal?.();
-  const decisionDock = createDecisionDock({
-    language: () => uiLanguage(settings),
-    isEditorEmpty: () => (liveCtx?.ui.getEditorText?.() ?? "").trim() === "",
-    onSubmit: (replyText) => pi.sendUserMessage?.(replyText),
-    requestRender: () => refreshMinimalOutput(),
-  });
-  /**
-   * Pills and the decision dock exist only while the minimal fullscreen transcript is mounted;
-   * RPC/GUI hosts, Pi's native transcript and non-fullscreen TUI all show plain Markdown.
-   */
-  const capsulesRendered = (ctx: Pick<ExtensionContext, "mode"> | undefined) =>
-    settings["pi-mini-mode-minimal-show"] && settings["pi-mini-mode-semantic-badges"] && !nativeOutput
-      && ctx?.mode === "tui" && Boolean(restoreTranscript);
-  const syncDecisionDock = () => {
-    const lastTurn = minimalTurns.at(-1);
-    const enabled = capsulesRendered(liveCtx);
-    const prompt = enabled && !activeMinimalTurn?.running && lastTurn && !lastTurn.running
-      ? extractDecisionPrompt(lastTurn.final, minimalTurns.length - 1)
-      : undefined;
-    if (decisionDock.sync(prompt)) refreshMinimalOutput();
-  };
   const mountMinimalOutput = (ctx: ExtensionContext) => {
-    liveCtx = ctx;
     persistAgentStatuses = undefined;
     if (waitingTimer) clearInterval(waitingTimer);
     waitingTimer = undefined;
@@ -148,15 +115,6 @@ export default function (pi: ExtensionAPI) {
       const nativeKey = matchesKey(data, "ctrl+alt+o");
       const subAgentKey = matchesKey(data, "ctrl+s");
       if (!nativeKey && focusedSelectorOwnsKeys(minimalTui)) return;
-      if (!nativeKey && restoreTranscript && decisionDock.isActive) {
-        const dockNav = matchesKey(data, "escape")
-          || (((liveCtx?.ui.getEditorText?.() ?? "").trim() === "")
-            && (matchesKey(data, "up") || matchesKey(data, "down") || matchesKey(data, "enter") || matchesKey(data, "return")));
-        if (dockNav) {
-          if (isKeyRelease(data) || isKeyRepeat(data)) return { consume: true };
-          return decisionDock.handleTerminalInput(data);
-        }
-      }
       if (!nativeKey && (!restoreTranscript || (!subAgentKey && !matchesKey(data, "ctrl+o")))) return;
       // Input listeners run before Pi filters Kitty release/repeat events.
       if (isKeyRelease(data) || isKeyRepeat(data)) return { consume: true };
@@ -174,8 +132,6 @@ export default function (pi: ExtensionAPI) {
     if (nativeOutput || !settings["pi-mini-mode-minimal-show"] || ctx.mode !== "tui") {
       minimalTui = undefined;
       lastAttachMode = undefined;
-      decisionDock.sync(undefined);
-      ctx.ui.setWidget?.("pi-mini-mode-decision", undefined);
       ctx.ui.setWidget?.("pi-mini-mode-minimal-output", undefined);
       refreshMinimalOutput();
       refreshMinimal = undefined;
@@ -240,10 +196,6 @@ export default function (pi: ExtensionAPI) {
               },
             }
           : undefined,
-        semanticBadges: () => ({
-          enabled: settings["pi-mini-mode-semantic-badges"],
-          style: settings["pi-mini-mode-badge-style"],
-        }),
       }, () => settings["pi-mini-mode-minimal-record-limit"], () => uiLanguage(settings));
       // Native info notifications use dim; warning/error notifications retain
       // their position in the transcript. No plugin names or message matching.
@@ -321,13 +273,6 @@ export default function (pi: ExtensionAPI) {
           }
         }, 100);
         waitingTimer.unref();
-      }
-      if (restoreTranscript && settings["pi-mini-mode-semantic-badges"]) {
-        ctx.ui.setWidget?.("pi-mini-mode-decision", (_dockTui, dockTheme) => decisionDock.component(dockTheme), { placement: "aboveEditor" });
-        syncDecisionDock();
-      } else {
-        decisionDock.sync(undefined);
-        ctx.ui.setWidget?.("pi-mini-mode-decision", undefined);
       }
       tui.requestRender();
       // Factory acquires the renderer only; never duplicate content in the dock.
@@ -427,16 +372,14 @@ export default function (pi: ExtensionAPI) {
                 || entry.some(id => typeof id !== "string" || !(FOOTER_FIELDS as readonly string[]).includes(id))) throw new TypeError("Invalid order");
             } else if (key === "pi-mini-mode-image-preview") {
               if (entry !== "hover" && entry !== "inline") throw new TypeError("Invalid preview mode");
-            } else if (key === "pi-mini-mode-badge-style") {
-              if (!isBadgeStyle(entry)) throw new TypeError("Invalid badge style");
             } else if (key === "pi-mini-mode-minimal-record-limit") {
               if (!isRecordLimit(entry)) throw new TypeError("Invalid record limit");
             } else if (key === "pi-mini-mode-language") {
               if (!isUiLanguage(entry)) throw new TypeError("Invalid language");
             } else if (key === "lastSeenVersion") {
               if (entry !== undefined && (typeof entry !== "string" || !/^\d+\.\d+\.\d+$/.test(entry))) throw new TypeError("Invalid version");
-            } else if (isLegacyMinimalSetting(key) && typeof entry === "boolean") {
-              // Accept stale settings pages; these former child switches no longer gate output.
+            } else if (isLegacyMinimalSetting(key)) {
+              // Accept stale settings pages; retired switches no longer do anything.
               continue;
             } else if (!SETTING_IDS.includes(key as typeof SETTING_IDS[number]) || typeof entry !== "boolean") throw new TypeError("Invalid setting");
           }
@@ -611,7 +554,6 @@ export default function (pi: ExtensionAPI) {
     minimalTurns = minimalTurnsFromBranch(ctx.sessionManager.getBranch());
     activeMinimalTurn = undefined;
     pendingMinimalFinal = "";
-    decisionDock.clearAll();
     thinkingStream.reset();
     minimalToolOutputIndices.clear();
     mountMinimalOutput(ctx);
@@ -624,17 +566,11 @@ export default function (pi: ExtensionAPI) {
     if (activeMinimalTurn) { refreshMinimalOutput(); return; }
     syncMinimalBranch(event, ctx);
   });
-  pi.on("before_agent_start", (event, ctx) => {
+  pi.on("before_agent_start", (event) => {
     if (activeMinimalTurn) {
       for (const name of skillNames(event.prompt)) pushProcess(activeMinimalTurn, "skill", name);
       refreshMinimalOutput();
     }
-    const profile = resolveReportProfile({
-      // Headless runs (print/json: subagents, background forks) feed machines, not people.
-      guideEnabled: settings["pi-mini-mode-report-guide"] && Boolean((ctx ?? liveCtx)?.hasUI),
-      capsulesRendered: capsulesRendered(ctx ?? liveCtx),
-    });
-    return applyReportGuide(event, profile);
   });
   pi.on("ui_prompt_start", (event) => {
     activeUIPrompt = event;
@@ -648,7 +584,6 @@ export default function (pi: ExtensionAPI) {
   pi.on("thinking_level_select", refresh);
   pi.on("message_start", (event) => {
     if (event.message.role === "user") {
-      decisionDock.sync(undefined);
       if (activeMinimalTurn) {
         thinkingStream.stop(activeMinimalTurn, "aborted");
         activeMinimalTurn.final = pendingMinimalFinal;
@@ -828,15 +763,11 @@ export default function (pi: ExtensionAPI) {
     pendingMinimalFinal = "";
     thinkingStream.reset();
     minimalToolOutputIndices.clear();
-    syncDecisionDock();
     refreshMinimalOutput();
   });
   pi.on("session_shutdown", () => {
     thinkingStream.stop(activeMinimalTurn, "aborted");
     thinkingStream.reset();
-    decisionDock.clearAll();
-    liveCtx?.ui.setWidget?.("pi-mini-mode-decision", undefined);
-    liveCtx = undefined;
     restoreScrollbar?.();
     restoreScrollbar = undefined;
     scrollbarRoot = undefined;

@@ -42,21 +42,16 @@ const I18N={
   fieldsHeading:{zh:'状态栏字段与预览（示例数据）',en:'Status bar items & preview (sample data)'},
   optionsHeading:{zh:'状态栏样式',en:'Status bar style'},
   on:{zh:'开启',en:'On'},off:{zh:'关闭',en:'Off'},previewModeLabel:{zh:'图片预览方式',en:'Image preview mode'},previewHover:{zh:'光标浮窗',en:'Cursor popup'},previewInline:{zh:'内联卡片（多图排列）',en:'Inline cards (multiple images)'},previewModeHint:{zh:'卡片显示在输入框上方；终端不支持图片时显示占位。',en:'Cards appear above the editor; unsupported terminals show placeholders.'},
-  badgeStyleLabel:{zh:'胶囊样式',en:'Capsule style'},badgeRound:{zh:'圆角胶囊（Ghostty / Nerd Font）',en:'Rounded pills (Ghostty / Nerd Font)'},badgeSquare:{zh:'方角纯色块（通用终端）',en:'Square color blocks (universal)'},
   recordLimitLabel:{zh:'折叠时记录数',en:'Collapsed record limit'},
   recordLimitHint:{zh:'默认 6 条。子代理始终显示，每个占一条；剩余额度显示最新执行记录。子代理超过上限时，仅显示全部子代理。',en:'Defaults to 6. Every subagent stays visible and uses one record; remaining slots show the latest execution records. When subagents exceed the limit, only their rows remain.'},
   featureList:{
     zh:[
       {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'极简输出',body:'在全屏模式下，把思考、工具与技能记录收进一棵可折叠过程树，保留完整回复。',points:['长用户消息显示前四行，点击展开全文','子代理始终显示,可展开活动记录与输出','Ctrl+O 展开或收起过程树,新问题默认收起','最终 Markdown 流畅呈现,失败与中断明确标记']},
-      {id:'report-guide',setting:'pi-mini-mode-report-guide',title:'排障汇报格式',body:'只在排障、风险审查或需要你拍板时，让回复先给一句结论，再区分证据可信度与可选方案。',points:['格式跟随显示位置：全屏终端用彩色胶囊，T3 Code 等图形界面用表情加粗体','只在真有选择时才列方案，不为凑格式硬造决策','日常改代码与普通问答保持原样']},
-      {id:'semantic-badges',setting:'pi-mini-mode-semantic-badges',title:'语义诊断胶囊',body:'全屏极简输出下，把排障回复里的状态标记渲染成彩色胶囊，并在输入框上方提供快速选方案。',points:['区分「亲眼确认」「合理推测」与「? 还没查」，一眼看清未验证盲区','存在多方案待拍板时，上下键或点击即可确认发送，直接打字互不干扰','关闭后标记显示为表情加粗体，历史记录同样可读']},
       {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'输入增强',body:'让输入框和消息里的图片、技能与文件路径直接可用。',points:['图片默认以内联卡片陈列于输入框上方，亦可切换光标悬停','图片路径收纳为 [image1] 标签，提交时保留原图','空白后输入 / 就地搜索技能并插入光标处','左键用系统默认应用打开，全屏右键在文件管理器中定位并选中'],hint:'Ctrl+V 粘贴图片（Windows/WSL 使用 Alt+V）'},
       {id:'themes',title:'明暗主题',body:'主题让 Markdown、代码高亮、表格与 Mermaid 图表跟随明暗切换。',points:['用户消息使用主题用户背景色，与正文区分','不支持、不完整或过宽的图表保留源文本'],hint:'回到 Pi，输入 /settings → Theme，选择 cc-dark / cc-light'}
     ],
     en:[
       {id:'minimal',setting:'pi-mini-mode-minimal-show',title:'Minimal transcript',body:'In fullscreen mode, fold thinking, tools and skill reads into one process tree while keeping the full reply.',points:['Long user messages show four rendered rows; click to expand','Subagents stay visible; click to expand activity and output','Ctrl+O expands or collapses the full process tree; new questions start collapsed','Final Markdown streams plainly; failures and interrupts are marked']},
-      {id:'report-guide',setting:'pi-mini-mode-report-guide',title:'Investigation reply format',body:'Only for investigations, risk reviews and real decisions: replies open with a one-line verdict, then separate evidence certainty and options.',points:['Format follows the viewer: colored pills in the fullscreen terminal, emoji + bold in GUI hosts such as T3 Code','Options appear only when you actually have to choose','Routine coding tasks and simple Q&A stay plain']},
-      {id:'semantic-badges',setting:'pi-mini-mode-semantic-badges',title:'Semantic diagnostic pills',body:'In the fullscreen minimal transcript, paint reply status markers as colored pills with a quick option picker above the editor.',points:['Separates Observed facts, Inferred deductions and Unverified blind spots','Up/Down or click to send a numbered option; typing freely in the editor stays unobstructed','When off, markers show as emoji + bold, including in history']},
       {id:'input-enhancements',setting:'pi-mini-mode-input-enhancements',title:'Input enhancements',body:'Makes images, skills and file paths usable right where you type.',points:['Images appear as inline cards above the editor by default, with optional cursor hover','Image paths collapse to [image1] labels while keeping the original path on submit','Type / after a space to search skills and insert at the cursor','Left-click opens in the default app; fullscreen right-click reveals and selects the file'],hint:'Ctrl+V pastes images (Windows/WSL: Alt+V)'},
       {id:'themes',title:'Light and dark themes',body:'Themes keep Markdown, code highlighting, tables and Mermaid diagrams in step with light and dark.',points:['User messages use the theme user background to stand out','Unsupported, incomplete or overly wide diagrams keep their source text'],hint:'In Pi, enter /settings → Theme and choose cc-dark or cc-light'}
     ]
@@ -225,15 +220,6 @@ function feature(item){
     label.append(text,input);card.append(label);
     const hint=document.createElement('p');hint.className='feature-hint';hint.textContent=t('recordLimitHint');card.append(hint);
     head.querySelector('input').addEventListener('change',()=>{input.disabled=!state[item.setting]});
-  }
-  if(item.id==='semantic-badges'){
-    const label=document.createElement('label');label.className='preview-mode';label.htmlFor='pi-mini-mode-badge-style';
-    const text=document.createElement('span');text.textContent=t('badgeStyleLabel');
-    const select=document.createElement('select');select.id=label.htmlFor;select.disabled=!state[item.setting];
-    for(const [value,key] of [['round','badgeRound'],['square','badgeSquare']]){const option=document.createElement('option');option.value=value;option.textContent=t(key);select.append(option)}
-    select.value=state[select.id]||'round';select.onchange=()=>{state[select.id]=select.value;change()};
-    label.append(text,select);card.append(label);
-    head.querySelector('input').addEventListener('change',()=>{select.disabled=!state[item.setting]});
   }
   if(item.id==='input-enhancements'){
     const label=document.createElement('label');label.className='preview-mode';label.htmlFor='pi-mini-mode-image-preview';

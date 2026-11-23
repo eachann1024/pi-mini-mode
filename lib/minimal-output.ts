@@ -6,7 +6,6 @@ import { assistantImageSpans, clearAssistantImageCaches, createAssistantImages, 
 import { clearFileLinkCaches, linkToolFiles } from "./file-links.ts";
 import { createLinkHover } from "./link-hover.ts";
 import { diagramMarkdown, isFencedMarkdown, renderMinimalMarkdown } from "./minimal-markdown.ts";
-import { plainSemanticBadges, type BadgeStyle } from "./semantic-badges.ts";
 import { minimalSurface, paintExpandedHeading } from "./minimal-theme.ts";
 import { formatElapsed, formatThinkingElapsed, formatToolElapsed, piLoopSummary, type MinimalTurn } from "./minimal-turns.ts";
 import { clearPrintAgentCaches } from "./print-agent.ts";
@@ -124,29 +123,21 @@ export interface MinimalOutputOptions {
   requestRender(): void;
   write?(data: string): void;
   updateBanner?: () => UpdateBannerState | undefined;
-  semanticBadges?: () => { enabled: boolean; style: BadgeStyle };
 }
 
 export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], getTurns: () => MinimalTurn[], isExpanded: () => boolean = () => false, showUsage: () => boolean = () => true, subAgentsExpanded: () => boolean = () => false, agentDeadlines = new Map<string, number>(), transformText: (text: string) => string = text => text, imageOptions?: MinimalOutputOptions, getRecordLimit: () => number = () => DEFAULT_SETTINGS["pi-mini-mode-minimal-record-limit"], getLanguage: () => UiLanguage = () => "zh", getUpdateBanner?: () => UpdateBannerState | undefined) {
   const resolveUpdateBanner = getUpdateBanner ?? imageOptions?.updateBanner;
-  const resolveBadges = () => imageOptions?.semanticBadges ? imageOptions.semanticBadges() : { enabled: true, style: "round" as BadgeStyle };
   const markdownCache = new Map<string, string[]>();
   const assistantMdCache = new Map<string, string[]>();
   const callDisplayCache = new Map<string, { tool?: string; name: string; action?: string; state: string; task: string; output?: string; value: { summary: string; detail: string } }>();
   const turnCache = new Map<number, { key: readonly unknown[]; value: TurnRenderResult }>();
   const placeholderText = (text: string) => imageOptions ? imagePlaceholders(text, imageOptions.cwd()) : text;
   const markdown = (text: string, width: number, process = false): string[] => {
-    const badgeCfg = !process ? resolveBadges() : { enabled: false, style: "round" as BadgeStyle };
-    const badgeKey = badgeCfg.enabled ? badgeCfg.style : "off";
-    const key = `${process ? 1 : 0}|${badgeKey}|${width}|${text}`;
+    const key = `${process ? 1 : 0}|${width}|${text}`;
     const hit = lruGet(markdownCache, key);
     if (hit !== undefined) return [...hit];
     const rows = renderMinimalMarkdown(text, width, getMarkdownTheme(), theme.getBgAnsi?.("userMessageBg") ?? "",
-      { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => {
-        const next = transformText(placeholderText(diagramMarkdown(source, available)));
-        return !process && !badgeCfg.enabled ? plainSemanticBadges(next) : next;
-      },
-      badgeCfg.enabled ? { theme, style: badgeCfg.style } : undefined);
+      { color: (value) => theme.fg(process ? "muted" : "text", value) }, (source, available) => transformText(placeholderText(diagramMarkdown(source, available))));
     lruSet(markdownCache, key, rows);
     return [...rows];
   };
@@ -163,8 +154,7 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
   const assistantImages = imageOptions && createAssistantImages(imageOptions.cwd, () => { turnCache.clear(); imageOptions.requestRender(); }, imageOptions.write);
   const assistantMarkdown = (text: string, width: number, owner: string): string[] => {
     if (!assistantImages) return markdown(text, width);
-    const badgeCfg = resolveBadges();
-    const key = `${badgeCfg.enabled ? badgeCfg.style : "off"}|${width}|${text}`;
+    const key = `${width}|${text}`;
     const hit = lruGet(assistantMdCache, key);
     if (hit !== undefined) return [...hit];
     if (!assistantImageSpans(text, imageOptions!.cwd()).length) {
@@ -460,7 +450,6 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
         const elapsedSec = turn.startedAt != null && turn.endedAt == null
           ? Math.floor((now - turn.startedAt) / 1000)
           : (turn.endedAt ?? -1);
-        const badgeCfg = resolveBadges();
         const key: unknown[] = [
           width,
           exp,
@@ -468,7 +457,6 @@ export function minimalOutputComponent(theme: ExtensionContext["ui"]["theme"], g
           usageShown,
           recLimit,
           lang,
-          badgeCfg.enabled ? badgeCfg.style : "off",
           agentModes.get(index),
           expandedPrompts.get(index),
           turnExpandedTools,
